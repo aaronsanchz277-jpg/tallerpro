@@ -1,0 +1,3091 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0f">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%230a0a0f'/><text x='96' y='125' font-size='90' text-anchor='middle' fill='%2300e5ff' font-family='sans-serif' font-weight='bold'>T</text></svg>">
+<title>TallerPro</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --success: #00ff88;
+    --warning: #ffcc00;
+    --danger: #ff4444;
+    --text: #e8e8f0;
+    --text2: #8888aa;
+    --font-head: 'Rajdhani', sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-body); min-height:100vh; overflow-x:hidden; }
+
+  /* SPLASH */
+  #splash { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1000; transition:opacity .5s; }
+  #splash .logo-big { font-family:var(--font-head); font-size:3rem; font-weight:700; color:var(--accent); letter-spacing:4px; }
+  #splash .sub { color:var(--text2); font-size:.85rem; margin-top:.5rem; letter-spacing:2px; }
+  #splash .loader { width:60px; height:3px; background:var(--border); border-radius:2px; margin-top:2rem; overflow:hidden; }
+  #splash .loader-bar { height:100%; background:var(--accent); border-radius:2px; animation:load 1.5s ease forwards; }
+  @keyframes load { from{width:0} to{width:100%} }
+
+  /* LOGIN */
+  #login-screen { display:none; min-height:100vh; align-items:center; justify-content:center; padding:1.5rem; flex-direction:column; }
+  .login-box { width:100%; max-width:380px; }
+  .login-logo { font-family:var(--font-head); font-size:2.5rem; font-weight:700; color:var(--accent); letter-spacing:4px; text-align:center; margin-bottom:.25rem; }
+  .login-sub { text-align:center; color:var(--text2); font-size:.8rem; letter-spacing:2px; margin-bottom:2rem; }
+  .login-tabs { display:flex; background:var(--surface2); border-radius:10px; padding:4px; margin-bottom:1.5rem; }
+  .login-tab { flex:1; padding:.5rem; text-align:center; border:none; background:none; color:var(--text2); cursor:pointer; border-radius:8px; font-family:var(--font-body); font-size:.85rem; transition:all .2s; }
+  .login-tab.active { background:var(--accent); color:#000; font-weight:600; }
+
+  /* LAYOUT */
+  #app { display:none; flex-direction:column; min-height:100vh; }
+  .topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:0 1rem; height:56px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; }
+  .topbar-logo { font-family:var(--font-head); font-size:1.4rem; font-weight:700; color:var(--accent); letter-spacing:2px; }
+  .topbar-right { display:flex; align-items:center; gap:.5rem; }
+  .topbar-title { font-family:var(--font-head); font-size:1rem; color:var(--text2); }
+  .topbar-role { font-size:.65rem; padding:2px 8px; border-radius:20px; font-weight:600; }
+  .role-admin { background:rgba(0,229,255,.15); color:var(--accent); border:1px solid rgba(0,229,255,.3); }
+  .role-empleado { background:rgba(255,107,53,.15); color:var(--accent2); border:1px solid rgba(255,107,53,.3); }
+  .role-cliente { background:rgba(0,255,136,.15); color:var(--success); border:1px solid rgba(0,255,136,.3); }
+  .logout-btn { background:none; border:none; color:var(--text2); cursor:pointer; font-size:.75rem; padding:.3rem .6rem; border-radius:6px; border:1px solid var(--border); }
+
+  .content { flex:1; padding:1rem; padding-bottom:80px; max-width:600px; margin:0 auto; width:100%; }
+
+  /* BOTTOM NAV */
+  .bottom-nav { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); display:flex; justify-content:flex-start; padding:.5rem 0; z-index:100; overflow-x:auto; scrollbar-width:none; }
+  .bottom-nav::-webkit-scrollbar { display:none; }
+  .nav-btn { display:flex; flex-direction:column; align-items:center; gap:2px; padding:.4rem .75rem; border:none; background:none; color:var(--text2); cursor:pointer; font-family:var(--font-body); font-size:.62rem; transition:color .2s; border-radius:8px; flex-shrink:0; min-width:64px; }
+  .nav-btn svg { width:22px; height:22px; }
+  .nav-btn.active { color:var(--accent); }
+  .nav-btn.active svg { filter:drop-shadow(0 0 4px var(--accent)); }
+
+  /* CARDS */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1rem; margin-bottom:.75rem; cursor:pointer; transition:border-color .2s, transform .1s; }
+  .card:hover { border-color:var(--accent); }
+  .card:active { transform:scale(.98); }
+  .card-header { display:flex; align-items:center; gap:.75rem; }
+  .card-avatar { width:44px; height:44px; border-radius:10px; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-family:var(--font-head); font-size:1.2rem; font-weight:700; color:var(--accent); border:1px solid var(--border); flex-shrink:0; overflow:hidden; }
+  .card-info { flex:1; min-width:0; }
+  .card-name { font-family:var(--font-head); font-size:1.05rem; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .card-sub { font-size:.75rem; color:var(--text2); margin-top:2px; }
+  .card-badge { font-size:.7rem; padding:3px 8px; border-radius:20px; font-weight:600; flex-shrink:0; }
+  .badge-green { background:rgba(0,255,136,.15); color:var(--success); border:1px solid rgba(0,255,136,.3); }
+  .badge-orange { background:rgba(255,107,53,.15); color:var(--accent2); border:1px solid rgba(255,107,53,.3); }
+  .badge-yellow { background:rgba(255,204,0,.15); color:var(--warning); border:1px solid rgba(255,204,0,.3); }
+  .badge-red { background:rgba(255,68,68,.15); color:var(--danger); border:1px solid rgba(255,68,68,.3); }
+  .badge-blue { background:rgba(0,229,255,.15); color:var(--accent); border:1px solid rgba(0,229,255,.3); }
+
+  /* SECTION HEADER */
+  .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+  .section-title { font-family:var(--font-head); font-size:1.5rem; font-weight:700; color:var(--text); }
+  .btn-add { background:var(--accent); color:#000; border:none; border-radius:8px; padding:.5rem 1rem; font-family:var(--font-head); font-size:.9rem; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:.4rem; letter-spacing:1px; transition:opacity .2s; }
+  .btn-add:hover { opacity:.85; }
+
+  /* SEARCH */
+  .search-box { position:relative; margin-bottom:1rem; }
+  .search-box input { width:100%; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.6rem 1rem .6rem 2.5rem; color:var(--text); font-family:var(--font-body); font-size:.9rem; outline:none; transition:border-color .2s; }
+  .search-box input:focus { border-color:var(--accent); }
+  .search-box svg { position:absolute; left:.75rem; top:50%; transform:translateY(-50%); color:var(--text2); width:16px; height:16px; }
+
+  /* MODAL */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:200; display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(4px); }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:20px 20px 0 0; padding:1.5rem; width:100%; max-width:600px; max-height:90vh; overflow-y:auto; animation:slideUp .3s ease; }
+  @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+  .modal-title { font-family:var(--font-head); font-size:1.3rem; font-weight:700; color:var(--accent); margin-bottom:1.25rem; }
+  .form-group { margin-bottom:1rem; }
+  .form-label { font-size:.75rem; color:var(--text2); margin-bottom:.4rem; display:block; letter-spacing:.5px; text-transform:uppercase; }
+  .form-input { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:.65rem .9rem; color:var(--text); font-family:var(--font-body); font-size:.9rem; outline:none; transition:border-color .2s; }
+  .form-input:focus { border-color:var(--accent); }
+  select.form-input { cursor:pointer; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+  .btn-primary { width:100%; background:var(--accent); color:#000; border:none; border-radius:10px; padding:.75rem; font-family:var(--font-head); font-size:1rem; font-weight:700; cursor:pointer; letter-spacing:1px; margin-top:.5rem; transition:opacity .2s; }
+  .btn-primary:hover { opacity:.85; }
+  .btn-secondary { width:100%; background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:10px; padding:.7rem; font-family:var(--font-head); font-size:.95rem; cursor:pointer; letter-spacing:1px; margin-top:.5rem; transition:border-color .2s; }
+  .btn-secondary:hover { border-color:var(--accent); color:var(--accent); }
+  .btn-danger { width:100%; background:rgba(255,68,68,.15); color:var(--danger); border:1px solid rgba(255,68,68,.3); border-radius:10px; padding:.7rem; font-family:var(--font-head); font-size:.95rem; cursor:pointer; letter-spacing:1px; margin-top:.5rem; transition:background .2s; }
+  .btn-danger:hover { background:rgba(255,68,68,.25); }
+
+  /* DETAIL */
+  .detail-header { display:flex; align-items:center; gap:.75rem; margin-bottom:1.25rem; }
+  .back-btn { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:.4rem .7rem; color:var(--text2); cursor:pointer; display:flex; align-items:center; gap:.3rem; font-size:.85rem; }
+  .detail-avatar { width:56px; height:56px; border-radius:12px; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-family:var(--font-head); font-size:1.6rem; font-weight:700; color:var(--accent); border:2px solid var(--accent); flex-shrink:0; }
+  .detail-name { font-family:var(--font-head); font-size:1.4rem; font-weight:700; }
+  .detail-sub { font-size:.8rem; color:var(--text2); }
+  .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; margin-bottom:1rem; }
+  .info-item { background:var(--surface2); border-radius:8px; padding:.6rem .8rem; border:1px solid var(--border); }
+  .info-item .label { font-size:.65rem; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
+  .info-item .value { font-size:.9rem; color:var(--text); margin-top:2px; font-weight:500; }
+  .sub-section { margin-top:1.25rem; }
+  .sub-section-title { font-family:var(--font-head); font-size:1rem; color:var(--text2); margin-bottom:.6rem; letter-spacing:1px; border-bottom:1px solid var(--border); padding-bottom:.4rem; }
+
+  /* STATS */
+  .stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; margin-bottom:1.25rem; }
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1rem; text-align:center; }
+  .stat-value { font-family:var(--font-head); font-size:1.8rem; font-weight:700; color:var(--accent); }
+  .stat-label { font-size:.72rem; color:var(--text2); margin-top:4px; }
+
+  /* TABS */
+  .tabs { display:flex; gap:.5rem; margin-bottom:1rem; overflow-x:auto; padding-bottom:.25rem; scrollbar-width:none; }
+  .tabs::-webkit-scrollbar { display:none; }
+  .tab { padding:.4rem .9rem; border-radius:20px; border:1px solid var(--border); background:none; color:var(--text2); font-size:.8rem; cursor:pointer; white-space:nowrap; transition:all .2s; font-family:var(--font-body); }
+  .tab.active { background:var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
+
+  /* INVENTARIO */
+  .inv-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.85rem; margin-bottom:.6rem; display:flex; align-items:center; gap:.75rem; cursor:pointer; }
+  .inv-icon { width:40px; height:40px; background:var(--surface2); border-radius:8px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border); flex-shrink:0; }
+  .inv-info { flex:1; min-width:0; }
+  .inv-name { font-weight:500; font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .inv-meta { font-size:.75rem; color:var(--text2); margin-top:2px; }
+  .inv-stock { text-align:right; flex-shrink:0; }
+  .inv-qty { font-family:var(--font-head); font-size:1.3rem; font-weight:700; }
+  .inv-unit { font-size:.7rem; color:var(--text2); }
+  .stock-low { color:var(--danger); }
+  .stock-ok { color:var(--success); }
+
+  /* EMPTY & LOADING */
+  .empty { text-align:center; padding:3rem 1rem; color:var(--text2); }
+  .empty svg { width:48px; height:48px; margin-bottom:1rem; opacity:.3; }
+  .empty p { font-size:.9rem; }
+  .loading { text-align:center; padding:2rem; color:var(--text2); font-size:.85rem; }
+
+  /* TOAST */
+  #toast { position:fixed; top:1rem; left:50%; transform:translateX(-50%); background:var(--surface2); border:1px solid var(--accent); color:var(--text); padding:.6rem 1.2rem; border-radius:8px; font-size:.85rem; z-index:999; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
+  #toast.show { opacity:1; }
+
+  /* FACTURA */
+  .factura-item { display:flex; justify-content:space-between; padding:.5rem 0; border-bottom:1px solid var(--border); font-size:.85rem; }
+  .factura-total { display:flex; justify-content:space-between; padding:.75rem 0; font-family:var(--font-head); font-size:1.1rem; color:var(--accent); }
+
+  /* DASHBOARD PANELS (extracted from inline styles) */
+  .dash-welcome { font-family:var(--font-head); font-size:1.3rem; color:var(--text); margin-bottom:.15rem; }
+  .dash-sub { font-size:.75rem; color:var(--text2); margin-bottom:1rem; }
+  .panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1rem; margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; }
+  .panel-label { font-size:.72rem; color:var(--text2); letter-spacing:1px; font-family:var(--font-head); }
+  .panel-value { font-family:var(--font-head); font-size:1.8rem; font-weight:700; }
+  .panel-sub { font-size:.72rem; color:var(--text2); }
+  .panel-icon { font-size:2rem; }
+  .panel-danger { background:rgba(255,68,68,.08); border:1px solid rgba(255,68,68,.3); border-radius:12px; padding:1rem; margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; }
+  .alert-box { background:rgba(255,68,68,.08); border:1px solid rgba(255,68,68,.3); border-radius:10px; padding:.75rem; margin-bottom:1rem; cursor:pointer; }
+  .alert-title { font-size:.72rem; color:var(--danger); font-family:var(--font-head); letter-spacing:1px; margin-bottom:.4rem; }
+  .alert-item { font-size:.82rem; color:var(--text2); padding:.2rem 0; }
+  .section-label { font-family:var(--font-head); font-size:.8rem; color:var(--text2); letter-spacing:2px; margin-bottom:.6rem; }
+  .whatsapp-btn { background:rgba(37,211,102,.15); color:#25d366; border:1px solid rgba(37,211,102,.3); border-radius:10px; padding:.6rem; font-family:var(--font-head); font-size:.9rem; cursor:pointer; }
+  .action-row { display:flex; gap:.5rem; margin-bottom:1rem; }
+  .action-grid { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin-bottom:1rem; }
+  .total-banner { background:rgba(255,68,68,.1); border:1px solid rgba(255,68,68,.3); border-radius:10px; padding:.75rem 1rem; margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; }
+  .code-display { background:var(--surface2); border-radius:10px; padding:1rem; text-align:center; margin-bottom:.75rem; }
+  .code-value { font-family:var(--font-head); font-size:2.2rem; font-weight:700; letter-spacing:6px; }
+  .link-box { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:.6rem; font-size:.72rem; color:var(--text2); word-break:break-all; margin-bottom:.5rem; }
+  .info-banner { background:rgba(0,229,255,.05); border:1px solid rgba(0,229,255,.2); border-radius:10px; padding:.75rem; margin-bottom:1.25rem; text-align:center; font-size:.82rem; color:var(--text2); }
+  .foto-preview { width:100%; max-height:200px; object-fit:cover; border-radius:12px; margin-bottom:1rem; border:1px solid var(--border); }
+  .foto-thumb { width:44px; height:44px; object-fit:cover; border-radius:8px; border:1px solid var(--border); }
+
+  /* PAGINATION */
+  .btn-load-more { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:.7rem; color:var(--text2); font-family:var(--font-head); font-size:.9rem; cursor:pointer; letter-spacing:1px; margin-top:.5rem; transition:all .2s; }
+  .btn-load-more:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* PRINT */
+  @media print {
+    body * { visibility: hidden; }
+    #factura-imprimible, #factura-imprimible * { visibility: visible; color: #000 !important; background: #fff !important; border-color: #ccc !important; }
+    #factura-imprimible { position: fixed; top: 0; left: 0; width: 100%; padding: 2rem; font-size: 14px; }
+  }
+
+  /* OFFLINE INDICATOR */
+  #offline-bar { position:fixed; top:0; left:0; right:0; background:var(--danger); color:#fff; text-align:center; padding:4px; font-size:.72rem; font-family:var(--font-head); letter-spacing:1px; z-index:999; transform:translateY(-100%); transition:transform .3s; }
+  #offline-bar.show { transform:translateY(0); }
+  body.is-offline .topbar { top:24px; }
+  body.is-offline .content { padding-top:1rem; }
+  #sync-badge { display:none; background:var(--warning); color:#000; font-size:.6rem; padding:1px 6px; border-radius:10px; font-weight:700; margin-left:.3rem; }
+  #sync-badge.show { display:inline; }
+</style>
+</head>
+<body>
+
+<div id="offline-bar">⚡ SIN CONEXIÓN — Los cambios se guardarán cuando vuelva el internet</div>
+
+<div id="splash">
+  <div class="logo-big">TALLERPRO</div>
+  <div class="sub">GESTIÓN INTELIGENTE</div>
+  <div class="loader"><div class="loader-bar"></div></div>
+</div>
+
+<div id="toast"></div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">TALLERPRO</div>
+    <div class="login-sub">GESTIÓN INTELIGENTE</div>
+    <div id="login-form">
+
+      <!-- LOGIN NORMAL -->
+      <div id="login-normal">
+        <div class="login-tabs">
+          <button class="login-tab active" onclick="switchLoginTab('login')">Ingresar</button>
+          <button class="login-tab" id="tab-nuevo-taller" onclick="switchLoginTab('nuevo-taller')">Nuevo Taller</button>
+        </div>
+
+        <!-- NUEVO TALLER (ADMIN) -->
+        <div id="nuevo-taller-fields" style="display:none">
+          <div style="background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.2);border-radius:8px;padding:.75rem;margin-bottom:1rem;font-size:.8rem;color:var(--text2)">
+            Registrá tu taller y creá tu cuenta de administrador.
+          </div>
+          <div class="form-group"><label class="form-label">Tu nombre *</label><input class="form-input" id="reg-nombre-admin" placeholder="Tu nombre completo"></div>
+          <div class="form-group"><label class="form-label">Nombre del taller *</label><input class="form-input" id="reg-taller" placeholder="Taller San José"></div>
+          <div class="form-group"><label class="form-label">Teléfono del taller</label><input class="form-input" id="reg-tel" placeholder="+595 21 000 000"></div>
+        </div>
+
+        <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="auth-email" type="email" placeholder="tu@email.com"></div>
+        <div class="form-group"><label class="form-label">Contraseña *</label><input class="form-input" id="auth-pass" type="password" placeholder="••••••••"></div>
+        <button class="btn-primary" id="auth-btn" onclick="handleAuth()">INGRESAR</button>
+        <p id="auth-error" style="color:var(--danger);font-size:.8rem;margin-top:.75rem;text-align:center;display:none"></p>
+        <div id="forgot-link" style="text-align:center;margin-top:.75rem">
+          <button onclick="switchLoginTab('forgot')" style="background:none;border:none;color:var(--text2);font-size:.8rem;cursor:pointer;text-decoration:underline">¿Olvidaste tu contraseña?</button>
+        </div>
+      </div>
+
+      <!-- REGISTRO POR INVITACIÓN -->
+      <div id="login-invitacion" style="display:none">
+        <div style="background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.2);border-radius:10px;padding:.75rem;margin-bottom:1.25rem;text-align:center;font-size:.82rem;color:var(--text2)">
+          Fuiste invitado a un taller. Completá tus datos para registrarte.
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="inv-nombre" placeholder="Juan"></div>
+          <div class="form-group"><label class="form-label">Apellido *</label><input class="form-input" id="inv-apellido" placeholder="Pérez"></div>
+        </div>
+        <div class="form-group" id="inv-tel-group">
+          <label class="form-label">Teléfono *</label>
+          <input class="form-input" id="inv-telefono" type="tel" placeholder="+595 981 000 000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Código *</label>
+          <input class="form-input" id="inv-codigo" placeholder="Código del taller" style="text-transform:uppercase;letter-spacing:3px" oninput="onCodigoInput(this.value)">
+          <div style="font-size:.72rem;color:var(--text2);margin-top:.3rem" id="inv-codigo-hint">El admin te da el código. Define si sos cliente o empleado.</div>
+        </div>
+        <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="inv-email" type="email" placeholder="tu@email.com"></div>
+        <div class="form-group"><label class="form-label">Contraseña *</label><input class="form-input" id="inv-pass" type="password" placeholder="Mínimo 6 caracteres"></div>
+        <button class="btn-primary" onclick="handleRegistroInvitacion()">REGISTRARME</button>
+        <p id="inv-error" style="color:var(--danger);font-size:.8rem;margin-top:.75rem;text-align:center;display:none"></p>
+        <div style="text-align:center;margin-top:.75rem">
+          <button onclick="showLoginNormal()" style="background:none;border:none;color:var(--text2);font-size:.8rem;cursor:pointer;text-decoration:underline">Ya tengo cuenta → Ingresar</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-logo">TALLERPRO</div>
+    <div class="topbar-right">
+      <div class="topbar-title" id="page-title"></div>
+      <span class="topbar-role" id="role-badge"></span>
+      <select id="lang-selector" onchange="cambiarIdioma(this.value)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:2px 4px;font-size:.7rem;cursor:pointer;outline:none">
+        <option value="es">🇵🇾 ES</option>
+        <option value="gn">🇵🇾 GN</option>
+        <option value="pt">🇧🇷 PT</option>
+        <option value="en">🇺🇸 EN</option>
+      </select>
+      <button class="logout-btn" id="btn-salir" onclick="logout()">Salir</button>
+      <span id="sync-badge">⏳</span>
+    </div>
+  </div>
+  <div class="content" id="main-content"></div>
+  <nav class="bottom-nav" id="bottom-nav"></nav>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+//  TALLERPRO — Gestión Inteligente de Talleres Mecánicos
+//  Versión 2.1 | Supabase + Vanilla JS | Security Patch
+// ════════════════════════════════════════════════════════════════
+
+// ─── SEGURIDAD: Escape de HTML para prevenir XSS ─────────────────────────────
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  const s = String(str);
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+// Alias corto para usar en templates
+const h = escapeHtml;
+
+// ─── CONFIGURACIÓN ────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://uggqqmsmxvafeyyinuir.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_QYoTP02Bh4tEhV_zkQkFVQ_rWXx0hBu';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ─── PWA: Service Worker ─────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    console.log('SW registrado:', reg.scope);
+    // Escuchar mensajes del SW para sync
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data?.type === 'SYNC_REQUESTED') processOfflineQueue();
+    });
+  }).catch(err => console.warn('SW falló:', err));
+}
+
+// ─── OFFLINE: IndexedDB para cache local ─────────────────────────────────────
+const DB_NAME = 'tallerpro_offline';
+const DB_VERSION = 1;
+let _offlineDB = null;
+
+function openOfflineDB() {
+  return new Promise((resolve, reject) => {
+    if (_offlineDB) { resolve(_offlineDB); return; }
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' });
+      if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
+    };
+    req.onsuccess = e => { _offlineDB = e.target.result; resolve(_offlineDB); };
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+// Guardar datos en cache local
+async function cacheLocal(key, data) {
+  try {
+    const db = await openOfflineDB();
+    const tx = db.transaction('cache', 'readwrite');
+    tx.objectStore('cache').put({ key, data, timestamp: Date.now() });
+  } catch(e) { console.warn('Cache write failed:', e); }
+}
+
+// Leer datos del cache local
+async function readCache(key) {
+  try {
+    const db = await openOfflineDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction('cache', 'readonly');
+      const req = tx.objectStore('cache').get(key);
+      req.onsuccess = () => resolve(req.result?.data || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch(e) { return null; }
+}
+
+// ─── OFFLINE: Cola de operaciones pendientes ─────────────────────────────────
+async function addToQueue(operation) {
+  try {
+    const db = await openOfflineDB();
+    const tx = db.transaction('queue', 'readwrite');
+    tx.objectStore('queue').add({ ...operation, createdAt: Date.now() });
+    updateSyncBadge();
+  } catch(e) { console.error('Queue write failed:', e); }
+}
+
+async function getQueueCount() {
+  try {
+    const db = await openOfflineDB();
+    return new Promise(resolve => {
+      const tx = db.transaction('queue', 'readonly');
+      const req = tx.objectStore('queue').count();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(0);
+    });
+  } catch(e) { return 0; }
+}
+
+async function getAllQueue() {
+  try {
+    const db = await openOfflineDB();
+    return new Promise(resolve => {
+      const tx = db.transaction('queue', 'readonly');
+      const req = tx.objectStore('queue').getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+  } catch(e) { return []; }
+}
+
+async function clearQueueItem(id) {
+  try {
+    const db = await openOfflineDB();
+    const tx = db.transaction('queue', 'readwrite');
+    tx.objectStore('queue').delete(id);
+  } catch(e) {}
+}
+
+// Procesar cola cuando vuelve internet
+async function processOfflineQueue() {
+  if (!navigator.onLine) return;
+  const items = await getAllQueue();
+  if (items.length === 0) return;
+  
+  let processed = 0;
+  for (const item of items) {
+    try {
+      const { table, action, data, matchField, matchValue } = item;
+      let result;
+      if (action === 'insert') {
+        result = await sb.from(table).insert(data);
+      } else if (action === 'update') {
+        result = await sb.from(table).update(data).eq(matchField, matchValue);
+      } else if (action === 'delete') {
+        result = await sb.from(table).delete().eq(matchField, matchValue);
+      }
+      if (!result.error) {
+        await clearQueueItem(item.id);
+        processed++;
+      }
+    } catch(e) {
+      console.warn('Sync failed for item:', item.id, e);
+    }
+  }
+  
+  if (processed > 0) {
+    toast(`✓ ${processed} cambio${processed>1?'s':''} sincronizado${processed>1?'s':''}`, 'success');
+    // Refrescar la vista actual
+    if (currentPage) navigate(currentPage);
+  }
+  updateSyncBadge();
+}
+
+// ─── OFFLINE: Wrapper para operaciones CRUD ──────────────────────────────────
+// Reemplaza las llamadas directas a Supabase cuando no hay internet
+async function offlineInsert(table, data) {
+  if (navigator.onLine) {
+    const result = await sb.from(table).insert(data);
+    if (!result.error) cacheLocal(`${table}_list`, null); // Invalidar cache
+    return result;
+  }
+  // Offline: guardar en cola
+  await addToQueue({ table, action: 'insert', data });
+  toast('Guardado offline — se sincronizará al volver internet', 'info');
+  return { data: [data], error: null };
+}
+
+async function offlineUpdate(table, data, matchField, matchValue) {
+  if (navigator.onLine) {
+    const result = await sb.from(table).update(data).eq(matchField, matchValue);
+    return result;
+  }
+  await addToQueue({ table, action: 'update', data, matchField, matchValue });
+  toast('Actualizado offline — se sincronizará', 'info');
+  return { data: [data], error: null };
+}
+
+async function offlineDelete(table, matchField, matchValue) {
+  if (navigator.onLine) {
+    const result = await sb.from(table).delete().eq(matchField, matchValue);
+    return result;
+  }
+  await addToQueue({ table, action: 'delete', matchField, matchValue });
+  toast('Eliminado offline — se sincronizará', 'info');
+  return { error: null };
+}
+
+// ─── OFFLINE: Wrapper para queries (lee cache si offline) ────────────────────
+async function cachedQuery(cacheKey, queryFn) {
+  if (navigator.onLine) {
+    try {
+      const result = await queryFn();
+      if (result.data) cacheLocal(cacheKey, result);
+      return result;
+    } catch(e) {
+      // Network error — fall through to cache
+    }
+  }
+  // Offline o error de red: leer del cache
+  const cached = await readCache(cacheKey);
+  if (cached) return cached;
+  return { data: [], count: 0, error: { message: 'Sin conexión y sin datos en cache' } };
+}
+
+// ─── OFFLINE: Estado de conexión ─────────────────────────────────────────────
+let _isOnline = navigator.onLine;
+
+function updateOnlineStatus() {
+  _isOnline = navigator.onLine;
+  const bar = document.getElementById('offline-bar');
+  if (bar) bar.classList.toggle('show', !_isOnline);
+  document.body.classList.toggle('is-offline', !_isOnline);
+  
+  // Cuando vuelve internet, sincronizar
+  if (_isOnline) {
+    setTimeout(processOfflineQueue, 1000);
+  }
+}
+
+async function updateSyncBadge() {
+  const count = await getQueueCount();
+  const badge = document.getElementById('sync-badge');
+  if (badge) {
+    badge.textContent = `⏳ ${count}`;
+    badge.classList.toggle('show', count > 0);
+  }
+}
+
+window.addEventListener('online', updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+// Init on load
+setTimeout(updateOnlineStatus, 100);
+
+// ─── IDIOMAS ──────────────────────────────────────────────────────────────────
+const IDIOMAS = {
+  es: {
+    salir:'Salir', inicio:'INICIO', clientes:'CLIENTES', vehiculos:'VEHÍCULOS',
+    reparaciones:'REPARACIONES', inventario:'INVENTARIO', creditos:'CRÉDITOS',
+    empleados:'EMPLEADOS', facturas:'FACTURAS', reportes:'REPORTES',
+    usuarios:'USUARIOS', misAutos:'MIS AUTOS', misReps:'MIS REPARACIONES',
+    navInicio:'Inicio', navClientes:'Clientes', navVehiculos:'Vehículos',
+    navReparaciones:'Reparaciones', navInventario:'Inventario', navCreditos:'Créditos',
+    navEmpleados:'Empleados', navFacturas:'Facturas', navReportes:'Reportes',
+    navUsuarios:'Usuarios', navMisAutos:'Mis Autos', navMisReps:'Mis Reparaciones',
+    bienvenido:'Bienvenido', cargando:'Cargando...', sinDatos:'Sin datos',
+    guardar:'GUARDAR', cancelar:'CANCELAR', eliminar:'ELIMINAR', editar:'Editar',
+    nuevo:'+ Nuevo', volver:'← Volver', ingresar:'INGRESAR', salirBtn:'Salir',
+    buscar:'Buscar', ver:'Ver', cerrar:'CERRAR', actualizar:'ACTUALIZAR',
+    confirmar:'¿Estás seguro?', si:'SÍ', no:'NO',
+    dashTaller:'Tu Taller', dashBienvenido:'Bienvenido',
+    dashClientes:'CLIENTES', dashEnProgreso:'EN PROGRESO', dashHoy:'HOY',
+    dashCreditos:'CRÉDITOS', dashIngresosMes:'INGRESOS DEL MES',
+    dashRepsFinalizadas:'reparaciones finalizadas', dashStockBajo:'⚠ STOCK BAJO',
+    dashRestantes:'restantes', dashRecientes:'RECIENTES', dashSinReps:'Sin reparaciones aún',
+    dashBuscarPatente:'Buscar por patente...',
+    cliTitulo:'Clientes', cliNuevo:'+ Nuevo', cliBuscar:'Buscar cliente...',
+    cliSinDatos:'No hay clientes', cliSinTel:'Sin teléfono',
+    cliTel:'Teléfono', cliEmail:'Email', cliVehiculos:'Vehículos',
+    cliFiadoPend:'Crédito pendiente', cliVehiculos2:'VEHÍCULOS',
+    cliUltReps:'ÚLTIMAS REPARACIONES', cliSinVeh:'Sin vehículos',
+    cliSinReps:'Sin reparaciones', cliWhatsapp:'💬 WhatsApp',
+    cliNombre:'Nombre *', cliTelLabel:'Teléfono', cliEmailLabel:'Email',
+    cliEliminar:'¿Eliminar este cliente? Se eliminarán sus vehículos y reparaciones.',
+    vehTitulo:'Vehículos', vehBuscar:'Buscar por patente o marca...',
+    vehSinDatos:'No hay vehículos', vehSinProp:'Sin propietario',
+    vehPatente:'Patente *', vehMarca:'Marca', vehModelo:'Modelo',
+    vehAnio:'Año', vehColor:'Color', vehPropietario:'Propietario',
+    vehFoto:'Foto del vehículo', vehNuevaFoto:'Nueva foto (opcional)',
+    vehHistorial:'HISTORIAL DE REPARACIONES', vehSinReps:'Sin reparaciones',
+    vehEliminar:'¿Eliminar este vehículo?',
+    repTitulo:'Reparaciones', repNueva:'+ Nueva', repBuscar:'Buscar por descripción, patente o cliente...',
+    repTodas:'Todas', repPendiente:'Pendiente', repEnProgreso:'En progreso', repFinalizadas:'Finalizadas',
+    repSinDatos:'No hay reparaciones', repDescripcion:'Descripción *',
+    repFecha:'Fecha', repCosto:'Costo (₲)', repEstado:'Estado',
+    repVehiculo:'Vehículo', repCliente:'Cliente', repNotas:'Notas',
+    repCambiarEstado:'CAMBIAR ESTADO', repFacturar:'🧾 GENERAR FACTURA',
+    repEliminar:'¿Eliminar esta reparación?',
+    repEstPendiente:'PENDIENTE', repEstProgreso:'EN PROGRESO', repEstFinalizado:'FINALIZADO',
+    invTitulo:'Inventario', invNuevo:'+ Nuevo', invBuscar:'Buscar producto...',
+    invSinDatos:'No hay productos en inventario', invStockBajo:'STOCK BAJO',
+    invNombre:'Nombre *', invCantidad:'Cantidad', invStockMin:'Stock mínimo',
+    invPrecio:'Precio unitario (₲)', invCategoria:'Categoría',
+    invDescontar:'Descontar stock', invCantDescontar:'Cantidad a descontar',
+    invEliminar:'¿Eliminar este producto?',
+    credTitulo:'Créditos', credPendientes:'Pendientes', credPagados:'Pagados',
+    credSinDatos:'No hay créditos', credNuevo:'+ Nuevo',
+    credCliente:'Cliente *', credMonto:'Monto (₲) *', credDescripcion:'Descripción',
+    credFecha:'Fecha', credMarcarPagado:'✓ MARCAR PAGADO',
+    credEliminar:'¿Eliminar este crédito?',
+    empTitulo:'Empleados', empNuevo:'+ Nuevo', empSinDatos:'No hay empleados',
+    empCargo:'Cargo', empTel:'Teléfono', empEmail:'Email',
+    empTrabajosReg:'TRABAJOS REGISTRADOS', empSinTrabajos:'Sin trabajos registrados',
+    empNuevoTrabajo:'+ Registrar trabajo', empFecha:'Fecha', empHoras:'Horas',
+    empDescripcion:'Descripción', empMonto:'Monto (₲)',
+    empNombre:'Nombre *', empCargoLabel:'Cargo', empTelLabel:'Teléfono',
+    empEliminar:'¿Eliminar este empleado?',
+    facTitulo:'Facturas', facSinDatos:'Sin facturas generadas',
+    facDetalle:'DETALLE', facCliente:'Cliente', facVehiculo:'Vehículo',
+    facReparacion:'Reparación', facManoObra:'Mano de obra', facRepuestos:'Repuestos',
+    facOtros:'Otros', facTotal:'TOTAL', facNotas:'Notas',
+    facCompartir:'📤 Compartir', facImprimir:'🖨️ Imprimir',
+    facWhatsapp:'💬 Enviar por WhatsApp', facMarcarPagada:'✓ MARCAR COMO PAGADA',
+    facPagada:'✓ FACTURA PAGADA', facFecha:'Fecha',
+    facManoObraLabel:'Mano de obra (₲)', facRepuestosLabel:'Repuestos (₲)', facOtrosLabel:'Otros (₲)',
+    repGanancias:'GANANCIAS', repHoy2:'HOY', repSemana:'ESTA SEMANA',
+    repMes:'ESTE MES', repFiados:'CRÉDITOS PENDIENTES', repVerCreditos:'Ver créditos',
+    repTopServ:'TOP SERVICIOS DEL MES', repSinReps2:'Sin reparaciones este mes',
+    repRepsFinalizadas:'reparaciones finalizadas',
+    usTitulo:'Usuarios', usInvitar:'+ Invitar', usCodigosPend:'CÓDIGOS PENDIENTES',
+    usAdmins:'ADMINISTRADORES', usEmpleados:'EMPLEADOS', usClientes:'CLIENTES',
+    usSinUsuarios:'Sin usuarios registrados', usRol:'Rol', usAutos:'🚗 Autos',
+    usVos:'(Vos)',
+    credTotalPend:'TOTAL PENDIENTE', credPagar:'✓ Pagar', credPagadoLabel:'Pagado',
+    credTodos:'Todos',
+    sinCliente:'Sin cliente', sinDescripcion:'Sin descripción', sinVehiculo:'Sin vehículo',
+    sinRol:'Sin rol', sinCategoria:'Sin categoría', sinFecha:'Sin fecha',
+    editarBtn:'Editar', eliminarBtn:'Eliminar', facturarBtn:'🧾 Facturar',
+    enProgresoBtn:'▶ En progreso', finalizarBtn:'✓ Finalizar',
+    yaVinculados:'YA VINCULADOS', vehSinPropietario:'No hay vehículos sin propietario.',
+    modNuevoCliente:'NUEVO CLIENTE', modEditarCliente:'EDITAR CLIENTE',
+    modNuevoVehiculo:'NUEVO VEHÍCULO', modEditarVehiculo:'EDITAR VEHÍCULO',
+    modNuevaRep:'NUEVA REPARACIÓN', modEditarRep:'EDITAR REPARACIÓN',
+    modNuevoProducto:'NUEVO PRODUCTO', modEditarProducto:'EDITAR PRODUCTO',
+    modDescontarStock:'DESCONTAR STOCK', modNuevoCredito:'NUEVO CRÉDITO',
+    modNuevoEmpleado:'NUEVO EMPLEADO', modEditarEmpleado:'EDITAR EMPLEADO',
+    modRegistrarTrabajo:'REGISTRAR TRABAJO', modNuevaFactura:'NUEVA FACTURA',
+    modVincularVeh:'VINCULAR VEHÍCULOS', modInvitarUsuario:'INVITAR USUARIO',
+    modNuevaPass:'NUEVA CONTRASEÑA',
+    lblDescripcion:'Descripción *', lblCosto:'Costo (₲)', lblFecha:'Fecha',
+    lblEstado:'Estado', lblVehiculo:'Vehículo', lblCliente:'Cliente', lblNotas:'Notas',
+    lblMarca:'Marca', lblModelo:'Modelo', lblAnio:'Año', lblColor:'Color',
+    lblPropietario:'Propietario', lblFotoVeh:'Foto del vehículo',
+    lblNuevaFoto:'Nueva foto (opcional)',
+    lblCantidad:'Cantidad', lblUnidad:'Unidad', lblStockMin:'Stock mínimo',
+    lblPrecioUnit:'Precio unitario (₲)', lblCategoria:'Categoría',
+    lblCantDescontar:'Cantidad a descontar', lblMotivo:'Motivo (opcional)',
+    lblMonto:'Monto (₲) *', lblManoObra:'Mano de obra (₲)',
+    lblRepuestos:'Repuestos (₲)', lblOtros:'Otros (₲)',
+    lblHoras:'Horas', lblTipoTrabajo:'Tipo de trabajo', lblComentario:'Comentario',
+    lblFotoTrabajo:'Foto del vehículo (opcional)',
+    generandoPdf:'Generando PDF...', pdfDescargado:'PDF descargado',
+    cuentaPendiente:'Cuenta pendiente de vinculación',
+    cuentaPendienteMsg:'El taller todavía no vinculó tu cuenta a tu ficha de cliente. Avisales para que lo hagan.',
+    cuentaPendienteMsg2:'El taller todavía no vinculó tu cuenta. Avisales para que lo hagan.',
+    stockActual:'Stock actual',
+  },
+  gn: {
+    salir:'Sali', inicio:'PYPE', clientes:'MBOROKUÁI', vehiculos:'MBYYRÃ',
+    reparaciones:'MBOGUATAHA', inventario:'MBOGUATA', creditos:"MOÑE'Ẽ",
+    empleados:"MBA'APOHÁRA", facturas:'PAPEL', reportes:"MOMBE'U",
+    usuarios:'AVATEPY', misAutos:'CHE MBYYRÃ', misReps:'CHE MBOGUATAHA',
+    navInicio:'Pype', navClientes:'Mborokuái', navVehiculos:'Mbyyrã',
+    navReparaciones:'Mboguataha', navInventario:'Mboguata', navCreditos:"Moñe'ẽ",
+    navEmpleados:"Mba'apohára", navFacturas:'Papel', navReportes:"Mombe'u",
+    navUsuarios:'Avatepy', navMisAutos:'Che mbyyrã', navMisReps:'Che mboguataha',
+    bienvenido:'Eguahé porã', cargando:'Oheka...', sinDatos:"Ndaipóri mba'e",
+    guardar:'ÑONGATU', cancelar:'MBOYKE', eliminar:'MBOGUEJA', editar:'Mbosako',
+    nuevo:'+ Pyahu', volver:'← Jevy', ingresar:'BYASA', salirBtn:'Sali',
+    buscar:'Heka', ver:'Hecha', cerrar:'MBOYKE', actualizar:'MBOSAKO JEY',
+    confirmar:'Eñemoneĩ?', si:"HA'E", no:'NAHÁNIRI',
+    dashTaller:'Ne taller', dashBienvenido:'Eguahé porã',
+    dashClientes:'MBOROKUÁI', dashEnProgreso:'OIKÓVA', dashHoy:"KO'ÃRE",
+    dashCreditos:"MOÑE'Ẽ", dashIngresosMes:'PYTYVÕ ARÁ PEVE',
+    dashRepsFinalizadas:'mboguataha ojeporavo', dashStockBajo:'⚠ MBOGUATA MICHĨ',
+    dashRestantes:'oñemanteve', dashRecientes:'IPAHAITÉVA',
+    dashSinReps:'Ndaipóri mboguataha', dashBuscarPatente:'Eheka chapa rupi...',
+    cliTitulo:'Mborokuái', cliNuevo:'+ Pyahu', cliBuscar:'Eheka mborokuái...',
+    cliSinDatos:'Ndaipóri mborokuái', cliSinTel:'Ndaipóri pumbyry',
+    cliTel:'Pumbyry', cliEmail:'Ñanduti veve', cliVehiculos:'Mbyyrã',
+    cliFiadoPend:"Moñe'ẽ oñemanteve", cliVehiculos2:'MBYYRÃ',
+    cliUltReps:'IPAHAITÉVA MBOGUATAHA', cliSinVeh:'Ndaipóri mbyyrã',
+    cliSinReps:'Ndaipóri mboguataha', cliWhatsapp:'💬 WhatsApp',
+    cliNombre:'Téra *', cliTelLabel:'Pumbyry', cliEmailLabel:'Ñanduti veve',
+    cliEliminar:'¿Rembogueje ko mborokuái?',
+    vehTitulo:'Mbyyrã', vehBuscar:'Eheka chapa térã marca rupi...',
+    vehSinDatos:'Ndaipóri mbyyrã', vehSinProp:'Ndaipóri dueño',
+    vehPatente:'Chapa *', vehMarca:'Marca', vehModelo:'Modelo',
+    vehAnio:'Año', vehColor:"Sa'y", vehPropietario:'Dueño',
+    vehFoto:"Mbyyrã ra'anga", vehNuevaFoto:"Ra'anga pyahu",
+    vehHistorial:'MBOGUATAHA REKO', vehSinReps:'Ndaipóri mboguataha',
+    vehEliminar:'¿Rembogueje ko mbyyrã?',
+    repTitulo:'Mboguataha', repNueva:'+ Pyahu', repBuscar:'Eheka...',
+    repTodas:'Opavave', repPendiente:'Oñemanteve', repEnProgreso:'Oikóva', repFinalizadas:'Ojeporavo',
+    repSinDatos:'Ndaipóri mboguataha', repDescripcion:"Mombe'u *",
+    repFecha:'Arange', repCosto:'Pytyvõ (₲)', repEstado:'Teko',
+    repVehiculo:'Mbyyrã', repCliente:'Mborokuái', repNotas:'Marandu',
+    repCambiarEstado:'MBOSAKO TEKO', repFacturar:'🧾 PAPEL MOINGE',
+    repEliminar:'¿Rembogueje ko mboguataha?',
+    repEstPendiente:'OÑEMANTEVE', repEstProgreso:'OIKÓVA', repEstFinalizado:'OJEPORAVO',
+    invTitulo:'Mboguata', invNuevo:'+ Pyahu', invBuscar:'Eheka mbykymi...',
+    invSinDatos:'Ndaipóri mboguata', invStockBajo:'MBOGUATA MICHĨ',
+    invNombre:'Téra *', invCantidad:'Papapy', invStockMin:'Papapy michĩve',
+    invPrecio:'Tepy (₲)', invCategoria:"Mba'e reko", invDescontar:'Embogueje stock',
+    invCantDescontar:'Papapy rembogue', invEliminar:'¿Rembogueje ko mbykymi?',
+    credTitulo:"Moñe'ẽ", credPendientes:'Oñemanteve', credPagados:'Ojeporavo',
+    credSinDatos:"Ndaipóri moñe'ẽ", credNuevo:'+ Pyahu',
+    credCliente:'Mborokuái *', credMonto:'Pytyvõ (₲) *', credDescripcion:"Mombe'u",
+    credFecha:'Arange', credMarcarPagado:'✓ OJEPORAVO REKO',
+    credEliminar:"¿Rembogueje ko moñe'ẽ?",
+    empTitulo:"Mba'apohára", empNuevo:'+ Pyahu', empSinDatos:"Ndaipóri mba'apohára",
+    empCargo:"Mba'apo", empTel:'Pumbyry', empEmail:'Ñanduti veve',
+    empTrabajosReg:"MBA'APO REJOAPY", empSinTrabajos:"Ndaipóri mba'apo",
+    empNuevoTrabajo:"+ Mba'apo moinge", empFecha:'Arange', empHoras:'Aravo',
+    empDescripcion:"Mombe'u", empMonto:'Pytyvõ (₲)',
+    empNombre:'Téra *', empCargoLabel:"Mba'apo", empTelLabel:'Pumbyry',
+    empEliminar:"¿Rembogueje ko mba'apohára?",
+    facTitulo:'Papel', facSinDatos:'Ndaipóri papel',
+    facDetalle:"MOMBE'U", facCliente:'Mborokuái', facVehiculo:'Mbyyrã',
+    facReparacion:'Mboguataha', facManoObra:"Mba'apo po", facRepuestos:'Mbykymi pyahu',
+    facOtros:'Ambue', facTotal:'OPAVAVE', facNotas:'Marandu',
+    facCompartir:'📤 Moherakuã', facImprimir:"🖨️ Moha'anga",
+    facWhatsapp:'💬 WhatsApp rupi mondo', facMarcarPagada:'✓ OJEPORAVO REKO',
+    facPagada:'✓ PAPEL OJEPORAVO', facFecha:'Arange',
+    facManoObraLabel:"Mba'apo po (₲)", facRepuestosLabel:'Mbykymi pyahu (₲)', facOtrosLabel:'Ambue (₲)',
+    repGanancias:'PYTYVÕ', repHoy2:"KO'ÃRE", repSemana:'KO ARAPOKÕINDY',
+    repMes:'KO ARA', repFiados:"MOÑE'Ẽ OÑEMANTEVE", repVerCreditos:"Hecha moñe'ẽ",
+    repTopServ:'MBOGUATAHA PORÃVÉVA', repSinReps2:'Ndaipóri mboguataha ko ara',
+    repRepsFinalizadas:'mboguataha ojeporavo',
+    usTitulo:'Avatepy', usInvitar:'+ Mondaha', usCodigosPend:'CÓDIGO OÑEMANTEVE',
+    usAdmins:'OÑONDIVEKUÉRA', usEmpleados:"MBA'APOHÁRA", usClientes:'MBOROKUÁI',
+    usSinUsuarios:'Ndaipóri avatepy', usRol:'Teko', usAutos:'🚗 Mbyyrã',
+    usVos:'(Nde)',
+    credTotalPend:'OPAVAVE OÑEMANTEVE', credPagar:'✓ Ehepyme', credPagadoLabel:'Ojeporavo',
+    credTodos:'Opavave',
+    sinCliente:'Ndaipóri mborokuái', sinDescripcion:"Ndaipóri mombe'u", sinVehiculo:'Ndaipóri mbyyrã',
+    sinRol:"Ndaipóri mba'apo", sinCategoria:"Ndaipóri mba'e reko", sinFecha:'Ndaipóri arange',
+    editarBtn:'Mbosako', eliminarBtn:'Mbogueja', facturarBtn:'🧾 Papel',
+    enProgresoBtn:'▶ Oikóva', finalizarBtn:'✓ Ojeporavo',
+    yaVinculados:'OJUEHE VAEKUE', vehSinPropietario:'Ndaipóri mbyyrã dueño',
+  },
+  pt: {
+    salir:'Sair', inicio:'INÍCIO', clientes:'CLIENTES', vehiculos:'VEÍCULOS',
+    reparaciones:'REPARAÇÕES', inventario:'INVENTÁRIO', creditos:'CRÉDITOS',
+    empleados:'FUNCIONÁRIOS', facturas:'FATURAS', reportes:'RELATÓRIOS',
+    usuarios:'USUÁRIOS', misAutos:'MEUS CARROS', misReps:'MINHAS REPARAÇÕES',
+    navInicio:'Início', navClientes:'Clientes', navVehiculos:'Veículos',
+    navReparaciones:'Reparações', navInventario:'Inventário', navCreditos:'Créditos',
+    navEmpleados:'Funcionários', navFacturas:'Faturas', navReportes:'Relatórios',
+    navUsuarios:'Usuários', navMisAutos:'Meus Carros', navMisReps:'Minhas Reparações',
+    bienvenido:'Bem-vindo', cargando:'Carregando...', sinDatos:'Sem dados',
+    guardar:'SALVAR', cancelar:'CANCELAR', eliminar:'EXCLUIR', editar:'Editar',
+    nuevo:'+ Novo', volver:'← Voltar', ingresar:'ENTRAR', salirBtn:'Sair',
+    buscar:'Buscar', ver:'Ver', cerrar:'FECHAR', actualizar:'ATUALIZAR',
+    confirmar:'Tem certeza?', si:'SIM', no:'NÃO',
+    dashTaller:'Sua Oficina', dashBienvenido:'Bem-vindo',
+    dashClientes:'CLIENTES', dashEnProgreso:'EM ANDAMENTO', dashHoy:'HOJE',
+    dashCreditos:'CRÉDITOS', dashIngresosMes:'RECEITA DO MÊS',
+    dashRepsFinalizadas:'reparações finalizadas', dashStockBajo:'⚠ ESTOQUE BAIXO',
+    dashRestantes:'restantes', dashRecientes:'RECENTES', dashSinReps:'Sem reparações ainda',
+    dashBuscarPatente:'Buscar por placa...',
+    cliTitulo:'Clientes', cliNuevo:'+ Novo', cliBuscar:'Buscar cliente...',
+    cliSinDatos:'Não há clientes', cliSinTel:'Sem telefone',
+    cliTel:'Telefone', cliEmail:'E-mail', cliVehiculos:'Veículos',
+    cliFiadoPend:'Crédito pendente', cliVehiculos2:'VEÍCULOS',
+    cliUltReps:'ÚLTIMAS REPARAÇÕES', cliSinVeh:'Sem veículos',
+    cliSinReps:'Sem reparações', cliWhatsapp:'💬 WhatsApp',
+    cliNombre:'Nome *', cliTelLabel:'Telefone', cliEmailLabel:'E-mail',
+    cliEliminar:'Excluir este cliente?',
+    vehTitulo:'Veículos', vehBuscar:'Buscar por placa ou marca...',
+    vehSinDatos:'Não há veículos', vehSinProp:'Sem proprietário',
+    vehPatente:'Placa *', vehMarca:'Marca', vehModelo:'Modelo',
+    vehAnio:'Ano', vehColor:'Cor', vehPropietario:'Proprietário',
+    vehFoto:'Foto do veículo', vehNuevaFoto:'Nova foto (opcional)',
+    vehHistorial:'HISTÓRICO DE REPARAÇÕES', vehSinReps:'Sem reparações',
+    vehEliminar:'Excluir este veículo?',
+    repTitulo:'Reparações', repNueva:'+ Nova', repBuscar:'Buscar por descrição, placa ou cliente...',
+    repTodas:'Todas', repPendiente:'Pendente', repEnProgreso:'Em andamento', repFinalizadas:'Finalizadas',
+    repSinDatos:'Não há reparações', repDescripcion:'Descrição *',
+    repFecha:'Data', repCosto:'Custo (₲)', repEstado:'Status',
+    repVehiculo:'Veículo', repCliente:'Cliente', repNotas:'Notas',
+    repCambiarEstado:'ALTERAR STATUS', repFacturar:'🧾 GERAR FATURA',
+    repEliminar:'Excluir esta reparação?',
+    repEstPendiente:'PENDENTE', repEstProgreso:'EM ANDAMENTO', repEstFinalizado:'FINALIZADO',
+    invTitulo:'Inventário', invNuevo:'+ Novo', invBuscar:'Buscar produto...',
+    invSinDatos:'Não há produtos', invStockBajo:'ESTOQUE BAIXO',
+    invNombre:'Nome *', invCantidad:'Quantidade', invStockMin:'Estoque mínimo',
+    invPrecio:'Preço unitário (₲)', invCategoria:'Categoria',
+    invDescontar:'Descontar estoque', invCantDescontar:'Quantidade a descontar',
+    invEliminar:'Excluir este produto?',
+    credTitulo:'Créditos', credPendientes:'Pendentes', credPagados:'Pagos',
+    credSinDatos:'Não há créditos', credNuevo:'+ Novo',
+    credCliente:'Cliente *', credMonto:'Valor (₲) *', credDescripcion:'Descrição',
+    credFecha:'Data', credMarcarPagado:'✓ MARCAR COMO PAGO',
+    credEliminar:'Excluir este crédito?',
+    empTitulo:'Funcionários', empNuevo:'+ Novo', empSinDatos:'Não há funcionários',
+    empCargo:'Cargo', empTel:'Telefone', empEmail:'E-mail',
+    empTrabajosReg:'TRABALHOS REGISTRADOS', empSinTrabajos:'Sem trabalhos',
+    empNuevoTrabajo:'+ Registrar trabalho', empFecha:'Data', empHoras:'Horas',
+    empDescripcion:'Descrição', empMonto:'Valor (₲)',
+    empNombre:'Nome *', empCargoLabel:'Cargo', empTelLabel:'Telefone',
+    empEliminar:'Excluir este funcionário?',
+    facTitulo:'Faturas', facSinDatos:'Sem faturas geradas',
+    facDetalle:'DETALHES', facCliente:'Cliente', facVehiculo:'Veículo',
+    facReparacion:'Reparação', facManoObra:'Mão de obra', facRepuestos:'Peças',
+    facOtros:'Outros', facTotal:'TOTAL', facNotas:'Notas',
+    facCompartir:'📤 Compartilhar', facImprimir:'🖨️ Imprimir',
+    facWhatsapp:'💬 Enviar pelo WhatsApp', facMarcarPagada:'✓ MARCAR COMO PAGA',
+    facPagada:'✓ FATURA PAGA', facFecha:'Data',
+    facManoObraLabel:'Mão de obra (₲)', facRepuestosLabel:'Peças (₲)', facOtrosLabel:'Outros (₲)',
+    repGanancias:'RECEITAS', repHoy2:'HOJE', repSemana:'ESTA SEMANA',
+    repMes:'ESTE MÊS', repFiados:'CRÉDITOS PENDENTES', repVerCreditos:'Ver créditos',
+    repTopServ:'TOP SERVIÇOS DO MÊS', repSinReps2:'Sem reparações este mês',
+    repRepsFinalizadas:'reparações finalizadas',
+    usTitulo:'Usuários', usInvitar:'+ Convidar', usCodigosPend:'CÓDIGOS PENDENTES',
+    usAdmins:'ADMINISTRADORES', usEmpleados:'FUNCIONÁRIOS', usClientes:'CLIENTES',
+    usSinUsuarios:'Sem usuários registrados', usRol:'Função', usAutos:'🚗 Carros',
+    usVos:'(Você)',
+    credTotalPend:'TOTAL PENDENTE', credPagar:'✓ Pagar', credPagadoLabel:'Pago',
+    credTodos:'Todos',
+    sinCliente:'Sem cliente', sinDescripcion:'Sem descrição', sinVehiculo:'Sem veículo',
+    sinRol:'Sem função', sinCategoria:'Sem categoria', sinFecha:'Sem data',
+    editarBtn:'Editar', eliminarBtn:'Excluir', facturarBtn:'🧾 Faturar',
+    enProgresoBtn:'▶ Em andamento', finalizarBtn:'✓ Finalizar',
+    yaVinculados:'JÁ VINCULADOS', vehSinPropietario:'Não há veículos sem proprietário.',
+    modNuevoCliente:'NOVO CLIENTE', modEditarCliente:'EDITAR CLIENTE',
+    modNuevoVehiculo:'NOVO VEÍCULO', modEditarVehiculo:'EDITAR VEÍCULO',
+    modNuevaRep:'NOVA REPARAÇÃO', modEditarRep:'EDITAR REPARAÇÃO',
+    modNuevoProducto:'NOVO PRODUTO', modEditarProducto:'EDITAR PRODUTO',
+    modDescontarStock:'DESCONTAR ESTOQUE', modNuevoCredito:'NOVO CRÉDITO',
+    modNuevoEmpleado:'NOVO FUNCIONÁRIO', modEditarEmpleado:'EDITAR FUNCIONÁRIO',
+    modRegistrarTrabajo:'REGISTRAR TRABALHO', modNuevaFactura:'NOVA FATURA',
+    modVincularVeh:'VINCULAR VEÍCULOS', modInvitarUsuario:'CONVIDAR USUÁRIO',
+    modNuevaPass:'NOVA SENHA',
+    lblDescripcion:'Descrição *', lblCosto:'Custo (₲)', lblFecha:'Data',
+    lblEstado:'Status', lblVehiculo:'Veículo', lblCliente:'Cliente', lblNotas:'Notas',
+    lblMarca:'Marca', lblModelo:'Modelo', lblAnio:'Ano', lblColor:'Cor',
+    lblPropietario:'Proprietário', lblFotoVeh:'Foto do veículo',
+    lblNuevaFoto:'Nova foto (opcional)',
+    lblCantidad:'Quantidade', lblUnidad:'Unidade', lblStockMin:'Estoque mínimo',
+    lblPrecioUnit:'Preço unitário (₲)', lblCategoria:'Categoria',
+    lblCantDescontar:'Quantidade a descontar', lblMotivo:'Motivo (opcional)',
+    lblMonto:'Valor (₲) *', lblManoObra:'Mão de obra (₲)',
+    lblRepuestos:'Peças (₲)', lblOtros:'Outros (₲)',
+    lblHoras:'Horas', lblTipoTrabajo:'Tipo de trabalho', lblComentario:'Comentário',
+    lblFotoTrabajo:'Foto do veículo (opcional)',
+    generandoPdf:'Gerando PDF...', pdfDescargado:'PDF baixado',
+    cuentaPendiente:'Conta pendente de vinculação',
+    cuentaPendienteMsg:'A oficina ainda não vinculou sua conta. Avise-os para fazer isso.',
+    cuentaPendienteMsg2:'A oficina ainda não vinculou sua conta. Avise-os.',
+    stockActual:'Estoque atual',
+  },
+  en: {
+    salir:'Logout', inicio:'HOME', clientes:'CLIENTS', vehiculos:'VEHICLES',
+    reparaciones:'REPAIRS', inventario:'INVENTORY', creditos:'CREDITS',
+    empleados:'EMPLOYEES', facturas:'INVOICES', reportes:'REPORTS',
+    usuarios:'USERS', misAutos:'MY CARS', misReps:'MY REPAIRS',
+    navInicio:'Home', navClientes:'Clients', navVehiculos:'Vehicles',
+    navReparaciones:'Repairs', navInventario:'Inventory', navCreditos:'Credits',
+    navEmpleados:'Employees', navFacturas:'Invoices', navReportes:'Reports',
+    navUsuarios:'Users', navMisAutos:'My Cars', navMisReps:'My Repairs',
+    bienvenido:'Welcome', cargando:'Loading...', sinDatos:'No data',
+    guardar:'SAVE', cancelar:'CANCEL', eliminar:'DELETE', editar:'Edit',
+    nuevo:'+ New', volver:'← Back', ingresar:'LOGIN', salirBtn:'Logout',
+    buscar:'Search', ver:'View', cerrar:'CLOSE', actualizar:'UPDATE',
+    confirmar:'Are you sure?', si:'YES', no:'NO',
+    dashTaller:'Your Workshop', dashBienvenido:'Welcome',
+    dashClientes:'CLIENTS', dashEnProgreso:'IN PROGRESS', dashHoy:'TODAY',
+    dashCreditos:'CREDITS', dashIngresosMes:'MONTHLY INCOME',
+    dashRepsFinalizadas:'completed repairs', dashStockBajo:'⚠ LOW STOCK',
+    dashRestantes:'remaining', dashRecientes:'RECENT', dashSinReps:'No repairs yet',
+    dashBuscarPatente:'Search by plate...',
+    cliTitulo:'Clients', cliNuevo:'+ New', cliBuscar:'Search client...',
+    cliSinDatos:'No clients found', cliSinTel:'No phone',
+    cliTel:'Phone', cliEmail:'Email', cliVehiculos:'Vehicles',
+    cliFiadoPend:'Pending credit', cliVehiculos2:'VEHICLES',
+    cliUltReps:'LATEST REPAIRS', cliSinVeh:'No vehicles',
+    cliSinReps:'No repairs', cliWhatsapp:'💬 WhatsApp',
+    cliNombre:'Name *', cliTelLabel:'Phone', cliEmailLabel:'Email',
+    cliEliminar:'Delete this client?',
+    vehTitulo:'Vehicles', vehBuscar:'Search by plate or brand...',
+    vehSinDatos:'No vehicles found', vehSinProp:'No owner',
+    vehPatente:'Plate *', vehMarca:'Brand', vehModelo:'Model',
+    vehAnio:'Year', vehColor:'Color', vehPropietario:'Owner',
+    vehFoto:'Vehicle photo', vehNuevaFoto:'New photo (optional)',
+    vehHistorial:'REPAIR HISTORY', vehSinReps:'No repairs',
+    vehEliminar:'Delete this vehicle?',
+    repTitulo:'Repairs', repNueva:'+ New', repBuscar:'Search by description, plate or client...',
+    repTodas:'All', repPendiente:'Pending', repEnProgreso:'In progress', repFinalizadas:'Completed',
+    repSinDatos:'No repairs found', repDescripcion:'Description *',
+    repFecha:'Date', repCosto:'Cost (₲)', repEstado:'Status',
+    repVehiculo:'Vehicle', repCliente:'Client', repNotas:'Notes',
+    repCambiarEstado:'CHANGE STATUS', repFacturar:'🧾 GENERATE INVOICE',
+    repEliminar:'Delete this repair?',
+    repEstPendiente:'PENDING', repEstProgreso:'IN PROGRESS', repEstFinalizado:'COMPLETED',
+    invTitulo:'Inventory', invNuevo:'+ New', invBuscar:'Search product...',
+    invSinDatos:'No products found', invStockBajo:'LOW STOCK',
+    invNombre:'Name *', invCantidad:'Quantity', invStockMin:'Min. stock',
+    invPrecio:'Unit price (₲)', invCategoria:'Category',
+    invDescontar:'Deduct stock', invCantDescontar:'Quantity to deduct',
+    invEliminar:'Delete this product?',
+    credTitulo:'Credits', credPendientes:'Pending', credPagados:'Paid',
+    credSinDatos:'No credits found', credNuevo:'+ New',
+    credCliente:'Client *', credMonto:'Amount (₲) *', credDescripcion:'Description',
+    credFecha:'Date', credMarcarPagado:'✓ MARK AS PAID',
+    credEliminar:'Delete this credit?',
+    empTitulo:'Employees', empNuevo:'+ New', empSinDatos:'No employees found',
+    empCargo:'Position', empTel:'Phone', empEmail:'Email',
+    empTrabajosReg:'REGISTERED WORK', empSinTrabajos:'No work registered',
+    empNuevoTrabajo:'+ Register work', empFecha:'Date', empHoras:'Hours',
+    empDescripcion:'Description', empMonto:'Amount (₲)',
+    empNombre:'Name *', empCargoLabel:'Position', empTelLabel:'Phone',
+    empEliminar:'Delete this employee?',
+    facTitulo:'Invoices', facSinDatos:'No invoices generated',
+    facDetalle:'DETAILS', facCliente:'Client', facVehiculo:'Vehicle',
+    facReparacion:'Repair', facManoObra:'Labor', facRepuestos:'Parts',
+    facOtros:'Other', facTotal:'TOTAL', facNotas:'Notes',
+    facCompartir:'📤 Share', facImprimir:'🖨️ Print',
+    facWhatsapp:'💬 Send via WhatsApp', facMarcarPagada:'✓ MARK AS PAID',
+    facPagada:'✓ INVOICE PAID', facFecha:'Date',
+    facManoObraLabel:'Labor (₲)', facRepuestosLabel:'Parts (₲)', facOtrosLabel:'Other (₲)',
+    repGanancias:'REVENUE', repHoy2:'TODAY', repSemana:'THIS WEEK',
+    repMes:'THIS MONTH', repFiados:'PENDING CREDITS', repVerCreditos:'View credits',
+    repTopServ:'TOP SERVICES THIS MONTH', repSinReps2:'No repairs this month',
+    repRepsFinalizadas:'completed repairs',
+    usTitulo:'Users', usInvitar:'+ Invite', usCodigosPend:'PENDING CODES',
+    usAdmins:'ADMINISTRATORS', usEmpleados:'EMPLOYEES', usClientes:'CLIENTS',
+    usSinUsuarios:'No registered users', usRol:'Role', usAutos:'🚗 Cars',
+    usVos:'(You)',
+    credTotalPend:'TOTAL PENDING', credPagar:'✓ Pay', credPagadoLabel:'Paid',
+    credTodos:'All',
+    sinCliente:'No client', sinDescripcion:'No description', sinVehiculo:'No vehicle',
+    sinRol:'No role', sinCategoria:'No category', sinFecha:'No date',
+    editarBtn:'Edit', eliminarBtn:'Delete', facturarBtn:'🧾 Invoice',
+    enProgresoBtn:'▶ In progress', finalizarBtn:'✓ Complete',
+    yaVinculados:'ALREADY LINKED', vehSinPropietario:'No vehicles without owner.',
+    modNuevoCliente:'NEW CLIENT', modEditarCliente:'EDIT CLIENT',
+    modNuevoVehiculo:'NEW VEHICLE', modEditarVehiculo:'EDIT VEHICLE',
+    modNuevaRep:'NEW REPAIR', modEditarRep:'EDIT REPAIR',
+    modNuevoProducto:'NEW PRODUCT', modEditarProducto:'EDIT PRODUCT',
+    modDescontarStock:'DEDUCT STOCK', modNuevoCredito:'NEW CREDIT',
+    modNuevoEmpleado:'NEW EMPLOYEE', modEditarEmpleado:'EDIT EMPLOYEE',
+    modRegistrarTrabajo:'REGISTER WORK', modNuevaFactura:'NEW INVOICE',
+    modVincularVeh:'LINK VEHICLES', modInvitarUsuario:'INVITE USER',
+    modNuevaPass:'NEW PASSWORD',
+    lblDescripcion:'Description *', lblCosto:'Cost (₲)', lblFecha:'Date',
+    lblEstado:'Status', lblVehiculo:'Vehicle', lblCliente:'Client', lblNotas:'Notes',
+    lblMarca:'Brand', lblModelo:'Model', lblAnio:'Year', lblColor:'Color',
+    lblPropietario:'Owner', lblFotoVeh:'Vehicle photo',
+    lblNuevaFoto:'New photo (optional)',
+    lblCantidad:'Quantity', lblUnidad:'Unit', lblStockMin:'Min. stock',
+    lblPrecioUnit:'Unit price (₲)', lblCategoria:'Category',
+    lblCantDescontar:'Quantity to deduct', lblMotivo:'Reason (optional)',
+    lblMonto:'Amount (₲) *', lblManoObra:'Labor (₲)',
+    lblRepuestos:'Parts (₲)', lblOtros:'Other (₲)',
+    lblHoras:'Hours', lblTipoTrabajo:'Type of work', lblComentario:'Comment',
+    lblFotoTrabajo:'Vehicle photo (optional)',
+    generandoPdf:'Generating PDF...', pdfDescargado:'PDF downloaded',
+    cuentaPendiente:'Account pending linking',
+    cuentaPendienteMsg:'The workshop has not yet linked your account. Let them know.',
+    cuentaPendienteMsg2:'The workshop has not yet linked your account. Let them know.',
+    stockActual:'Current stock',
+  }
+};
+
+
+let idiomaActual = localStorage.getItem('tallerpro_lang') || 'es';
+const t = (key) => IDIOMAS[idiomaActual]?.[key] || IDIOMAS['es'][key] || key;
+
+function cambiarIdioma(lang) {
+  idiomaActual = lang;
+  localStorage.setItem('tallerpro_lang', lang);
+  // Actualizar botón salir
+  const btnSalir = document.getElementById('btn-salir');
+  if (btnSalir) btnSalir.textContent = t('salirBtn');
+  // Refrescar navegación y página actual
+  buildNav();
+  navigate(currentPage);
+}
+
+function aplicarIdioma() {
+  const sel = document.getElementById('lang-selector');
+  if (sel) sel.value = idiomaActual;
+  const btnSalir = document.getElementById('btn-salir');
+  if (btnSalir) btnSalir.textContent = t('salirBtn');
+}
+let currentUser   = null;   // Usuario autenticado de Supabase
+let currentPerfil = null;   // Perfil con rol y taller
+let currentPage   = 'dashboard';
+let loginTab      = 'login';
+let recoveryMode  = window.location.hash.includes('type=recovery');
+
+// Link de invitación: detectar ?taller=ID (validado como UUID)
+const urlParams       = new URLSearchParams(window.location.search);
+const _rawTallerId    = urlParams.get('taller');
+const UUID_REGEX      = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const tallerIdFromUrl = (_rawTallerId && UUID_REGEX.test(_rawTallerId)) ? _rawTallerId : null;
+
+// Splash: tiempo de inicio para sincronizar animación
+const splashStart = Date.now();
+
+// ─── SPLASH ───────────────────────────────────────────────────────────────────
+function hideSplash(immediate = false) {
+  const splash = document.getElementById('splash');
+  if (!splash || splash.style.display === 'none') return;
+  if (immediate) { splash.style.display = 'none'; return; }
+  splash.style.pointerEvents = 'none';
+  splash.style.zIndex = '-1';
+  const remaining = Math.max(0, 1600 - (Date.now() - splashStart));
+  setTimeout(() => {
+    splash.style.opacity = '0';
+    setTimeout(() => { splash.style.display = 'none'; }, 400);
+  }, remaining);
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+window.addEventListener('load', async () => {
+  if (recoveryMode) {
+    hideSplash(true);
+    mostrarFormCambiarPass();
+    return;
+  }
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) {
+      hideSplash(true);
+      await loadPerfil(session.user);
+    } else {
+      hideSplash();
+      showLogin();
+    }
+  } catch(e) {
+    hideSplash(true);
+    showLogin();
+  }
+});
+
+// onAuthStateChange: recovery y logout solamente
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    recoveryMode = true;
+    hideSplash(true);
+    mostrarFormCambiarPass();
+  } else if (event === 'SIGNED_OUT') {
+    recoveryMode = false;
+    currentUser = null;
+    currentPerfil = null;
+    showLogin();
+  }
+});
+
+// ─── PANTALLAS ────────────────────────────────────────────────────────────────
+function mostrarFormCambiarPass() {
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-form').innerHTML = `
+    <div class="login-logo" style="margin-bottom:1.5rem">TALLERPRO</div>
+    <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--accent);margin-bottom:1rem;text-align:center">NUEVA CONTRASEÑA</div>
+    <div class="form-group"><label class="form-label">Nueva contraseña *</label><input class="form-input" id="new-pass" type="password" placeholder="Mínimo 6 caracteres"></div>
+    <div class="form-group"><label class="form-label">Repetir contraseña *</label><input class="form-input" id="new-pass2" type="password" placeholder="Repetí la contraseña"></div>
+    <button class="btn-primary" onclick="cambiarContrasena()">GUARDAR CONTRASEÑA</button>
+    <p id="auth-error" style="color:var(--danger);font-size:.8rem;margin-top:.75rem;text-align:center;display:none"></p>`;
+}
+
+async function loadPerfil(user) {
+  currentUser = user;
+  try {
+    const { data: perfil, error } = await sb.from('perfiles')
+      .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono)')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (error) { showLogin(); return; }
+    if (!perfil) {
+      const { data: nuevo } = await sb.from('perfiles')
+        .insert({ id: user.id, nombre: user.email, rol: 'cliente', taller_id: null })
+        .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono)')
+        .maybeSingle();
+      currentPerfil = nuevo;
+      showCodigoPrompt();
+      return;
+    }
+    currentPerfil = perfil;
+    if (perfil.taller_id && (perfil.rol === 'admin' || perfil.rol === 'empleado' || perfil.rol === 'cliente')) {
+      showApp();
+    } else {
+      showCodigoPrompt();
+    }
+  } catch(e) {
+    showLogin();
+  }
+}
+
+function showCodigoPrompt() {
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-form').innerHTML = `
+    <div class="login-logo" style="margin-bottom:.5rem">TALLERPRO</div>
+    <div style="font-family:var(--font-head);font-size:1rem;color:var(--text2);text-align:center;margin-bottom:1.5rem;letter-spacing:1px">BIENVENIDO</div>
+    <div style="background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.2);border-radius:10px;padding:.75rem;margin-bottom:1.25rem;font-size:.82rem;color:var(--text2);text-align:center">
+      Tu cuenta no está vinculada a ningún taller. Ingresá el código que te dio el administrador.
+    </div>
+    <div class="form-group">
+      <label class="form-label">Código *</label>
+      <input class="form-input" id="prompt-codigo" placeholder="Ingresá tu código" style="text-transform:uppercase;letter-spacing:3px">
+    </div>
+    <button class="btn-primary" onclick="aplicarCodigo()">CONTINUAR</button>
+    <p id="auth-error" style="color:var(--danger);font-size:.8rem;margin-top:.75rem;text-align:center;display:none"></p>
+    <button class="btn-secondary" onclick="logout()" style="margin-top:.5rem">Cerrar sesión</button>`;
+}
+
+async function aplicarCodigo() {
+  const codigo = document.getElementById('prompt-codigo').value.trim().toUpperCase();
+  const errEl = document.getElementById('auth-error');
+  if (!codigo) { errEl.textContent = 'El código es obligatorio'; errEl.style.display = 'block'; return; }
+  const { data: cod } = await sb.from('codigos_empleado')
+    .select('*').eq('codigo', codigo).eq('usado', false).single();
+  if (!cod) { errEl.textContent = 'Código inválido o ya utilizado'; errEl.style.display = 'block'; return; }
+  const rolNuevo = cod.tipo === 'empleado' ? 'empleado' : 'cliente';
+  await sb.from('perfiles').update({ rol: rolNuevo, taller_id: cod.taller_id }).eq('id', currentUser.id);
+  await sb.from('codigos_empleado').update({ usado: true, usado_por: currentUser.id }).eq('codigo', codigo);
+  if (rolNuevo === 'cliente') {
+    const { data: perfActual } = await sb.from('perfiles').select('cliente_id').eq('id', currentUser.id).maybeSingle();
+    if (!perfActual?.cliente_id) {
+      const { data: cli } = await sb.from('clientes')
+        .insert({ nombre: currentPerfil?.nombre || currentUser.email, taller_id: cod.taller_id })
+        .select().single();
+      if (cli) await sb.from('perfiles').update({ cliente_id: cli.id }).eq('id', currentUser.id);
+    }
+  }
+  const { data: perfil } = await sb.from('perfiles')
+    .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono)')
+    .eq('id', currentUser.id).maybeSingle();
+  currentPerfil = perfil;
+  toast(rolNuevo === 'empleado' ? 'Registrado como empleado' : 'Registrado como cliente', 'success');
+  showApp();
+}
+
+// ─── AUTH UI ─────────────────────────────────────────────────────────────────
+function showLogin() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  if (tallerIdFromUrl) {
+    showLoginInvitacion();
+  } else {
+    showLoginNormal();
+  }
+}
+
+function showLoginNormal() {
+  document.getElementById('login-normal').style.display = 'block';
+  document.getElementById('login-invitacion').style.display = 'none';
+  switchLoginTab('login');
+}
+
+function showLoginInvitacion() {
+  document.getElementById('login-normal').style.display = 'none';
+  document.getElementById('login-invitacion').style.display = 'block';
+}
+
+function onCodigoInput(val) {
+  // No-op: el tipo de código (empleado/cliente) se valida server-side al registrarse
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  aplicarIdioma();
+  buildNav();
+  const rol = currentPerfil?.rol || 'cliente';
+  const rolLabel = { admin:'ADMIN', empleado:'EMPLEADO', cliente:'CLIENTE' }[rol] || '';
+  const rolClass = { admin:'role-admin', empleado:'role-empleado', cliente:'role-cliente' }[rol] || '';
+  document.getElementById('role-badge').textContent = rolLabel;
+  document.getElementById('role-badge').className = `topbar-role ${rolClass}`;
+  navigate('dashboard');
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
+}
+
+function switchLoginTab(tab) {
+  loginTab = tab;
+  document.querySelectorAll('.login-tab').forEach((t,i) => {
+    t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='register')||(i===2&&tab==='nuevo-taller'));
+  });
+  const regFields = document.getElementById('register-fields');
+  if (regFields) regFields.style.display = tab==='register' ? 'block' : 'none';
+  document.getElementById('nuevo-taller-fields').style.display = tab==='nuevo-taller' ? 'block' : 'none';
+  document.getElementById('forgot-link').style.display = tab==='login' ? 'block' : 'none';
+  const forgotMode = tab === 'forgot';
+  document.getElementById('auth-pass').style.display = forgotMode ? 'none' : 'block';
+  document.getElementById('auth-pass').previousElementSibling.style.display = forgotMode ? 'none' : 'block';
+  if (forgotMode) {
+    document.getElementById('auth-btn').textContent = 'ENVIAR LINK';
+    document.getElementById('auth-btn').onclick = handleForgotPassword;
+    document.getElementById('forgot-link').innerHTML = `<button onclick="switchLoginTab('login')" style="background:none;border:none;color:var(--text2);font-size:.8rem;cursor:pointer;text-decoration:underline">← Volver al login</button>`;
+  } else {
+    const labels = { login:'INGRESAR', register:'REGISTRARME', 'nuevo-taller':'CREAR TALLER' };
+    document.getElementById('auth-btn').textContent = labels[tab] || 'INGRESAR';
+    document.getElementById('auth-btn').onclick = handleAuth;
+  }
+}
+
+// ─── MANEJO DE AUTENTICACIÓN ──────────────────────────────────────────────────
+async function handleRegistroInvitacion() {
+  const nombre = document.getElementById('inv-nombre').value.trim();
+  const apellido = document.getElementById('inv-apellido').value.trim();
+  const telefono = document.getElementById('inv-telefono').value.trim();
+  const codigo = document.getElementById('inv-codigo').value.trim().toUpperCase();
+  const email = document.getElementById('inv-email').value.trim();
+  const pass = document.getElementById('inv-pass').value;
+  const errEl = document.getElementById('inv-error');
+  const btn = document.querySelector('#login-invitacion .btn-primary');
+  errEl.style.display = 'none';
+
+  if (!nombre || !apellido) { errEl.textContent = 'Nombre y apellido son obligatorios'; errEl.style.display = 'block'; return; }
+  if (!codigo) { errEl.textContent = 'El código es obligatorio'; errEl.style.display = 'block'; return; }
+  if (!email || !pass) { errEl.textContent = 'Email y contraseña son obligatorios'; errEl.style.display = 'block'; return; }
+  if (pass.length < 6) { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres'; errEl.style.display = 'block'; return; }
+
+  btn.textContent = 'REGISTRANDO...';
+  btn.disabled = true;
+
+  // Verificar código
+  const { data: cod, error: codError } = await sb.from('codigos_empleado')
+    .select('*').eq('codigo', codigo).eq('usado', false).single();
+  if (codError || !cod) {
+    errEl.textContent = 'Código inválido o ya utilizado';
+    errEl.style.display = 'block';
+    btn.textContent = 'REGISTRARME'; btn.disabled = false;
+    return;
+  }
+  if (cod.taller_id !== tallerIdFromUrl) {
+    errEl.textContent = 'El código no corresponde a este taller';
+    errEl.style.display = 'block';
+    btn.textContent = 'REGISTRARME'; btn.disabled = false;
+    return;
+  }
+
+  const rolFinal = cod.tipo === 'empleado' ? 'empleado' : 'cliente';
+
+  // Teléfono obligatorio para clientes
+  if (rolFinal === 'cliente' && !telefono) {
+    errEl.textContent = 'El teléfono es obligatorio';
+    errEl.style.display = 'block';
+    btn.textContent = 'REGISTRARME'; btn.disabled = false;
+    return;
+  }
+
+  // Crear cuenta
+  const { data, error } = await sb.auth.signUp({ email, password: pass });
+  if (error) {
+    errEl.textContent = error.message;
+    errEl.style.display = 'block';
+    btn.textContent = 'REGISTRARME'; btn.disabled = false;
+    return;
+  }
+
+  const nombreCompleto = `${nombre} ${apellido}`;
+
+  // Crear perfil
+  await sb.from('perfiles').insert({
+    id: data.user.id,
+    nombre: nombreCompleto,
+    rol: rolFinal,
+    taller_id: cod.taller_id
+  });
+
+  // Si es cliente, crear ficha y vincular
+  if (rolFinal === 'cliente') {
+    const { data: cli } = await sb.from('clientes')
+      .insert({ nombre: nombreCompleto, telefono, taller_id: cod.taller_id })
+      .select().single();
+    if (cli) await sb.from('perfiles').update({ cliente_id: cli.id }).eq('id', data.user.id);
+  }
+
+  // Marcar código como usado
+  await sb.from('codigos_empleado').update({ usado: true, usado_por: data.user.id }).eq('codigo', codigo);
+
+  toast(`¡Bienvenido ${nombre}!`, 'success');
+  btn.textContent = 'REGISTRARME'; btn.disabled = false;
+
+  // Ingresar directamente
+  await loadPerfil(data.user);
+}
+
+async function handleAuth() {
+  const email = document.getElementById('auth-email').value.trim();
+  const pass = document.getElementById('auth-pass').value;
+  const btn = document.getElementById('auth-btn');
+  showAuthError('');
+  if (!email || !pass) { showAuthError('Completá todos los campos'); return; }
+  btn.textContent = 'CARGANDO...';
+  btn.disabled = true;
+
+  if (loginTab === 'login') {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if (error) {
+      showAuthError('Email o contraseña incorrectos');
+      btn.textContent = 'INGRESAR'; btn.disabled = false;
+      return;
+    }
+    await loadPerfil(data.user);
+
+  } else if (loginTab === 'nuevo-taller') {
+    const nombre = document.getElementById('reg-nombre-admin').value.trim();
+    const tallerNombre = document.getElementById('reg-taller').value.trim();
+    const tallerTel = document.getElementById('reg-tel').value.trim();
+    if (!nombre || !tallerNombre) { showAuthError('Completá todos los campos'); btn.textContent = 'CREAR TALLER'; btn.disabled = false; return; }
+    const { data, error } = await sb.auth.signUp({ email, password: pass });
+    if (error) { showAuthError(error.message); btn.textContent = 'CREAR TALLER'; btn.disabled = false; return; }
+    const { data: taller } = await sb.from('talleres').insert({ nombre: tallerNombre, telefono: tallerTel }).select().single();
+    await sb.from('perfiles').insert({ id: data.user.id, nombre, rol: 'admin', taller_id: taller.id });
+    toast('¡Taller creado! Ingresá con tu email y contraseña.', 'success');
+    btn.textContent = 'CREAR TALLER'; btn.disabled = false;
+    switchLoginTab('login');
+  }
+}
+
+
+async function handleForgotPassword() {
+  const email = document.getElementById('auth-email').value.trim();
+  if (!email) { showAuthError('Ingresá tu email'); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.href
+  });
+  if (error) { showAuthError('Error al enviar el email'); return; }
+  document.getElementById('auth-error').style.display = 'none';
+  document.getElementById('login-form').innerHTML = `
+    <div style="text-align:center;padding:1rem">
+      <div style="font-size:2rem;margin-bottom:1rem">📧</div>
+      <div style="font-family:var(--font-head);font-size:1.2rem;color:var(--accent);margin-bottom:.5rem">EMAIL ENVIADO</div>
+      <p style="color:var(--text2);font-size:.85rem">Revisá tu bandeja de entrada y seguí el link para restablecer tu contraseña.</p>
+      <button class="btn-secondary" style="margin-top:1.5rem" onclick="location.reload()">VOLVER AL LOGIN</button>
+    </div>`;
+}
+
+async function cambiarContrasena() {
+  const pass1 = document.getElementById('new-pass').value;
+  const pass2 = document.getElementById('new-pass2').value;
+  const errEl = document.getElementById('auth-error');
+
+  if (!pass1 || pass1.length < 6) { 
+    errEl.textContent = 'La contraseña debe tener al menos 6 caracteres';
+    errEl.style.display = 'block';
+    return; 
+  }
+  if (pass1 !== pass2) { 
+    errEl.textContent = 'Las contraseñas no coinciden';
+    errEl.style.display = 'block';
+    return; 
+  }
+
+  const btn = document.querySelector('#login-form .btn-primary');
+  if (btn) btn.textContent = 'GUARDANDO...';
+  errEl.style.display = 'none';
+
+  const { error } = await sb.auth.updateUser({ password: pass1 });
+  
+  if (error) { 
+    errEl.textContent = 'Error: ' + error.message;
+    errEl.style.display = 'block';
+    if (btn) btn.textContent = 'GUARDAR CONTRASEÑA';
+    return; 
+  }
+
+  recoveryMode = false;
+  await sb.auth.signOut();
+  window.location.href = window.location.origin + window.location.pathname;
+}
+
+async function logout() {
+  currentUser = null;
+  currentPerfil = null;
+  await sb.auth.signOut();
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  location.reload();
+}
+
+// ─── NAVIGATION ──────────────────────────────────────────────────────────────
+function buildNav() {
+  const rol = currentPerfil?.rol;
+  const navItems = [];
+
+  navItems.push({ id: 'dashboard', label: t('navInicio'), icon: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>' });
+
+  if (rol === 'admin' || rol === 'empleado') {
+    navItems.push({ id: 'clientes', label: t('navClientes'), icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' });
+    navItems.push({ id: 'vehiculos', label: t('navVehiculos'), icon: '<path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2h-2"/><circle cx="8.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>' });
+    navItems.push({ id: 'reparaciones', label: t('navReparaciones'), icon: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' });
+    navItems.push({ id: 'inventario', label: t('navInventario'), icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>' });
+  }
+
+  if (rol === 'admin') {
+    navItems.push({ id: 'creditos', label: t('navCreditos'), icon: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' });
+    navItems.push({ id: 'empleados', label: t('navEmpleados'), icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' });
+    navItems.push({ id: 'facturacion', label: t('navFacturas'), icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>' });
+    navItems.push({ id: 'reportes', label: t('navReportes'), icon: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>' });
+    navItems.push({ id: 'usuarios', label: t('navUsuarios'), icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/>' });
+  }
+
+  if (rol === 'cliente') {
+    navItems.push({ id: 'mis-vehiculos', label: t('navMisAutos'), icon: '<path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2h-2"/><circle cx="8.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>' });
+    navItems.push({ id: 'mis-reparaciones', label: t('navMisReps'), icon: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' });
+  }
+
+  document.getElementById('bottom-nav').innerHTML = navItems.map(n => `
+    <button class="nav-btn" onclick="navigate('${n.id}')" id="nav-${n.id}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${n.icon}</svg>
+      ${n.label}
+    </button>`).join('');
+}
+
+async function navigate(page, params = {}) {
+  currentPage = page;
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const navEl = document.getElementById('nav-' + page);
+  if (navEl) navEl.classList.add('active');
+  const titles = { dashboard:t('inicio'), clientes:t('clientes'), vehiculos:t('vehiculos'), reparaciones:t('reparaciones'), inventario:t('inventario'), creditos:t('creditos'), empleados:t('empleados'), facturacion:t('facturas'), reportes:t('reportes'), usuarios:t('usuarios'), 'mis-vehiculos':t('misAutos'), 'mis-reparaciones':t('misReps') };
+  document.getElementById('page-title').textContent = titles[page] || '';
+  document.getElementById('main-content').innerHTML = '<div class="loading">Cargando...</div>';
+  const pages = { dashboard, clientes, vehiculos, reparaciones, inventario, creditos, empleados, facturacion, reportes, usuarios, 'mis-vehiculos': misVehiculos, 'mis-reparaciones': misReparaciones };
+  if (pages[page]) {
+    try { await pages[page](params); }
+    catch(err) { console.error(`Error en ${page}:`, err); document.getElementById('main-content').innerHTML = `<div class="empty"><p>Error al cargar. <button onclick="navigate('${page}')" style="color:var(--accent);background:none;border:none;cursor:pointer;text-decoration:underline">Reintentar</button></p></div>`; }
+  }
+}
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--success)' : 'var(--accent)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ─── MODAL ───────────────────────────────────────────────────────────────────
+function openModal(html) {
+  closeModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'modal-overlay';
+  overlay.innerHTML = `<div class="modal">${html}</div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  document.body.appendChild(overlay);
+}
+function closeModal() {
+  const m = document.getElementById('modal-overlay');
+  if (m) m.remove();
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+const tid = () => currentPerfil?.taller_id;
+function gs(n) { return parseFloat(n||0).toLocaleString('es-PY'); }
+function estadoBadge(e) { return { pendiente:'badge-yellow', en_progreso:'badge-orange', finalizado:'badge-green' }[e]||'badge-blue'; }
+function estadoLabel(e) { return { pendiente:t('repEstPendiente'), en_progreso:t('repEstProgreso'), finalizado:t('repEstFinalizado') }[e]||e; }
+
+// ─── PAGINACIÓN ─────────────────────────────────────────────────────────────
+const PAGE_SIZE = 30;
+function renderPagination(total, offset, onNavigate) {
+  if (total <= PAGE_SIZE) return '';
+  const hasPrev = offset > 0;
+  const hasNext = offset + PAGE_SIZE < total;
+  const current = Math.floor(offset / PAGE_SIZE) + 1;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  return `<div style="display:flex;justify-content:center;align-items:center;gap:1rem;padding:1rem 0">
+    ${hasPrev ? `<button onclick="${onNavigate}(${offset - PAGE_SIZE})" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .8rem;cursor:pointer;font-size:.8rem">← Anterior</button>` : ''}
+    <span style="font-size:.75rem;color:var(--text2)">${current} / ${totalPages}</span>
+    ${hasNext ? `<button onclick="${onNavigate}(${offset + PAGE_SIZE})" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .8rem;cursor:pointer;font-size:.8rem">Siguiente →</button>` : ''}
+  </div>`;
+}
+
+// ─── DEBOUNCE ───────────────────────────────────────────────────────────────
+const _debounceTimers = {};
+function debounce(key, fn, ms = 400) {
+  clearTimeout(_debounceTimers[key]);
+  _debounceTimers[key] = setTimeout(fn, ms);
+}
+
+// ─── MANEJO GLOBAL DE ERRORES ────────────────────────────────────────────────
+window.onerror = (msg, src, line) => { console.error(`Error: ${msg} at ${src}:${line}`); toast('Ocurrió un error inesperado','error'); };
+window.onunhandledrejection = (e) => { console.error('Unhandled:', e.reason); toast('Error de conexión','error'); };
+
+let _pendingConfirm = null;
+function confirmar(msg, onConfirm) {
+  _pendingConfirm = onConfirm;
+  openModal(`
+    <div style="text-align:center;padding:.5rem">
+      <div style="font-size:2rem;margin-bottom:.75rem">⚠️</div>
+      <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--text);margin-bottom:.5rem">¿Estás seguro?</div>
+      <div style="font-size:.85rem;color:var(--text2);margin-bottom:1.5rem">${h(msg)}</div>
+      <div style="display:flex;gap:.75rem">
+        <button class="btn-secondary" style="margin:0;flex:1" onclick="closeModal()">${t('cancelar')}</button>
+        <button class="btn-danger" style="margin:0;flex:1" id="btn-confirm-action">ELIMINAR</button>
+      </div>
+    </div>`);
+  setTimeout(() => {
+    const btn = document.getElementById('btn-confirm-action');
+    if (btn) btn.addEventListener('click', () => { closeModal(); if (_pendingConfirm) { _pendingConfirm(); _pendingConfirm = null; } });
+  }, 50);
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+function fechaHoy() { return new Date().toISOString().split('T')[0]; }
+function primerDiaMes() { const h = new Date(); return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}-01`; }
+function formatFecha(f) { if (!f) return ''; const [y,m,d] = f.split('-'); return `${d}/${m}/${y}`; }
+
+async function dashboard() {
+  const rol = currentPerfil?.rol;
+  const tallerNombre = currentPerfil?.talleres?.nombre || 'Tu Taller';
+  if (rol === 'cliente') { misReparaciones(); return; }
+
+  const hoy = fechaHoy();
+  const primerMes = primerDiaMes();
+
+  const [
+    { count: totalClientes },
+    { count: totalVehiculos },
+    { count: enProgreso },
+    { data: creditos },
+    { data: repsHoy },
+    { data: ingresosMes },
+    { data: stockBajo },
+    { data: recientes }
+  ] = await Promise.all([
+    cachedQuery('dash_clientes', () => sb.from('clientes').select('*',{count:'exact',head:true}).eq('taller_id',tid())),
+    cachedQuery('dash_vehiculos', () => sb.from('vehiculos').select('*',{count:'exact',head:true}).eq('taller_id',tid())),
+    cachedQuery('dash_progreso', () => sb.from('reparaciones').select('*',{count:'exact',head:true}).eq('taller_id',tid()).eq('estado','en_progreso')),
+    cachedQuery('dash_creditos', () => sb.from('fiados').select('monto').eq('taller_id',tid()).eq('pagado',false)),
+    cachedQuery('dash_hoy', () => sb.from('reparaciones').select('id').eq('taller_id',tid()).eq('fecha',hoy)),
+    cachedQuery('dash_ingresos', () => sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerMes)),
+    cachedQuery('dash_stock', () => sb.from('inventario').select('nombre,cantidad,stock_minimo').eq('taller_id',tid())),
+    cachedQuery('dash_recientes', () => sb.from('reparaciones').select('*, vehiculos(patente,marca)').eq('taller_id',tid()).order('created_at',{ascending:false}).limit(5))
+  ]);
+
+  const totalCrédito = (creditos||[]).reduce((s,f) => s+parseFloat(f.monto||0), 0);
+  const totalMes = (ingresosMes||[]).reduce((s,r) => s+parseFloat(r.costo||0), 0);
+  const alertasStock = (stockBajo||[]).filter(i => parseFloat(i.cantidad) <= parseFloat(i.stock_minimo));
+
+  document.getElementById('main-content').innerHTML = `
+    <div style="padding:.25rem 0 .75rem">
+      <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text);margin-bottom:.15rem">${h(tallerNombre)}</div>
+      <div style="font-size:.75rem;color:var(--text2);margin-bottom:1rem">${t('bienvenido')}, ${h(currentPerfil?.nombre||'')}</div>
+
+      <div class="search-box" style="margin-bottom:1.25rem">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="${t('dashBuscarPatente')}" class="form-input" style="padding-left:2.5rem;text-transform:uppercase;letter-spacing:2px" oninput="buscarPatente(this.value)">
+      </div>
+
+      <div id="patente-results"></div>
+
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-value">${totalClientes||0}</div><div class="stat-label">${t('dashClientes')}</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--accent2)">${enProgreso||0}</div><div class="stat-label">${t('dashEnProgreso')}</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--success)">${(repsHoy||[]).length}</div><div class="stat-label">${t('repHoy2')}</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:var(--danger)">₲${gs(totalCrédito)}</div><div class="stat-label">${t('dashCreditos')}</div></div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:.72rem;color:var(--text2);letter-spacing:1px;font-family:var(--font-head)">${t('dashIngresosMes')}</div>
+          <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--success)">₲${gs(totalMes)}</div>
+          <div style="font-size:.72rem;color:var(--text2)">${(ingresosMes||[]).length} ${t('dashRepsFinalizadas')}</div>
+        </div>
+        <div style="font-size:2rem">💰</div>
+      </div>
+
+      ${alertasStock.length > 0 ? `
+      <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:.75rem;margin-bottom:1rem;cursor:pointer" onclick="navigate('inventario')">
+        <div style="font-size:.72rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">${t('dashStockBajo')}</div>
+        ${alertasStock.map(i => `<div style="font-size:.82rem;color:var(--text2);padding:.2rem 0">${h(i.nombre)} — <span style="color:var(--danger);font-weight:600">${i.cantidad} ${t('dashRestantes')}</span></div>`).join('')}
+      </div>` : ''}
+
+      <div style="font-family:var(--font-head);font-size:.9rem;color:var(--text2);margin-bottom:.6rem;letter-spacing:2px">${t('dashRecientes')}</div>
+      ${(recientes||[]).length===0 ? `<div class="empty"><p>${t('dashSinReps')}</p></div>` :
+        (recientes||[]).map(r => `
+        <div class="card" onclick="detalleReparacion('${r.id}')">
+          <div class="card-header">
+            <div class="card-avatar">🔧</div>
+            <div class="card-info">
+              <div class="card-name">${h(r.descripcion)}</div>
+              <div class="card-sub">${r.vehiculos ? r.vehiculos.marca+' '+r.vehiculos.patente : t('sinVehiculo')} · ${formatFecha(r.fecha)}</div>
+            </div>
+            <span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span>
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ─── BÚSQUEDA POR PATENTE ─────────────────────────────────────────────────────
+let patenteBusquedaTimer = null;
+async function buscarPatente(valor) {
+  const resultsEl = document.getElementById('patente-results');
+  if (!resultsEl) return;
+  const patente = valor.trim().toUpperCase();
+  if (!patente) { resultsEl.innerHTML = ''; return; }
+  clearTimeout(patenteBusquedaTimer);
+  patenteBusquedaTimer = setTimeout(async () => {
+    const { data: vehs } = await sb.from('vehiculos')
+      .select('*, clientes(nombre,telefono), reparaciones(id,descripcion,estado,costo,fecha)')
+      .eq('taller_id', tid())
+      .ilike('patente', `%${patente}%`)
+      .limit(3);
+    if (!vehs || vehs.length === 0) {
+      resultsEl.innerHTML = `<div style="background:var(--surface2);border-radius:10px;padding:.75rem;margin-bottom:1rem;font-size:.85rem;color:var(--text2)">No se encontró ningún vehículo con esa patente.</div>`;
+      return;
+    }
+    resultsEl.innerHTML = vehs.map(v => {
+      const reps = (v.reparaciones||[]).sort((a,b) => (b.fecha||'').localeCompare(a.fecha||'')).slice(0,5);
+      return `
+        <div style="background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:1rem;margin-bottom:1rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+            <div>
+              <div style="font-family:var(--font-head);font-size:1.2rem;color:var(--accent);letter-spacing:2px">${h(v.patente)}</div>
+              <div style="font-size:.82rem;color:var(--text2)">${h(v.marca||'')} ${h(v.modelo||'')} ${v.anio?'· '+v.anio:''}</div>
+              ${v.clientes?`<div style="font-size:.8rem;color:var(--text2)">👤 ${h(v.clientes.nombre)}</div>`:''}
+            </div>
+            <button onclick="detalleVehiculo('${v.id}')" style="font-size:.72rem;background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 8px;cursor:pointer">Ver</button>
+          </div>
+          <div style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">HISTORIAL (${reps.length})</div>
+          ${reps.length === 0 ? '<div style="font-size:.8rem;color:var(--text2)">${t("vehSinReps")}</div>' :
+            reps.map(r => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.82rem">
+              <span>${h(r.descripcion)}</span>
+              <span class="card-badge ${estadoBadge(r.estado)}" style="font-size:.65rem">${estadoLabel(r.estado)}</span>
+            </div>`).join('')}
+        </div>`;
+    }).join('');
+  }, 500);
+}
+
+// ─── REPORTES ─────────────────────────────────────────────────────────────────
+async function reportes() {
+  const hoy = fechaHoy();
+  const primerMes = primerDiaMes();
+  const primerSemana = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - d.getDay());
+    return d.toISOString().split('T')[0];
+  })();
+
+  const [
+    { data: repsHoy },
+    { data: repsSemana },
+    { data: repsMes },
+    { data: todasReps },
+    { data: creditosPend }
+  ] = await Promise.all([
+    sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').eq('fecha',hoy),
+    sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerSemana),
+    sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerMes),
+    sb.from('reparaciones').select('descripcion,costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerMes),
+    sb.from('fiados').select('monto').eq('taller_id',tid()).eq('pagado',false)
+  ]);
+
+  const ganHoy = (repsHoy||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
+  const ganSemana = (repsSemana||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
+  const ganMes = (repsMes||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
+  const totalCréditos = (creditosPend||[]).reduce((s,f)=>s+parseFloat(f.monto||0),0);
+
+  const serviciosCount = {};
+  (todasReps||[]).forEach(r => {
+    const key = r.descripcion || 'Sin descripción';
+    serviciosCount[key] = (serviciosCount[key]||0) + parseFloat(r.costo||0);
+  });
+  const topServicios = Object.entries(serviciosCount).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  document.getElementById('main-content').innerHTML = `
+    <div style="padding:.25rem 0">
+      <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.75rem">${t('repGanancias')}</div>
+      <div class="stats-grid" style="margin-bottom:1rem">
+        <div class="stat-card"><div class="stat-value" style="font-size:1.3rem">₲${gs(ganHoy)}</div><div class="stat-label">${t('repHoy2')}</div></div>
+        <div class="stat-card"><div class="stat-value" style="font-size:1.3rem">₲${gs(ganSemana)}</div><div class="stat-label">${t('repSemana')}</div></div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:.72rem;color:var(--text2);letter-spacing:1px;font-family:var(--font-head)">${t('repMes')}</div>
+          <div style="font-family:var(--font-head);font-size:2rem;font-weight:700;color:var(--success)">₲${gs(ganMes)}</div>
+          <div style="font-size:.72rem;color:var(--text2)">${(repsMes||[]).length} ${t('repRepsFinalizadas')}</div>
+        </div>
+        <div style="font-size:2.5rem">💰</div>
+      </div>
+      <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:.72rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">${t('repFiados')}</div>
+          <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--danger)">₲${gs(totalCréditos)}</div>
+        </div>
+        <button onclick="navigate('creditos')" style="background:rgba(255,68,68,.15);border:1px solid rgba(255,68,68,.3);color:var(--danger);border-radius:8px;padding:.5rem .75rem;font-size:.8rem;cursor:pointer">${t('repVerCreditos')}</button>
+      </div>
+      ${topServicios.length > 0 ? `
+      <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.6rem">${t('repTopServ')}</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem">
+        ${topServicios.map(([desc,total],i) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;gap:.5rem;align-items:center">
+              <span style="font-family:var(--font-head);font-size:.85rem;color:var(--accent2)">#${i+1}</span>
+              <span style="font-size:.85rem">${h(desc)}</span>
+            </div>
+            <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">₲${gs(total)}</span>
+          </div>`).join('')}
+      </div>` : `<div class="empty"><p>${t('repSinReps2')}</p></div>`}
+    </div>`;
+}
+
+// ─── CLIENTES ────────────────────────────────────────────────────────────────
+
+async function clientes({ search='', offset=0 }={}) {
+  const cacheKey = `clientes_${search}_${offset}`;
+  const { data, count } = await cachedQuery(cacheKey, () => {
+    let q = sb.from('clientes').select('*', {count:'exact'}).eq('taller_id', tid()).order('nombre');
+    if (search) q = q.ilike('nombre', `%${search}%`);
+    return q.range(offset, offset + PAGE_SIZE - 1);
+  });
+  const canEdit = ['admin','empleado'].includes(currentPerfil?.rol);
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t('cliTitulo')} ${count ? `<span style="font-size:.75rem;color:var(--text2)">(${count})</span>` : ''}</div>
+      ${canEdit ? `<button class="btn-add" onclick="modalNuevoCliente()">${t('cliNuevo')}</button>` : ''}
+    </div>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" placeholder="${t('cliBuscar')}" value="${h(search)}" oninput="debounce('cli',()=>clientes({search:this.value}))" class="form-input" style="padding-left:2.5rem">
+    </div>
+    ${(data||[]).length===0 ? `<div class="empty"><p>${t('cliSinDatos')}</p></div>` :
+      (data||[]).map(c => `
+      <div class="card" onclick="detalleCliente('${c.id}')">
+        <div class="card-header">
+          <div class="card-avatar">${c.nombre.charAt(0).toUpperCase()}</div>
+          <div class="card-info"><div class="card-name">${h(c.nombre)}</div><div class="card-sub">${h(c.telefono)||t('cliSinTel')}</div></div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>`).join('')}
+    ${renderPagination(count||0, offset, '_navClientes')}`;
+}
+function _navClientes(o) { clientes({offset:o}); }
+
+async function detalleCliente(id) {
+  const [{ data:c }, { data:veh }, { data:reps }, { data:creditos }] = await Promise.all([
+    sb.from('clientes').select('*').eq('id',id).single(),
+    sb.from('vehiculos').select('*').eq('cliente_id',id),
+    sb.from('reparaciones').select('*').eq('cliente_id',id).order('created_at',{ascending:false}).limit(5),
+    sb.from('fiados').select('*').eq('cliente_id',id).eq('pagado',false)
+  ]);
+  if (!c) return;
+  const totalCrédito = (creditos||[]).reduce((s,f) => s+parseFloat(f.monto||0),0);
+  const isAdmin = currentPerfil?.rol === 'admin';
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="detail-header">
+      <button class="back-btn" onclick="navigate('clientes')">${t('volver')}</button>
+      <div class="detail-avatar">${c.nombre.charAt(0).toUpperCase()}</div>
+      <div><div class="detail-name">${h(c.nombre)}</div><div class="detail-sub">${h(c.telefono||'')}</div></div>
+    </div>
+    <div class="info-grid">
+      <div class="info-item"><div class="label">${t('cliTel')}</div><div class="value">${h(c.telefono||'-')}</div></div>
+      <div class="info-item"><div class="label">${t('cliEmail')}</div><div class="value">${h(c.email||'-')}</div></div>
+      <div class="info-item"><div class="label">${t('cliVehiculos')}</div><div class="value">${(veh||[]).length}</div></div>
+      <div class="info-item"><div class="label">${t('cliFiadoPend')}</div><div class="value" style="color:${totalCrédito>0?'var(--danger)':'var(--success)'}">₲${gs(totalCrédito)}</div></div>
+    </div>
+    ${isAdmin ? `<div style="display:flex;gap:.5rem;margin-bottom:1rem">
+      <button class="btn-secondary" style="margin:0" onclick="modalEditarCliente('${id}')">${t('editarBtn')}</button>
+      <button class="btn-danger" style="margin:0" onclick="eliminarCliente('${id}')">${t('eliminarBtn')}</button>
+      ${c.telefono ? `<button onclick="window.open('https://wa.me/595${c.telefono.replace(/\D/g,'')}')" style="flex:1;background:rgba(37,211,102,.15);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:10px;padding:.5rem;font-family:var(--font-head);font-size:.85rem;cursor:pointer">💬 WhatsApp</button>` : ''}
+    </div>` : c.telefono ? `<button onclick="window.open('https://wa.me/595${c.telefono.replace(/\D/g,'')}')" style="width:100%;background:rgba(37,211,102,.15);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:10px;padding:.6rem;font-family:var(--font-head);font-size:.9rem;cursor:pointer;margin-bottom:1rem">💬 WhatsApp</button>` : ''}
+    <div class="sub-section">
+      <div class="sub-section-title">${t('cliVehiculos2')}</div>
+      ${(veh||[]).length===0 ? '<p style="color:var(--text2);font-size:.85rem">${t("cliSinVeh")}</p>' :
+        (veh||[]).map(v => `<div class="card" style="margin-bottom:.5rem"><div class="card-header"><div class="card-avatar" style="font-size:.8rem">${h(v.patente)}</div><div class="card-info"><div class="card-name">${h(v.marca)} ${h(v.modelo||'')}</div><div class="card-sub">${h(v.anio||'')}</div></div></div></div>`).join('')}
+    </div>
+    <div class="sub-section">
+      <div class="sub-section-title">${t('cliUltReps')}</div>
+      ${(reps||[]).length===0 ? '<p style="color:var(--text2);font-size:.85rem">${t("vehSinReps")}</p>' :
+        (reps||[]).map(r => `<div class="card" style="margin-bottom:.5rem"><div class="card-header"><div class="card-info"><div class="card-name">${h(r.descripcion)}</div><div class="card-sub">₲${gs(r.costo)} · ${formatFecha(r.fecha)}</div></div><span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span></div></div>`).join('')}
+    </div>`;
+}
+
+function modalNuevoCliente() {
+  openModal(`
+    <div class="modal-title">${t("modNuevoCliente")}</div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" placeholder="Juan Pérez"></div>
+    <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="f-tel" type="tel"></div>
+    <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="f-email" type="email"></div>
+    <button class="btn-primary" onclick="guardarCliente()">${t('guardar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function guardarCliente(id=null) {
+  const nombre = document.getElementById('f-nombre').value.trim();
+  if (!nombre) { toast('El nombre es obligatorio','error'); return; }
+  const data = { nombre, telefono:document.getElementById('f-tel').value, email:document.getElementById('f-email').value, taller_id:tid() };
+  const { error } = id ? await offlineUpdate('clientes', data, 'id', id) : await offlineInsert('clientes', data);
+  if (error) { toast('Error: '+error.message,'error'); return; }
+  toast(id?'Cliente actualizado':'Cliente guardado','success');
+  closeModal(); clientes();
+}
+
+async function modalEditarCliente(id) {
+  const { data:c } = await sb.from('clientes').select('*').eq('id',id).single();
+  openModal(`
+    <div class="modal-title">${t("modEditarCliente")}</div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" value="${h(c.nombre||'')}"></div>
+    <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="f-tel" value="${h(c.telefono||'')}"></div>
+    <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="f-email" value="${h(c.email||'')}"></div>
+    <button class="btn-primary" onclick="guardarCliente('${id}')">${t('actualizar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function eliminarCliente(id) {
+  confirmar('Esta acción eliminará el cliente permanentemente.', async () => {
+    await offlineDelete('clientes', 'id', id);
+    toast('Cliente eliminado'); navigate('clientes');
+  });
+}
+
+// ─── VEHICULOS ───────────────────────────────────────────────────────────────
+async function vehiculos({ search='', offset=0 }={}) {
+  const cacheKey = `vehiculos_${search}_${offset}`;
+  const { data, count } = await cachedQuery(cacheKey, () => {
+    let q = sb.from('vehiculos').select('*, clientes(nombre)', {count:'exact'}).eq('taller_id', tid()).order('patente');
+    if (search) q = q.ilike('patente', `%${search}%`);
+    return q.range(offset, offset + PAGE_SIZE - 1);
+  });
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t('vehTitulo')} ${count ? `<span style="font-size:.75rem;color:var(--text2)">(${count})</span>` : ''}</div>
+      <button class="btn-add" onclick="modalNuevoVehiculo()">+ Nuevo</button>
+    </div>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" placeholder="${t('dashBuscarPatente')}" value="${h(search)}" oninput="debounce('veh',()=>vehiculos({search:this.value}))" class="form-input" style="padding-left:2.5rem">
+    </div>
+    ${(data||[]).length===0 ? `<div class="empty"><p>${t('vehSinDatos')}</p></div>` :
+      (data||[]).map(v => `
+      <div class="card" onclick="detalleVehiculo('${v.id}')">
+        <div class="card-header">
+          <div class="card-avatar" style="font-size:.8rem;letter-spacing:1px">${h(v.patente)}</div>
+          <div class="card-info">
+            <div class="card-name">${h(v.marca)} ${h(v.modelo||'')}</div>
+            <div class="card-sub">${h(v.anio||'')} · ${v.clientes?h(v.clientes.nombre):t('vehSinProp')}</div>
+          </div>
+          ${v.foto_url ? `<img src="${safeFotoUrl(v.foto_url)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">` : ''}
+        </div>
+      </div>`).join('')}
+    ${renderPagination(count||0, offset, '_navVeh')}`;
+}
+function _navVeh(o) { vehiculos({offset:o}); }
+
+async function detalleVehiculo(id) {
+  const [{ data:v }, { data:reps }] = await Promise.all([
+    sb.from('vehiculos').select('*, clientes(nombre,telefono)').eq('id',id).single(),
+    sb.from('reparaciones').select('*').eq('vehiculo_id',id).order('created_at',{ascending:false})
+  ]);
+  if (!v) return;
+  const isAdmin = currentPerfil?.rol==='admin';
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="detail-header">
+      <button class="back-btn" onclick="navigate('vehiculos')">${t('volver')}</button>
+      ${v.foto_url ? `<img src="${safeFotoUrl(v.foto_url)}" style="width:56px;height:56px;object-fit:cover;border-radius:12px;border:2px solid var(--accent)">` : `<div class="detail-avatar" style="font-size:.9rem">${h(v.patente)}</div>`}
+      <div><div class="detail-name">${h(v.marca)} ${h(v.modelo||'')}</div><div class="detail-sub">${h(v.anio||'')}</div></div>
+    </div>
+    ${v.foto_url ? `<img src="${safeFotoUrl(v.foto_url)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;margin-bottom:1rem;border:1px solid var(--border)">` : ''}
+    <div class="info-grid">
+      <div class="info-item"><div class="label">Patente</div><div class="value">${h(v.patente)}</div></div>
+      <div class="info-item"><div class="label">Marca</div><div class="value">${h(v.marca||'-')}</div></div>
+      <div class="info-item"><div class="label">Modelo</div><div class="value">${h(v.modelo||'-')}</div></div>
+      <div class="info-item"><div class="label">Año</div><div class="value">${h(v.anio||'-')}</div></div>
+      <div class="info-item" style="grid-column:1/-1"><div class="label">Propietario</div><div class="value">${v.clientes?v.clientes.nombre:t('vehSinProp')}</div></div>
+    </div>
+    ${isAdmin ? `<div style="display:flex;gap:.5rem;margin-bottom:1rem">
+      <button class="btn-secondary" style="margin:0" onclick="modalEditarVehiculo('${id}')">${t('editarBtn')}</button>
+      <button class="btn-danger" style="margin:0" onclick="eliminarVehiculo('${id}')">${t('eliminarBtn')}</button>
+    </div>` : ''}
+    <div class="sub-section">
+      <div class="sub-section-title">${t('vehHistorial')} (${(reps||[]).length})</div>
+      ${(reps||[]).length===0 ? '<p style="color:var(--text2);font-size:.85rem">${t("vehSinReps")}</p>' :
+        (reps||[]).map(r => `<div class="card" style="margin-bottom:.5rem"><div class="card-header"><div class="card-info"><div class="card-name">${h(r.descripcion)}</div><div class="card-sub">₲${gs(r.costo)} · ${formatFecha(r.fecha)}</div></div><span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span></div></div>`).join('')}
+    </div>`;
+}
+
+async function modalNuevoVehiculo() {
+  const { data:cls } = await sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre');
+  openModal(`
+    <div class="modal-title">${t("modNuevoVehiculo")}</div>
+    <div class="form-group"><label class="form-label">Patente *</label><input class="form-input" id="f-patente" placeholder="ABC 123" style="text-transform:uppercase"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblMarca")}</label><input class="form-input" id="f-marca" placeholder="Toyota"></div>
+      <div class="form-group"><label class="form-label">${t("lblModelo")}</label><input class="form-input" id="f-modelo" placeholder="Corolla"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblAnio")}</label><input class="form-input" id="f-anio" type="number" placeholder="2020"></div>
+      <div class="form-group"><label class="form-label">${t("lblColor")}</label><input class="form-input" id="f-color" placeholder="Blanco"></div>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblPropietario")}</label>
+      <select class="form-input" id="f-cliente">
+        <option value="">${t("vehSinProp")}</option>
+        ${(cls||[]).map(c => `<option value="${c.id}">${h(c.nombre)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t("lblFotoVeh")}</label>
+      <input type="file" id="f-foto-file" accept="image/*" capture="environment" class="form-input" style="padding:.4rem" onchange="previewFoto(this,'f-foto-b64','foto-prev')">
+      <div id="foto-prev" style="margin-top:.5rem"></div>
+      <input type="hidden" id="f-foto-b64">
+    </div>
+    <button class="btn-primary" onclick="guardarVehiculo()">${t('guardar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+const MAX_FOTO_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_FOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+let _pendingFotoFile = null; // Archivo comprimido listo para subir
+
+function previewFoto(input, hiddenId, previewId) {
+  const file = input.files[0];
+  _pendingFotoFile = null;
+  if (!file) return;
+  if (!ALLOWED_FOTO_TYPES.includes(file.type)) {
+    toast('Solo se permiten imágenes JPG, PNG o WebP','error');
+    input.value = '';
+    return;
+  }
+  if (file.size > MAX_FOTO_SIZE) {
+    toast('La imagen no puede superar 5MB','error');
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_DIM = 800;
+      let w = img.width, ht = img.height;
+      if (w > MAX_DIM || ht > MAX_DIM) {
+        if (w > ht) { ht = Math.round(ht * MAX_DIM / w); w = MAX_DIM; }
+        else { w = Math.round(w * MAX_DIM / ht); ht = MAX_DIM; }
+      }
+      canvas.width = w; canvas.height = ht;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, ht);
+      // Preview
+      const previewUrl = canvas.toDataURL('image/jpeg', 0.7);
+      document.getElementById(previewId).innerHTML = `<img src="${previewUrl}" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">`;
+      // Guardar blob comprimido para subir a Storage
+      canvas.toBlob(blob => { _pendingFotoFile = blob; }, 'image/jpeg', 0.7);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Subir foto a Supabase Storage y devolver URL pública
+async function uploadFoto(vehiculoId) {
+  if (!_pendingFotoFile) return null;
+  const filePath = `${tid()}/${vehiculoId}_${Date.now()}.jpg`;
+  const { data, error } = await sb.storage.from('vehiculos').upload(filePath, _pendingFotoFile, {
+    contentType: 'image/jpeg',
+    upsert: true
+  });
+  if (error) { console.error('Upload error:', error); toast('Error al subir foto','error'); return null; }
+  const { data: urlData } = sb.storage.from('vehiculos').getPublicUrl(filePath);
+  _pendingFotoFile = null;
+  return urlData.publicUrl;
+}
+
+// Validar que foto_url sea segura antes de renderizar
+function safeFotoUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('data:image/jpeg') || url.startsWith('data:image/png') || url.startsWith('data:image/webp')) return url;
+  if (url.startsWith('https://')) return url;
+  return '';
+}
+
+async function guardarVehiculo(id=null) {
+  const patente = document.getElementById('f-patente').value.trim().toUpperCase();
+  if (!patente) { toast('La patente es obligatoria','error'); return; }
+  const cid = document.getElementById('f-cliente').value;
+
+  // Si hay foto nueva, subirla a Storage
+  const vehiculoId = id || crypto.randomUUID();
+  let fotoUrl = document.getElementById('f-foto-b64')?.value || null;
+  if (_pendingFotoFile) {
+    toast('Subiendo foto...','info');
+    const url = await uploadFoto(vehiculoId);
+    if (url) fotoUrl = url;
+  }
+
+  const data = { patente, marca:document.getElementById('f-marca').value, modelo:document.getElementById('f-modelo').value, anio:parseInt(document.getElementById('f-anio').value)||null, color:document.getElementById('f-color')?.value||null, cliente_id:cid||null, taller_id:tid(), foto_url:fotoUrl||null };
+  if (!id) data.id = vehiculoId;
+  const { error } = id ? await offlineUpdate('vehiculos', data, 'id', id) : await offlineInsert('vehiculos', data);
+  if (error) { toast('Error: '+error.message,'error'); return; }
+  toast('Vehículo guardado','success'); closeModal(); vehiculos();
+}
+
+async function modalEditarVehiculo(id) {
+  const [{ data:v }, { data:cls }] = await Promise.all([
+    sb.from('vehiculos').select('*').eq('id',id).single(),
+    sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre')
+  ]);
+  openModal(`
+    <div class="modal-title">${t("modEditarVehiculo")}</div>
+    <div class="form-group"><label class="form-label">Patente *</label><input class="form-input" id="f-patente" value="${h(v.patente||'')}" style="text-transform:uppercase"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblMarca")}</label><input class="form-input" id="f-marca" value="${h(v.marca||'')}"></div>
+      <div class="form-group"><label class="form-label">${t("lblModelo")}</label><input class="form-input" id="f-modelo" value="${h(v.modelo||'')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblAnio")}</label><input class="form-input" id="f-anio" type="number" value="${h(v.anio||'')}"></div>
+      <div class="form-group"><label class="form-label">${t("lblColor")}</label><input class="form-input" id="f-color" value="${h(v.color||'')}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblPropietario")}</label>
+      <select class="form-input" id="f-cliente">
+        <option value="">${t("vehSinProp")}</option>
+        ${(cls||[]).map(c => `<option value="${c.id}" ${c.id===v.cliente_id?'selected':''}>${h(c.nombre)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t("lblNuevaFoto")}</label>
+      <input type="file" id="f-foto-file" accept="image/*" capture="environment" class="form-input" style="padding:.4rem" onchange="previewFoto(this,'f-foto-b64','foto-prev')">
+      <div id="foto-prev">${v.foto_url?`<img src="${safeFotoUrl(v.foto_url)}" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-top:.5rem">`:''}</div>
+      <input type="hidden" id="f-foto-b64" value="${v.foto_url||''}">
+    </div>
+    <button class="btn-primary" onclick="guardarVehiculo('${id}')">${t('actualizar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function eliminarVehiculo(id) {
+  confirmar('Esta acción eliminará el vehículo permanentemente.', async () => {
+    await offlineDelete('vehiculos', 'id', id);
+    toast('Vehículo eliminado'); navigate('vehiculos');
+  });
+}
+
+// ─── REPARACIONES ────────────────────────────────────────────────────────────
+async function reparaciones({ filtro='todos', search='', offset=0 }={}) {
+  const cacheKey = `reparaciones_${filtro}_${search}_${offset}`;
+  const { data, count } = await cachedQuery(cacheKey, () => {
+    let q = sb.from('reparaciones').select('*, vehiculos(patente,marca), clientes(nombre)', {count:'exact'}).eq('taller_id',tid()).order('created_at',{ascending:false});
+    if (filtro!=='todos') q = q.eq('estado',filtro);
+    if (search) q = q.ilike('descripcion', `%${search}%`);
+    return q.range(offset, offset + PAGE_SIZE - 1);
+  });
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t('repTitulo')} ${count ? `<span style="font-size:.75rem;color:var(--text2)">(${count})</span>` : ''}</div>
+      <button class="btn-add" onclick="modalNuevaReparacion()">${t('repNueva')}</button>
+    </div>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" placeholder="${t('repBuscar')}" value="${h(search)}" oninput="debounce('rep',()=>reparaciones({filtro:'${filtro}',search:this.value}))" class="form-input" style="padding-left:2.5rem">
+    </div>
+    <div class="tabs">
+      <button class="tab ${filtro==='todos'?'active':''}" onclick="reparaciones({filtro:'todos'})">${t('repTodas')}</button>
+      <button class="tab ${filtro==='pendiente'?'active':''}" onclick="reparaciones({filtro:'pendiente'})">${t('repPendiente')}</button>
+      <button class="tab ${filtro==='en_progreso'?'active':''}" onclick="reparaciones({filtro:'en_progreso'})">${t('repEnProgreso')}</button>
+      <button class="tab ${filtro==='finalizado'?'active':''}" onclick="reparaciones({filtro:'finalizado'})">${t('repFinalizadas')}</button>
+    </div>
+    ${(data||[]).length===0 ? `<div class="empty"><p>${t('repSinDatos')}</p></div>` :
+      (data||[]).map(r => `
+      <div class="card" onclick="detalleReparacion('${r.id}')">
+        <div class="card-header">
+          <div class="card-avatar">🔧</div>
+          <div class="card-info">
+            <div class="card-name">${h(r.descripcion)}</div>
+            <div class="card-sub">${r.vehiculos?h(r.vehiculos.marca)+' '+h(r.vehiculos.patente):t('sinVehiculo')} · ${r.clientes?h(r.clientes.nombre):''}</div>
+            <div class="card-sub">₲${gs(r.costo)} · ${formatFecha(r.fecha)}</div>
+          </div>
+          <span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span>
+        </div>
+      </div>`).join('')}
+    ${renderPagination(count||0, offset, '_navRep')}`;
+}
+function _navRep(o) { reparaciones({offset:o}); }
+
+async function detalleReparacion(id) {
+  const { data:r } = await sb.from('reparaciones').select('*, vehiculos(patente,marca,modelo), clientes(nombre,telefono)').eq('id',id).single();
+  if (!r) return;
+  const isAdmin = currentPerfil?.rol==='admin';
+  const canEdit = ['admin','empleado'].includes(currentPerfil?.rol);
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="detail-header">
+      <button class="back-btn" onclick="navigate('reparaciones')">${t('volver')}</button>
+      <div class="detail-avatar">🔧</div>
+      <div><div class="detail-name" style="font-size:1rem">${h(r.descripcion)}</div><div class="detail-sub">${formatFecha(r.fecha)}</div></div>
+    </div>
+    <div class="info-grid">
+      <div class="info-item"><div class="label">Estado</div><div class="value"><span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span></div></div>
+      <div class="info-item"><div class="label">Costo</div><div class="value" style="color:var(--accent)">₲${gs(r.costo)}</div></div>
+      <div class="info-item"><div class="label">Vehículo</div><div class="value">${r.vehiculos?r.vehiculos.patente:'-'}</div></div>
+      <div class="info-item"><div class="label">Cliente</div><div class="value">${r.clientes?r.clientes.nombre:'-'}</div></div>
+    </div>
+    ${r.notas?`<div class="info-item" style="margin-bottom:1rem"><div class="label">Notas</div><div class="value">${h(r.notas)}</div></div>`:''}
+    ${canEdit ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
+      ${r.estado!=='en_progreso'?`<button class="btn-secondary" style="margin:0;font-size:.8rem" onclick="cambiarEstado('${id}','en_progreso')">${t('enProgresoBtn')}</button>`:''}
+      ${r.estado!=='finalizado'?`<button class="btn-secondary" style="margin:0;font-size:.8rem;color:var(--success);border-color:var(--success)" onclick="cambiarEstado('${id}','finalizado')">${t('finalizarBtn')}</button>`:''}
+    </div>` : ''}
+    ${isAdmin ? `<div style="display:flex;gap:.5rem">
+      <button class="btn-secondary" style="margin:0" onclick="modalEditarReparacion('${id}')">${t('editarBtn')}</button>
+      <button class="btn-danger" style="margin:0" onclick="eliminarReparacion('${id}')">${t('eliminarBtn')}</button>
+      <button class="btn-add" style="flex:1;justify-content:center" onclick="modalNuevaFactura('${id}')">${t('facturarBtn')}</button>
+    </div>` : ''}`;
+}
+
+async function cambiarEstado(id, estado) {
+  await offlineUpdate('reparaciones', { estado }, 'id', id);
+  toast('Estado actualizado','success'); detalleReparacion(id);
+}
+
+async function modalNuevaReparacion() {
+  const [{ data:vehs }, { data:cls }] = await Promise.all([
+    sb.from('vehiculos').select('id,patente,marca').eq('taller_id',tid()).order('patente'),
+    sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre')
+  ]);
+  openModal(`
+    <div class="modal-title">${t("modNuevaRep")}</div>
+    <div class="form-group"><label class="form-label">${t("lblDescripcion")}</label><input class="form-input" id="f-desc" placeholder="Cambio de frenos delanteros"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblCosto")}</label><input class="form-input" id="f-costo" type="number" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">${t("lblFecha")}</label><input class="form-input" id="f-fecha" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblEstado")}</label>
+      <select class="form-input" id="f-estado">
+        <option value="pendiente">${t('repPendiente')}</option>
+        <option value="en_progreso">${t('repEnProgreso')}</option>
+        <option value="finalizado">${t('repFinalizadas')}</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblVehiculo")}</label>
+      <select class="form-input" id="f-vehiculo">
+        <option value="">${t('sinVehiculo')}</option>
+        ${(vehs||[]).map(v => `<option value="${v.id}">${h(v.patente)} - ${h(v.marca)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblCliente")}</label>
+      <select class="form-input" id="f-cliente">
+        <option value="">${t('sinCliente')}</option>
+        ${(cls||[]).map(c => `<option value="${c.id}">${h(c.nombre)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblNotas")}</label><textarea class="form-input" id="f-notas" rows="2"></textarea></div>
+    <button class="btn-primary" onclick="guardarReparacion()">${t('guardar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function guardarReparacion(id=null) {
+  const desc = document.getElementById('f-desc').value.trim();
+  if (!desc) { toast('La descripción es obligatoria','error'); return; }
+  const vid = document.getElementById('f-vehiculo').value;
+  const cid = document.getElementById('f-cliente').value;
+  const data = { descripcion:desc, costo:parseFloat(document.getElementById('f-costo').value)||0, fecha:document.getElementById('f-fecha').value, estado:document.getElementById('f-estado').value, vehiculo_id:vid||null, cliente_id:cid||null, notas:document.getElementById('f-notas').value, taller_id:tid() };
+  const { error } = id ? await offlineUpdate('reparaciones', data, 'id', id) : await offlineInsert('reparaciones', data);
+  if (error) { toast('Error: '+error.message,'error'); return; }
+  toast('Reparación guardada','success'); closeModal(); reparaciones();
+}
+
+async function modalEditarReparacion(id) {
+  const [{ data:r }, { data:vehs }, { data:cls }] = await Promise.all([
+    sb.from('reparaciones').select('*').eq('id',id).single(),
+    sb.from('vehiculos').select('id,patente,marca').eq('taller_id',tid()).order('patente'),
+    sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre')
+  ]);
+  openModal(`
+    <div class="modal-title">${t("modEditarRep")}</div>
+    <div class="form-group"><label class="form-label">${t("lblDescripcion")}</label><input class="form-input" id="f-desc" value="${h(r.descripcion||'')}"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblCosto")}</label><input class="form-input" id="f-costo" type="number" value="${r.costo||0}"></div>
+      <div class="form-group"><label class="form-label">${t("lblFecha")}</label><input class="form-input" id="f-fecha" type="date" value="${r.fecha||''}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblEstado")}</label>
+      <select class="form-input" id="f-estado">
+        <option value="pendiente" ${r.estado==='pendiente'?'selected':''}>${t('repPendiente')}</option>
+        <option value="en_progreso" ${r.estado==='en_progreso'?'selected':''}>${t('repEnProgreso')}</option>
+        <option value="finalizado" ${r.estado==='finalizado'?'selected':''}>${t('repFinalizadas')}</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblVehiculo")}</label>
+      <select class="form-input" id="f-vehiculo">
+        <option value="">${t('sinVehiculo')}</option>
+        ${(vehs||[]).map(v => `<option value="${v.id}" ${v.id===r.vehiculo_id?'selected':''}>${h(v.patente)} - ${h(v.marca)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblCliente")}</label>
+      <select class="form-input" id="f-cliente">
+        <option value="">${t('sinCliente')}</option>
+        ${(cls||[]).map(c => `<option value="${c.id}" ${c.id===r.cliente_id?'selected':''}>${h(c.nombre)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblNotas")}</label><textarea class="form-input" id="f-notas" rows="2">${h(r.notas||'')}</textarea></div>
+    <button class="btn-primary" onclick="guardarReparacion('${id}')">${t('actualizar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function eliminarReparacion(id) {
+  confirmar('Esta acción eliminará la reparación permanentemente.', async () => {
+    await offlineDelete('reparaciones', 'id', id);
+    toast('Reparación eliminada'); navigate('reparaciones');
+  });
+}
+
+// ─── INVENTARIO ──────────────────────────────────────────────────────────────
+async function inventario({ search='', offset=0 }={}) {
+  const cacheKey = `inventario_${search}_${offset}`;
+  const { data, count } = await cachedQuery(cacheKey, () => {
+    let q = sb.from('inventario').select('*', {count:'exact'}).eq('taller_id',tid()).order('nombre');
+    if (search) q = q.ilike('nombre',`%${search}%`);
+    return q.range(offset, offset + PAGE_SIZE - 1);
+  });
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t('invTitulo')} ${count ? `<span style="font-size:.75rem;color:var(--text2)">(${count})</span>` : ''}</div>
+      <button class="btn-add" onclick="modalNuevoItem()">${t('invNuevo')}</button>
+    </div>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" placeholder="${t('invBuscar')}" value="${h(search)}" oninput="debounce('inv',()=>inventario({search:this.value}))" class="form-input" style="padding-left:2.5rem">
+    </div>
+    ${(data||[]).length===0 ? `<div class="empty"><p>${t('invSinDatos')}</p></div>` :
+      (data||[]).map(item => {
+        const bajo = parseFloat(item.cantidad)<=parseFloat(item.stock_minimo);
+        return `<div class="inv-card" onclick="modalEditarItem('${item.id}')">
+          <div class="inv-icon">📦</div>
+          <div class="inv-info">
+            <div class="inv-name">${h(item.nombre)}</div>
+            <div class="inv-meta">${h(item.categoria||t('sinCategoria'))} · ₲${gs(item.precio_unitario)} c/u</div>
+          </div>
+          <div class="inv-stock">
+            <div class="inv-qty ${bajo?'stock-low':'stock-ok'}">${item.cantidad}</div>
+            <div class="inv-unit">${h(item.unidad)}</div>
+            ${bajo?'<div style="font-size:.65rem;color:var(--danger)">⚠ BAJO</div>':''}
+          </div>
+        </div>`;
+      }).join('')}
+    ${renderPagination(count||0, offset, '_navInv')}`;
+}
+function _navInv(o) { inventario({offset:o}); }
+
+function modalNuevoItem() {
+  openModal(`
+    <div class="modal-title">${t("modNuevoProducto")}</div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" placeholder="Aceite motor 5W30"></div>
+    <div class="form-group"><label class="form-label">${t("lblCategoria")}</label><input class="form-input" id="f-cat" placeholder="Lubricantes, Frenos..."></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblCantidad")}</label><input class="form-input" id="f-qty" type="number" value="0" min="0"></div>
+      <div class="form-group"><label class="form-label">${t("lblUnidad")}</label><input class="form-input" id="f-unidad" placeholder="unidad, litro..."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblStockMin")}</label><input class="form-input" id="f-min" type="number" value="5" min="0"></div>
+      <div class="form-group"><label class="form-label">${t("lblPrecioUnit")}</label><input class="form-input" id="f-precio" type="number" value="0" min="0"></div>
+    </div>
+    <button class="btn-primary" onclick="guardarItem()">${t('guardar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function guardarItem(id=null) {
+  const nombre = document.getElementById('f-nombre').value.trim();
+  if (!nombre) { toast('El nombre es obligatorio','error'); return; }
+  const data = { nombre, categoria:document.getElementById('f-cat').value, cantidad:parseFloat(document.getElementById('f-qty').value)||0, unidad:document.getElementById('f-unidad').value||'unidad', stock_minimo:parseFloat(document.getElementById('f-min').value)||5, precio_unitario:parseFloat(document.getElementById('f-precio').value)||0, taller_id:tid() };
+  const { error } = id ? await offlineUpdate('inventario', data, 'id', id) : await offlineInsert('inventario', data);
+  if (error) { toast('Error: '+error.message,'error'); return; }
+  toast('Producto guardado','success'); closeModal(); inventario();
+}
+
+async function modalEditarItem(id) {
+  const { data:item } = await sb.from('inventario').select('*').eq('id',id).single();
+  const isAdmin = currentPerfil?.rol==='admin';
+  openModal(`
+    <div class="modal-title">${t("modEditarProducto")}</div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" value="${h(item.nombre||'')}"></div>
+    <div class="form-group"><label class="form-label">${t("lblCategoria")}</label><input class="form-input" id="f-cat" value="${h(item.categoria||'')}"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblCantidad")}</label><input class="form-input" id="f-qty" type="number" value="${item.cantidad||0}" min="0"></div>
+      <div class="form-group"><label class="form-label">${t("lblUnidad")}</label><input class="form-input" id="f-unidad" value="${h(item.unidad||'unidad')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblStockMin")}</label><input class="form-input" id="f-min" type="number" value="${item.stock_minimo||5}" min="0"></div>
+      <div class="form-group"><label class="form-label">${t("lblPrecioUnit")}</label><input class="form-input" id="f-precio" type="number" value="${item.precio_unitario||0}"></div>
+    </div>
+    <button class="btn-primary" onclick="guardarItem('${id}')">${t('actualizar')}</button>
+    <div style="display:flex;gap:.5rem">
+      <button class="btn-secondary" style="margin:0;flex:1" onclick="modalDescontarStock('${id}','${h(item.nombre)}',${item.cantidad})">- Descontar stock</button>
+      ${isAdmin?`<button class="btn-danger" style="margin:0" onclick="eliminarItem('${id}')">${t('eliminarBtn')}</button>`:''}
+    </div>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+function modalDescontarStock(id, nombre, stockActual) {
+  openModal(`
+    <div class="modal-title">${t("modDescontarStock")}</div>
+    <p style="color:var(--text2);font-size:.85rem;margin-bottom:1rem">${nombre} · ${t('stockActual')}: <strong style="color:var(--accent)">${stockActual}</strong></p>
+    <div class="form-group"><label class="form-label">${t("lblCantDescontar")}</label><input class="form-input" id="f-descuento" type="number" value="1" min="1" max="${stockActual}"></div>
+    <div class="form-group"><label class="form-label">${t("lblMotivo")}</label><input class="form-input" id="f-motivo" placeholder="Usado en reparación..."></div>
+    <button class="btn-primary" onclick="descontarStock('${id}',${stockActual})">DESCONTAR</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function descontarStock(id, stockActual) {
+  const descuento = parseFloat(document.getElementById('f-descuento').value)||0;
+  if (descuento<=0) { toast('Ingresá una cantidad válida','error'); return; }
+  if (descuento>stockActual) { toast('No hay suficiente stock','error'); return; }
+  const { error } = await offlineUpdate('inventario', { cantidad: stockActual - descuento }, 'id', id);
+  if (error) { toast('Error','error'); return; }
+  toast('Stock actualizado','success'); closeModal(); inventario();
+}
+
+async function eliminarItem(id) {
+  confirmar('Esta acción eliminará el producto permanentemente.', async () => {
+    await offlineDelete('inventario', 'id', id);
+    toast('Producto eliminado'); inventario();
+  });
+}
+
+// ─── CRÉDITOS ──────────────────────────────────────────────────────────────────
+async function creditos({ filtro='pendiente' }={}) {
+  const { data } = await cachedQuery(`creditos_${filtro}`, () => {
+    let q = sb.from('fiados').select('*, clientes(nombre,telefono)').eq('taller_id',tid()).order('created_at',{ascending:false});
+    if (filtro!=='todos') q = q.eq('pagado', filtro==='pagado');
+    return q;
+  });
+  const total = (data||[]).filter(f=>!f.pagado).reduce((s,f)=>s+parseFloat(f.monto||0),0);
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t('credTitulo')}</div>
+      <button class="btn-add" onclick="modalNuevoCrédito()">+ Nuevo</button>
+    </div>
+    ${filtro==='pendiente'?`<div style="background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center"><span style="color:var(--text2);font-size:.8rem">${t('credTotalPend')}</span><span style="font-family:var(--font-head);font-size:1.4rem;color:var(--danger)">₲${gs(total)}</span></div>`:''}
+    <div class="tabs">
+      <button class="tab ${filtro==='pendiente'?'active':''}" onclick="creditos({filtro:'pendiente'})">${t('credPendientes')}</button>
+      <button class="tab ${filtro==='pagado'?'active':''}" onclick="creditos({filtro:'pagado'})">${t('credPagados')}</button>
+      <button class="tab ${filtro==='todos'?'active':''}" onclick="creditos({filtro:'todos'})">${t('credTodos')}</button>
+    </div>
+    ${(data||[]).length===0 ? `<div class="empty"><p>${t('credSinDatos')}</p></div>` :
+      (data||[]).map(f => `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-avatar">${f.clientes?f.clientes.nombre.charAt(0).toUpperCase():'?'}</div>
+          <div class="card-info">
+            <div class="card-name">${f.clientes?h(f.clientes.nombre):t('sinCliente')}</div>
+            <div class="card-sub">${h(f.descripcion||t('sinDescripcion'))} · ${formatFecha(f.fecha)}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-family:var(--font-head);font-size:1.1rem;color:${f.pagado?'var(--success)':'var(--danger)'}">₲${gs(f.monto)}</div>
+            ${!f.pagado?`<button onclick="marcarPagado('${f.id}')" style="font-size:.7rem;background:rgba(0,255,136,.15);color:var(--success);border:1px solid rgba(0,255,136,.3);border-radius:6px;padding:2px 8px;cursor:pointer;margin-top:4px">${t('credPagar')}</button>`:`<span style="font-size:.7rem;color:var(--success)">${t('credPagadoLabel')}</span>`}
+          </div>
+        </div>
+      </div>`).join('')}`;
+}
+
+async function marcarPagado(id) {
+  await offlineUpdate('fiados', { pagado:true }, 'id', id);
+  toast('Marcado como pagado','success'); creditos();
+}
+
+async function modalNuevoCrédito() {
+  const { data:cls } = await sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre');
+  openModal(`
+    <div class="modal-title">${t("modNuevoCredito")}</div>
+    <div class="form-group"><label class="form-label">${t("lblCliente")} *</label>
+      <select class="form-input" id="f-cliente">
+        <option value="">Seleccionar cliente</option>
+        ${(cls||[]).map(c => `<option value="${c.id}">${h(c.nombre)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblMonto")}</label><input class="form-input" id="f-monto" type="number" placeholder="0" min="0"></div>
+    <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="f-desc" placeholder="Cambio de aceite pendiente"></div>
+    <div class="form-group"><label class="form-label">${t("lblFecha")}</label><input class="form-input" id="f-fecha" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
+    <button class="btn-primary" onclick="guardarCrédito()">${t('guardar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function guardarCrédito() {
+  const cid = document.getElementById('f-cliente').value;
+  const monto = parseFloat(document.getElementById('f-monto').value);
+  if (!cid) { toast('Seleccioná un cliente','error'); return; }
+  if (!monto||monto<=0) { toast('El monto debe ser mayor a 0','error'); return; }
+  const { error } = await offlineInsert('fiados', { cliente_id:cid, monto, descripcion:document.getElementById('f-desc').value, fecha:document.getElementById('f-fecha').value, taller_id:tid() });
+  if (error) { toast('Error','error'); return; }
+  toast('Crédito registrado','success'); closeModal(); creditos();
+}
+
+// ─── EMPLEADOS ───────────────────────────────────────────────────────────────
+async function empleados() {
+  const { data } = await cachedQuery('empleados_list', () =>
+    sb.from('empleados').select('*').eq('taller_id',tid()).order('nombre')
+  );
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t('empTitulo')}</div>
+      <button class="btn-add" onclick="modalNuevoEmpleado()">${t('empNuevo')}</button>
+    </div>
+    ${(data||[]).length===0 ? `<div class="empty"><p>${t('empSinDatos')}</p></div>` :
+      (data||[]).map(e => `
+      <div class="card" onclick="detalleEmpleado('${e.id}')">
+        <div class="card-header">
+          <div class="card-avatar" style="overflow:hidden;padding:0">
+            ${e.foto_url?`<img src="${e.foto_url}" style="width:100%;height:100%;object-fit:cover">`:`<span style="font-size:1.3rem">${e.nombre.charAt(0).toUpperCase()}</span>`}
+          </div>
+          <div class="card-info">
+            <div class="card-name">${h(e.nombre)}</div>
+            <div class="card-sub">${e.rol||t('sinRol')} · ${h(e.telefono||t('cliSinTel'))}</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>`).join('')}`;
+}
+
+async function detalleEmpleado(id) {
+  const [{ data:emp }, { data:trabajos }] = await Promise.all([
+    sb.from('empleados').select('*').eq('id',id).single(),
+    sb.from('trabajos_empleado').select('*, vehiculos(patente,marca,modelo)').eq('empleado_id',id).order('fecha',{ascending:false}).limit(30)
+  ]);
+  if (!emp) return;
+  const porFecha = {};
+  (trabajos||[]).forEach(t => { const f=t.fecha||t('sinFecha'); if(!porFecha[f]) porFecha[f]=[]; porFecha[f].push(t); });
+  const totalHoras = (trabajos||[]).reduce((s,t)=>s+parseFloat(t.horas||0),0);
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="detail-header">
+      <button class="back-btn" onclick="navigate('empleados')">${t('volver')}</button>
+      <div class="card-avatar" style="width:56px;height:56px;border-radius:12px;overflow:hidden;border:2px solid var(--accent);flex-shrink:0">
+        ${emp.foto_url?`<img src="${emp.foto_url}" style="width:100%;height:100%;object-fit:cover">`:`<span style="font-family:var(--font-head);font-size:1.6rem;font-weight:700;color:var(--accent)">${emp.nombre.charAt(0).toUpperCase()}</span>`}
+      </div>
+      <div><div class="detail-name">${h(emp.nombre)}</div><div class="detail-sub">${emp.rol||''}</div></div>
+    </div>
+    <div class="info-grid">
+      <div class="info-item"><div class="label">${t('cliTel')}</div><div class="value">${h(emp.telefono||'-')}</div></div>
+      <div class="info-item"><div class="label">Total horas</div><div class="value" style="color:var(--accent)">${totalHoras.toFixed(1)} hs</div></div>
+    </div>
+    <div style="display:flex;gap:.5rem;margin-bottom:1.25rem">
+      <button class="btn-add" style="flex:1;justify-content:center" onclick="modalNuevoTrabajo('${id}')">+ Registrar trabajo</button>
+      <button class="btn-secondary" style="margin:0" onclick="modalEditarEmpleado('${id}')">${t('editarBtn')}</button>
+      <button class="btn-danger" style="margin:0" onclick="eliminarEmpleado('${id}')">✕</button>
+    </div>
+    <div class="sub-section">
+      <div class="sub-section-title">${t('empTrabajosReg')}</div>
+      ${Object.keys(porFecha).length===0 ? '<p style="color:var(--text2);font-size:.85rem">${t("empSinTrabajos")}</p>' :
+        Object.entries(porFecha).map(([fecha,ts]) => `
+          <div style="margin-bottom:1rem">
+            <div style="font-size:.75rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">${fecha}</div>
+            ${ts.map(t => `
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.4rem">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
+                <div style="flex:1">
+                  <div style="font-weight:500;font-size:.9rem">${t.tipo_trabajo||'Trabajo general'}</div>
+                  <div style="font-size:.75rem;color:var(--text2);margin-top:2px">${t.vehiculos?t.vehiculos.patente+' · '+t.vehiculos.marca+' '+(t.vehiculos.modelo||''):t('sinVehiculo')}</div>
+                  ${t.comentario?`<div style="font-size:.8rem;color:var(--text2);margin-top:.4rem;font-style:italic">"${h(t.comentario)}"</div>`:''}
+                  ${t.foto_vehiculo_url?`<img src="${t.foto_vehiculo_url}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-top:.5rem;border:1px solid var(--border)">`:''}
+                </div>
+                <div style="text-align:right;flex-shrink:0">
+                  <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--accent)">${t.horas}hs</div>
+                  <button onclick="eliminarTrabajo('${t.id}','${id}')" style="font-size:.65rem;background:none;border:none;color:var(--text2);cursor:pointer;margin-top:4px">✕ borrar</button>
+                </div>
+              </div>
+            </div>`).join('')}
+          </div>`).join('')}
+    </div>`;
+}
+
+function modalNuevoEmpleado() {
+  openModal(`
+    <div class="modal-title">${t("modNuevoEmpleado")}</div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" placeholder="Carlos Rodríguez"></div>
+    <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" placeholder="Mecánico, Electricista..."></div>
+    <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="f-tel" type="tel"></div>
+    <button class="btn-primary" onclick="guardarEmpleado()">${t('guardar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function guardarEmpleado(id=null) {
+  const nombre = document.getElementById('f-nombre').value.trim();
+  if (!nombre) { toast('El nombre es obligatorio','error'); return; }
+  const data = { nombre, rol:document.getElementById('f-rol').value, telefono:document.getElementById('f-tel').value, taller_id:tid() };
+  const { error } = id ? await offlineUpdate('empleados', data, 'id', id) : await offlineInsert('empleados', data);
+  if (error) { toast('Error: '+error.message,'error'); return; }
+  toast(id?'Empleado actualizado':'Empleado guardado','success');
+  closeModal(); empleados();
+}
+
+async function modalEditarEmpleado(id) {
+  const { data:e } = await sb.from('empleados').select('*').eq('id',id).single();
+  openModal(`
+    <div class="modal-title">${t("modEditarEmpleado")}</div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" value="${h(e.nombre||'')}"></div>
+    <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" value="${e.rol||''}"></div>
+    <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="f-tel" value="${h(e.telefono||'')}"></div>
+    <button class="btn-primary" onclick="guardarEmpleado('${id}')">${t('actualizar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function eliminarEmpleado(id) {
+  confirmar('Esta acción eliminará al empleado y sus registros.', async () => {
+    await sb.from('trabajos_empleado').delete().eq('empleado_id',id);
+    await offlineDelete('empleados', 'id', id);
+    toast('Empleado eliminado'); navigate('empleados');
+  });
+}
+
+async function modalNuevoTrabajo(empleadoId) {
+  const { data:vehs } = await sb.from('vehiculos').select('id,patente,marca,modelo').eq('taller_id',tid()).order('patente');
+  openModal(`
+    <div class="modal-title">${t("modRegistrarTrabajo")}</div>
+    <div class="form-group"><label class="form-label">${t("lblFecha")} *</label><input class="form-input" id="f-fecha" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="form-group"><label class="form-label">${t("lblVehiculo")}</label>
+      <select class="form-input" id="f-vehiculo">
+        <option value="">${t('sinVehiculo')}</option>
+        ${(vehs||[]).map(v => `<option value="${v.id}">${h(v.patente)} · ${h(v.marca)} ${h(v.modelo||'')}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblTipoTrabajo")} *</label><input class="form-input" id="f-tipo" placeholder="Cambio de frenos, Alineación..."></div>
+    <div class="form-group"><label class="form-label">${t("lblHoras")} trabajadas *</label><input class="form-input" id="f-horas" type="number" placeholder="2.5" min="0.5" step="0.5"></div>
+    <div class="form-group"><label class="form-label">${t("lblComentario")}</label><textarea class="form-input" id="f-comentario" rows="2"></textarea></div>
+    <div class="form-group">
+      <label class="form-label">Foto del vehículo</label>
+      <input type="file" id="f-foto-file" accept="image/*" capture="environment" class="form-input" style="padding:.4rem" onchange="previewFoto(this,'f-foto-b64','foto-prev')">
+      <div id="foto-prev"></div>
+      <input type="hidden" id="f-foto-b64">
+    </div>
+    <button class="btn-primary" onclick="guardarTrabajo('${empleadoId}')">${t('guardar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function guardarTrabajo(empleadoId) {
+  const tipo = document.getElementById('f-tipo').value.trim();
+  const horas = parseFloat(document.getElementById('f-horas').value);
+  if (!tipo) { toast('El tipo de trabajo es obligatorio','error'); return; }
+  if (!horas||horas<=0) { toast('Las horas deben ser mayor a 0','error'); return; }
+  const vid = document.getElementById('f-vehiculo').value;
+  const data = { empleado_id:empleadoId, vehiculo_id:vid||null, fecha:document.getElementById('f-fecha').value, tipo_trabajo:tipo, horas, comentario:document.getElementById('f-comentario').value||null, foto_vehiculo_url:document.getElementById('f-foto-b64').value||null };
+  const { error } = await offlineInsert('trabajos_empleado', data);
+  if (error) { toast('Error: '+error.message,'error'); return; }
+  toast('Trabajo registrado','success'); closeModal(); detalleEmpleado(empleadoId);
+}
+
+async function eliminarTrabajo(trabajoId, empleadoId) {
+  confirmar('¿Eliminar este registro de trabajo?', async () => {
+    await offlineDelete('trabajos_empleado', 'id', trabajoId);
+    toast('Registro eliminado'); detalleEmpleado(empleadoId);
+  });
+}
+
+// ─── FACTURACIÓN ─────────────────────────────────────────────────────────────
+async function facturacion() {
+  const { data } = await cachedQuery('facturas_list', () =>
+    sb.from('facturas').select('*, clientes(nombre), reparaciones(descripcion)').eq('taller_id',tid()).order('created_at',{ascending:false})
+  );
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t('facTitulo')}</div>
+    </div>
+    ${(data||[]).length===0 ? `<div class="empty"><p>${t('facSinDatos')}</p></div>` :
+      (data||[]).map(f => `
+      <div class="card" onclick="detalleFactura('${f.id}')">
+        <div class="card-header">
+          <div class="card-avatar">🧾</div>
+          <div class="card-info">
+            <div class="card-name">${f.clientes?f.clientes.nombre:'Sin cliente'}</div>
+            <div class="card-sub">${formatFecha(f.fecha)} · ${f.pagada?t('facPagada'):t('repEstPendiente')}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:var(--font-head);color:var(--accent)">₲${gs(f.total)}</div>
+            <span class="card-badge ${f.pagada?'badge-green':'badge-yellow'}">${f.pagada?t('facPagada'):t('repEstPendiente')}</span>
+          </div>
+        </div>
+      </div>`).join('')}`;
+}
+
+async function modalNuevaFactura(reparacionId) {
+  closeModal();
+  const { data:r } = await sb.from('reparaciones').select('*, clientes(nombre,telefono), vehiculos(patente,marca)').eq('id',reparacionId).single();
+  if (!r) return;
+
+  openModal(`
+    <div class="modal-title">${t("modNuevaFactura")}</div>
+    <div style="background:var(--surface2);border-radius:8px;padding:.75rem;margin-bottom:1rem">
+      <div style="font-size:.8rem;color:var(--text2)">Reparación</div>
+      <div style="font-weight:500">${h(r.descripcion)}</div>
+      <div style="font-size:.75rem;color:var(--text2)">${r.clientes?r.clientes.nombre:''} · ${r.vehiculos?r.vehiculos.patente:''}</div>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblFecha")}</label><input class="form-input" id="f-fecha" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
+    <div class="form-group"><label class="form-label">${t("lblManoObra")}</label><input class="form-input" id="f-mano" type="number" value="${r.costo||0}" oninput="calcTotal()"></div>
+    <div class="form-group"><label class="form-label">${t("lblRepuestos")}</label><input class="form-input" id="f-repuestos" type="number" value="0" oninput="calcTotal()"></div>
+    <div class="form-group"><label class="form-label">${t("lblOtros")}</label><input class="form-input" id="f-otros" type="number" value="0" oninput="calcTotal()"></div>
+    <div style="background:var(--surface2);border-radius:8px;padding:.75rem;margin-bottom:1rem">
+      <div class="factura-item"><span>Mano de obra</span><span id="t-mano">₲${gs(r.costo)}</span></div>
+      <div class="factura-item"><span>Repuestos</span><span id="t-rep">₲0</span></div>
+      <div class="factura-item"><span>Otros</span><span id="t-otros">₲0</span></div>
+      <div class="factura-total"><span>TOTAL</span><span id="t-total">₲${gs(r.costo)}</span></div>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblNotas")}</label><textarea class="form-input" id="f-notas" rows="2" placeholder="Observaciones..."></textarea></div>
+    <button class="btn-primary" onclick="guardarFactura('${reparacionId}','${r.cliente_id||''}')">GUARDAR FACTURA</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+function calcTotal() {
+  const mano = parseFloat(document.getElementById('f-mano').value)||0;
+  const rep = parseFloat(document.getElementById('f-repuestos').value)||0;
+  const otros = parseFloat(document.getElementById('f-otros').value)||0;
+  const total = mano+rep+otros;
+  document.getElementById('t-mano').textContent = '₲'+gs(mano);
+  document.getElementById('t-rep').textContent = '₲'+gs(rep);
+  document.getElementById('t-otros').textContent = '₲'+gs(otros);
+  document.getElementById('t-total').textContent = '₲'+gs(total);
+}
+
+async function guardarFactura(reparacionId, clienteId) {
+  const mano = parseFloat(document.getElementById('f-mano').value)||0;
+  const rep = parseFloat(document.getElementById('f-repuestos').value)||0;
+  const otros = parseFloat(document.getElementById('f-otros').value)||0;
+  const total = mano+rep+otros;
+  const data = { reparacion_id:reparacionId, cliente_id:clienteId||null, fecha:document.getElementById('f-fecha').value, mano_obra:mano, repuestos:rep, otros, total, notas:document.getElementById('f-notas').value, pagada:false, taller_id:tid() };
+  const { error } = await offlineInsert('facturas', data);
+  if (error) { toast('Error: '+error.message,'error'); return; }
+  toast('Factura guardada','success'); closeModal(); facturacion();
+}
+
+async function detalleFactura(id) {
+  const { data:f } = await sb.from('facturas').select('*, clientes(nombre,telefono), reparaciones(descripcion,vehiculos(patente,marca))').eq('id',id).single();
+  if (!f) return;
+  const tallerNombre = currentPerfil?.talleres?.nombre || 'TallerPro';
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="detail-header">
+      <button class="back-btn" onclick="navigate('facturacion')">${t('volver')}</button>
+      <div class="detail-avatar">🧾</div>
+      <div><div class="detail-name">Factura</div><div class="detail-sub">${formatFecha(f.fecha)}</div></div>
+    </div>
+    <div id="factura-imprimible" style="background:var(--surface2);border-radius:12px;padding:1rem;margin-bottom:1rem;border:1px solid var(--border)">
+      <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--accent);margin-bottom:.25rem;letter-spacing:2px">${h(tallerNombre)}</div>
+      <div style="font-size:.75rem;color:var(--text2);margin-bottom:.75rem">${formatFecha(f.fecha)}</div>
+      <div style="font-family:var(--font-head);font-size:.85rem;color:var(--text2);margin-bottom:.5rem;letter-spacing:1px">DETALLE</div>
+      <div class="factura-item"><span style="color:var(--text2)">Cliente</span><span>${f.clientes?f.clientes.nombre:'-'}</span></div>
+      <div class="factura-item"><span style="color:var(--text2)">Vehículo</span><span>${f.reparaciones?.vehiculos?f.reparaciones.vehiculos.patente+' · '+f.reparaciones.vehiculos.marca:'-'}</span></div>
+      <div class="factura-item"><span style="color:var(--text2)">Reparación</span><span>${f.reparaciones?f.reparaciones.descripcion:'-'}</span></div>
+      <div style="height:1px;background:var(--border);margin:.5rem 0"></div>
+      <div class="factura-item"><span>Mano de obra</span><span>₲${gs(f.mano_obra)}</span></div>
+      <div class="factura-item"><span>Repuestos</span><span>₲${gs(f.repuestos)}</span></div>
+      <div class="factura-item"><span>Otros</span><span>₲${gs(f.otros)}</span></div>
+      <div class="factura-total"><span>TOTAL</span><span>₲${gs(f.total)}</span></div>
+      ${f.notas?`<div style="margin-top:.5rem;font-size:.8rem;color:var(--text2);font-style:italic">${h(f.notas)}</div>`:''}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
+      <button class="btn-secondary" style="margin:0" onclick="compartirFactura('${id}')">📤 Compartir</button>
+      <button class="btn-secondary" style="margin:0" onclick="window.print()">🖨️ Imprimir</button>
+    </div>
+    ${f.clientes?.telefono ? `
+    <button onclick="window.open('https://wa.me/595${f.clientes.telefono.replace(/\D/g,'')}?text=Hola%20${encodeURIComponent(f.clientes.nombre)}%2C%20su%20factura%20de%20₲${gs(f.total)}%20está%20lista.%20Taller%3A%20${encodeURIComponent(tallerNombre)}')" style="width:100%;background:rgba(37,211,102,.15);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:10px;padding:.7rem;font-family:var(--font-head);font-size:.95rem;cursor:pointer;margin-bottom:.5rem;letter-spacing:1px">💬 Enviar por WhatsApp</button>
+    ` : ''}
+    ${!f.pagada?`<button class="btn-primary" onclick="marcarFacturaPagada('${id}')">${t('facMarcarPagada')}</button>`:`<div style="text-align:center;color:var(--success);font-family:var(--font-head);font-size:1.1rem;padding:1rem">${t('facPagada')}</div>`}`;
+}
+
+async function compartirFactura(id) {
+  const { data:f } = await sb.from('facturas').select('*, clientes(nombre,telefono), reparaciones(descripcion,vehiculos(patente,marca))').eq('id',id).single();
+  if (!f) return;
+  const tallerNombre = currentPerfil?.talleres?.nombre || 'TallerPro';
+
+  toast(t('generandoPdf'), 'info');
+
+  try {
+    // Lazy load jsPDF solo cuando se necesita
+    if (!window.jspdf) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.crossOrigin = 'anonymous';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('No se pudo cargar jsPDF'));
+        document.head.appendChild(s);
+      });
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+
+    const margen = 20;
+    let y = 20;
+
+    // Header
+    doc.setFillColor(10, 10, 15);
+    doc.rect(0, 0, 210, 35, 'F');
+    doc.setTextColor(0, 229, 255);
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text(tallerNombre.toUpperCase(), margen, 18);
+    doc.setFontSize(9);
+    doc.setTextColor(136, 136, 170);
+    doc.text('GESTIÓN INTELIGENTE', margen, 26);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text(`Fecha: ${formatFecha(f.fecha)}`, 210 - margen, 18, { align: 'right' });
+    doc.text(`Estado: ${f.pagada ? 'PAGADA' : 'PENDIENTE'}`, 210 - margen, 26, { align: 'right' });
+
+    y = 45;
+
+    // Título
+    doc.setFillColor(26, 26, 38);
+    doc.rect(margen, y - 5, 170, 10, 'F');
+    doc.setTextColor(0, 229, 255);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DETALLE DE FACTURA', margen + 5, y + 2);
+    y += 15;
+
+    // Datos
+    doc.setTextColor(60, 60, 80);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+
+    const filas = [
+      ['Cliente', f.clientes?.nombre || '-'],
+      ['Vehículo', f.reparaciones?.vehiculos ? `${f.reparaciones.vehiculos.patente} · ${f.reparaciones.vehiculos.marca}` : '-'],
+      ['Reparación', f.reparaciones?.descripcion || '-'],
+    ];
+
+    filas.forEach(([label, valor]) => {
+      doc.setTextColor(136, 136, 170);
+      doc.text(label, margen, y);
+      doc.setTextColor(30, 30, 50);
+      doc.setFont('helvetica', 'bold');
+      doc.text(valor, margen + 35, y);
+      doc.setFont('helvetica', 'normal');
+      doc.setDrawColor(220, 220, 230);
+      doc.line(margen, y + 2, 190, y + 2);
+      y += 10;
+    });
+
+    y += 5;
+
+    // Montos
+    doc.setFillColor(245, 245, 250);
+    doc.rect(margen, y - 5, 170, 45, 'F');
+
+    const montos = [
+      ['Mano de obra', f.mano_obra],
+      ['Repuestos', f.repuestos],
+      ['Otros', f.otros],
+    ];
+
+    montos.forEach(([label, monto]) => {
+      doc.setTextColor(80, 80, 100);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(label, margen + 5, y);
+      doc.text(`₲ ${gs(monto)}`, 190, y, { align: 'right' });
+      doc.setDrawColor(210, 210, 220);
+      doc.line(margen + 5, y + 2, 185, y + 2);
+      y += 10;
+    });
+
+    // Total
+    doc.setFillColor(0, 229, 255);
+    doc.rect(margen, y - 3, 170, 12, 'F');
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('TOTAL', margen + 5, y + 5);
+    doc.text(`₲ ${gs(f.total)}`, 190, y + 5, { align: 'right' });
+    y += 20;
+
+    // Notas
+    if (f.notas) {
+      doc.setTextColor(100, 100, 120);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(9);
+      doc.text(`Notas: ${h(f.notas)}`, margen, y);
+      y += 10;
+    }
+
+    // Footer
+    doc.setFillColor(10, 10, 15);
+    doc.rect(0, 277, 210, 20, 'F');
+    doc.setTextColor(136, 136, 170);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Generado por TallerPro · Gestión Inteligente', 105, 286, { align: 'center' });
+
+    // Compartir o descargar
+    const pdfBlob = doc.output('blob');
+    const fileName = `Factura_${f.clientes?.nombre?.replace(/\s/g,'_') || 'cliente'}_${f.fecha || 'hoy'}.pdf`;
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([pdfBlob], fileName, { type: 'application/pdf' })] })) {
+      const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+      await navigator.share({ title: `Factura ${h(tallerNombre)}`, files: [file] });
+    } else {
+      // Fallback: descargar el PDF
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast(t('pdfDescargado'), 'success');
+    }
+
+  } catch(e) {
+    toast('Error al generar PDF: ' + e.message, 'error');
+  }
+}
+
+async function marcarFacturaPagada(id) {
+  await offlineUpdate('facturas', { pagada:true }, 'id', id);
+  toast('Factura marcada como pagada','success'); detalleFactura(id);
+}
+
+// ─── USUARIOS (ADMIN) ─────────────────────────────────────────────────────────
+async function usuarios() {
+  const [{ data: perfiles }, { data: codigos }] = await Promise.all([
+    sb.from('perfiles').select('*').eq('taller_id', tid()).order('nombre'),
+    sb.from('codigos_empleado').select('*').eq('taller_id', tid()).eq('usado', false).order('created_at', {ascending:false})
+  ]);
+
+  const admins    = (perfiles||[]).filter(u => u.rol === 'admin');
+  const empleados = (perfiles||[]).filter(u => u.rol === 'empleado');
+  const clientes  = (perfiles||[]).filter(u => u.rol === 'cliente');
+
+  const renderCard = (u) => `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-avatar">${u.nombre?u.nombre.charAt(0).toUpperCase():'?'}</div>
+        <div class="card-info">
+          <div class="card-name">${h(u.nombre||'Sin nombre')}${u.id===currentUser.id?' (Vos)':''}</div>
+        </div>
+        <div style="display:flex;gap:.4rem;align-items:center">
+          ${u.id!==currentUser.id?`<button onclick="cambiarRol('${u.id}','${u.rol}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 8px;cursor:pointer">Rol</button>`:''}
+          ${u.rol==='cliente'?`<button onclick="modalVincularVehiculo('${u.id}','${h(u.nombre)}')" style="font-size:.7rem;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.3);color:var(--accent);border-radius:6px;padding:3px 8px;cursor:pointer">🚗 Autos</button>`:''}
+        </div>
+      </div>
+    </div>`;
+
+  const renderSeccion = (titulo, color, lista) => lista.length === 0 ? '' : `
+    <div style="font-size:.72rem;color:${color};font-family:var(--font-head);letter-spacing:1px;margin:.75rem 0 .4rem">${titulo} (${lista.length})</div>
+    ${lista.map(renderCard).join('')}`;
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t('usTitulo')}</div>
+      <button class="btn-add" onclick="modalInvitarUsuario()">${t('usInvitar')}</button>
+    </div>
+
+    ${(codigos||[]).length > 0 ? `
+    <div style="background:rgba(255,204,0,.05);border:1px solid rgba(255,204,0,.2);border-radius:10px;padding:.75rem;margin-bottom:1rem">
+      <div style="font-size:.72rem;color:var(--warning);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.5rem">${t('usCodigosPend')}</div>
+      ${(codigos||[]).map(c => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
+          <div>
+            <span style="font-family:var(--font-head);font-size:1.1rem;color:${c.tipo==='empleado'?'var(--accent2)':'var(--success)'};letter-spacing:3px">${h(c.codigo)}</span>
+            <span style="font-size:.65rem;margin-left:.5rem;padding:2px 6px;border-radius:10px;background:${c.tipo==='empleado'?'rgba(255,107,53,.15)':'rgba(0,255,136,.15)'};color:${c.tipo==='empleado'?'var(--accent2)':'var(--success)'}">${c.tipo==='empleado'?'EMPLEADO':'CLIENTE'}</span>
+          </div>
+          <button onclick="eliminarCodigo('${c.id}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 8px;cursor:pointer">✕</button>
+        </div>`).join('')}
+    </div>` : ''}
+
+    ${perfiles?.length === 0 ? `<div class="empty"><p>${t('usSinUsuarios')}</p></div>` : ''}
+    ${renderSeccion(t('usAdmins'), 'var(--accent)', admins)}
+    ${renderSeccion(t('usEmpleados'), 'var(--accent2)', empleados)}
+    ${renderSeccion(t('usClientes'), 'var(--success)', clientes)}`;
+}
+
+async function eliminarCodigo(id) {
+  await sb.from('codigos_empleado').delete().eq('id', id);
+  toast('Código cancelado'); usuarios();
+}
+
+async function cambiarRol(userId, rolActual) {
+  const roles = ['admin','empleado','cliente'];
+  const siguiente = roles[(roles.indexOf(rolActual)+1) % roles.length];
+  confirmar(`¿Cambiar el rol a ${siguiente.toUpperCase()}?`, async () => {
+    await sb.from('perfiles').update({ rol: siguiente }).eq('id', userId);
+    toast('Rol actualizado','success'); usuarios();
+  });
+}
+
+async function modalVincularVehiculo(perfilId, nombreUsuario) {
+  // Obtener cliente_id del perfil
+  const { data: perfil } = await sb.from('perfiles').select('cliente_id').eq('id', perfilId).maybeSingle();
+
+  // Vehículos sin propietario del taller
+  const { data: vehiculosSin } = await sb.from('vehiculos')
+    .select('id, patente, marca, modelo')
+    .eq('taller_id', tid())
+    .is('cliente_id', null)
+    .order('patente');
+
+  // Vehículos ya asignados a este cliente
+  let vehiculosAsignados = [];
+  if (perfil?.cliente_id) {
+    const { data } = await sb.from('vehiculos')
+      .select('id, patente, marca, modelo')
+      .eq('cliente_id', perfil.cliente_id);
+    vehiculosAsignados = data || [];
+  }
+
+  openModal(`
+    <div class="modal-title">${t("modVincularVeh")}</div>
+    <p style="color:var(--text2);font-size:.82rem;margin-bottom:1rem">Cliente: <strong style="color:var(--text)">${h(nombreUsuario)}</strong></p>
+
+    ${vehiculosAsignados.length > 0 ? `
+    <div style="margin-bottom:1rem">
+      <div style="font-size:.72rem;color:var(--success);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">YA VINCULADOS</div>
+      ${vehiculosAsignados.map(v => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:.85rem">${h(v.patente)} · ${h(v.marca)} ${h(v.modelo||'')}</span>
+          <button onclick="desvincularVehiculo('${v.id}','${perfilId}','${h(nombreUsuario)}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 8px;cursor:pointer">✕ Quitar</button>
+        </div>`).join('')}
+    </div>` : ''}
+
+    ${(vehiculosSin||[]).length > 0 ? `
+    <div style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">VEHÍCULOS SIN PROPIETARIO</div>
+    ${(vehiculosSin||[]).map(v => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:.85rem">${h(v.patente)} · ${h(v.marca)} ${h(v.modelo||'')}</span>
+        <button onclick="vincularVehiculoACliente('${v.id}','${perfilId}','${h(nombreUsuario)}')" style="font-size:.7rem;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.3);color:var(--accent);border-radius:6px;padding:2px 8px;cursor:pointer">+ Asignar</button>
+      </div>`).join('')}
+    ` : `<p style="color:var(--text2);font-size:.82rem">No hay vehículos sin propietario.</p>`}
+
+    <button class="btn-secondary" onclick="closeModal()" style="margin-top:1rem">CERRAR</button>`);
+}
+
+async function vincularVehiculoACliente(vehiculoId, perfilId, nombreUsuario) {
+  // Obtener o crear ficha de cliente
+  const { data: perfil } = await sb.from('perfiles').select('cliente_id, nombre').eq('id', perfilId).maybeSingle();
+  let clienteId = perfil?.cliente_id;
+
+  if (!clienteId) {
+    // Crear ficha de cliente si no existe
+    const { data: cli } = await sb.from('clientes')
+      .insert({ nombre: perfil?.nombre || nombreUsuario, taller_id: tid() })
+      .select().single();
+    if (!cli) { toast('Error al crear ficha de cliente','error'); return; }
+    clienteId = cli.id;
+    await sb.from('perfiles').update({ cliente_id: clienteId }).eq('id', perfilId);
+  }
+
+  await offlineUpdate('vehiculos', { cliente_id: clienteId }, 'id', vehiculoId);
+  toast('Vehículo asignado','success');
+  closeModal();
+  modalVincularVehiculo(perfilId, nombreUsuario);
+}
+
+async function desvincularVehiculo(vehiculoId, perfilId, nombreUsuario) {
+  await offlineUpdate('vehiculos', { cliente_id: null }, 'id', vehiculoId);
+  toast('Vehículo desvinculado','success');
+  closeModal();
+  modalVincularVehiculo(perfilId, nombreUsuario);
+}
+
+function modalInvitarUsuario() {
+  const base = window.location.origin + window.location.pathname;
+  const link = `${base}?taller=${tid()}`;
+
+  openModal(`
+    <div class="modal-title">${t("modInvitarUsuario")}</div>
+    <div class="tabs" style="margin-bottom:1rem">
+      <button class="tab active" onclick="switchInviteTab('empleado',this)">Empleado</button>
+      <button class="tab" onclick="switchInviteTab('cliente',this)">Cliente</button>
+    </div>
+
+    <div id="invite-empleado">
+      <p style="color:var(--text2);font-size:.82rem;margin-bottom:1rem">
+        Generá un código y enviáselo al empleado junto con el link de registro.
+      </p>
+      <button class="btn-primary" onclick="generarCodigo('empleado')">GENERAR CÓDIGO</button>
+      <div id="codigo-generado-empleado" style="display:none;margin-top:1rem">
+        <div style="background:var(--surface2);border:1px solid var(--accent2);border-radius:10px;padding:1rem;text-align:center;margin-bottom:.75rem">
+          <div style="font-size:.72rem;color:var(--text2);margin-bottom:.4rem">CÓDIGO DE EMPLEADO</div>
+          <div id="codigo-valor-empleado" style="font-family:var(--font-head);font-size:2.2rem;font-weight:700;color:var(--accent2);letter-spacing:6px"></div>
+          <div style="font-size:.7rem;color:var(--text2);margin-top:.3rem">Un solo uso</div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.6rem;font-size:.72rem;color:var(--text2);word-break:break-all;margin-bottom:.5rem">${link}</div>
+        <button onclick="copiarInvitacion('empleado','${link}')" style="width:100%;background:var(--accent2);color:#000;border:none;border-radius:8px;padding:.6rem;font-family:var(--font-head);font-size:.9rem;font-weight:700;cursor:pointer">📋 COPIAR CÓDIGO + LINK</button>
+      </div>
+    </div>
+
+    <div id="invite-cliente" style="display:none">
+      <p style="color:var(--text2);font-size:.82rem;margin-bottom:1rem">
+        Generá un código y enviáselo al cliente junto con el link de registro.
+      </p>
+      <button class="btn-primary" onclick="generarCodigo('cliente')">GENERAR CÓDIGO</button>
+      <div id="codigo-generado-cliente" style="display:none;margin-top:1rem">
+        <div style="background:var(--surface2);border:1px solid var(--success);border-radius:10px;padding:1rem;text-align:center;margin-bottom:.75rem">
+          <div style="font-size:.72rem;color:var(--text2);margin-bottom:.4rem">CÓDIGO DE CLIENTE</div>
+          <div id="codigo-valor-cliente" style="font-family:var(--font-head);font-size:2.2rem;font-weight:700;color:var(--success);letter-spacing:6px"></div>
+          <div style="font-size:.7rem;color:var(--text2);margin-top:.3rem">Un solo uso</div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.6rem;font-size:.72rem;color:var(--text2);word-break:break-all;margin-bottom:.5rem">${link}</div>
+        <button onclick="copiarInvitacion('cliente','${link}')" style="width:100%;background:var(--success);color:#000;border:none;border-radius:8px;padding:.6rem;font-family:var(--font-head);font-size:.9rem;font-weight:700;cursor:pointer">📋 COPIAR CÓDIGO + LINK</button>
+      </div>
+    </div>
+
+    <button class="btn-secondary" onclick="closeModal()">CERRAR</button>`);
+}
+
+function switchInviteTab(tipo, btn) {
+  document.querySelectorAll('#modal-overlay .tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('invite-empleado').style.display = tipo==='empleado' ? 'block' : 'none';
+  document.getElementById('invite-cliente').style.display = tipo==='cliente' ? 'block' : 'none';
+}
+
+async function generarCodigo(tipo) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const arr = new Uint32Array(8);
+  crypto.getRandomValues(arr);
+  const codigo = Array.from(arr, v => chars[v % chars.length]).join('');
+  const { error } = await sb.from('codigos_empleado').insert({ codigo, taller_id: tid(), usado: false, tipo });
+  if (error) { toast('Error al generar código','error'); return; }
+  document.getElementById(`codigo-generado-${tipo}`).style.display = 'block';
+  document.getElementById(`codigo-valor-${tipo}`).textContent = codigo;
+}
+
+function copiarCodigoTipo(tipo) {
+  const codigo = document.getElementById(`codigo-valor-${tipo}`).textContent;
+  navigator.clipboard.writeText(codigo).then(() => toast('Código copiado','success'));
+}
+
+function copiarInvitacion(tipo, link) {
+  const codigo = document.getElementById(`codigo-valor-${tipo}`).textContent;
+  const tipoLabel = tipo === 'empleado' ? 'empleado' : 'cliente';
+  const texto = `Hola! Te invito a registrarte en TallerPro.\n\n1. Abrí este link: ${link}\n2. Completá tus datos\n3. Ingresá este código: ${codigo}\n\nEl código es de un solo uso.`;
+  navigator.clipboard.writeText(texto).then(() => toast('¡Invitación copiada! Pegala en WhatsApp', 'success'));
+}
+
+// ─── VISTA CLIENTE ────────────────────────────────────────────────────────────
+async function misVehiculos() {
+  // Buscar cliente_id desde el perfil
+  const { data: perfil } = await sb.from('perfiles').select('cliente_id').eq('id', currentUser.id).maybeSingle();
+
+  if (!perfil?.cliente_id) {
+    document.getElementById('main-content').innerHTML = `
+      <div class="empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+        <p style="font-size:1rem;margin-bottom:.5rem">${t('cuentaPendiente')}</p>
+        <p style="font-size:.8rem">${t('cuentaPendienteMsg')}/p>
+      </div>`;
+    return;
+  }
+
+  const { data } = await sb.from('vehiculos').select('*').eq('cliente_id', perfil.cliente_id);
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header"><div class="section-title">${t('misAutos')}</div></div>
+    ${(data||[]).length===0 ? `<div class="empty"><p>${t('vehSinDatos')}</p></div>` :
+      (data||[]).map(v => `
+      <div class="card">
+        <div class="card-header">
+          ${v.foto_url?`<img src="${safeFotoUrl(v.foto_url)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px">`:`<div class="card-avatar" style="font-size:.8rem">${h(v.patente)}</div>`}
+          <div class="card-info"><div class="card-name">${h(v.marca)} ${h(v.modelo||'')}</div><div class="card-sub">${h(v.patente)} · ${h(v.anio||'')}</div></div>
+        </div>
+      </div>`).join('')}`;
+}
+
+async function misReparaciones() {
+  if (currentPerfil?.rol !== 'cliente') { dashboard(); return; }
+
+  const { data: perfil } = await sb.from('perfiles').select('cliente_id').eq('id', currentUser.id).maybeSingle();
+
+  if (!perfil?.cliente_id) {
+    document.getElementById('main-content').innerHTML = `
+      <div class="empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+        <p style="font-size:1rem;margin-bottom:.5rem">${t('cuentaPendiente')}</p>
+        <p style="font-size:.8rem">${t('cuentaPendienteMsg2')}/p>
+      </div>`;
+    return;
+  }
+
+  const { data } = await sb.from('reparaciones').select('*, vehiculos(patente,marca)').eq('cliente_id', perfil.cliente_id).order('created_at',{ascending:false});
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header"><div class="section-title">${t('misReps')}</div></div>
+    ${(data||[]).length===0 ? `<div class="empty"><p>${t('repSinDatos')}</p></div>` :
+      (data||[]).map(r => `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-avatar">🔧</div>
+          <div class="card-info">
+            <div class="card-name">${h(r.descripcion)}</div>
+            <div class="card-sub">${r.vehiculos?r.vehiculos.patente+' · '+r.vehiculos.marca:''} · ${formatFecha(r.fecha)}</div>
+          </div>
+          <span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span>
+        </div>
+      </div>`).join('')}`;
+}
+
+</script>
+</body>
+</html>
