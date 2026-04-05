@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="TallerPro — El sistema más completo para talleres mecánicos en Paraguay. IA con voz, control financiero, fotos, inventario y más. 14 días gratis.">
+<meta name="theme-color" content="#0a0a0f">
+<meta property="og:title" content="TallerPro — Gestión Inteligente para Talleres">
+<meta property="og:description" content="Organizá tu taller, cobrá más, perdé menos. Todo desde tu celular.">
+<title>TallerPro — Gestión Inteligente para Talleres Mecánicos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#06060b;--bg2:#0c0c14;--surface:#12121e;--surface2:#1a1a2a;--border:#2a2a3a;--text:#e8e8f0;--text2:#7878a0;--cyan:#00e5ff;--green:#00ff88;--orange:#ff6b35;--red:#ff4444;--font:'Outfit',sans-serif;--mono:'JetBrains Mono',monospace}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font);overflow-x:hidden;line-height:1.6}
+body::before{content:'';position:fixed;inset:0;background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.03'/%3E%3C/svg%3E");pointer-events:none;z-index:9999}
+nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;backdrop-filter:blur(20px);background:rgba(6,6,11,.8);border-bottom:1px solid transparent;transition:border-color .3s}
+nav.scrolled{border-bottom-color:var(--border)}
+.nav-logo{font-size:1.4rem;font-weight:800;letter-spacing:2px;color:var(--cyan);text-decoration:none}.nav-logo span{color:var(--text)}
+.nav-links{display:flex;gap:2rem;align-items:center}
+.nav-links a{color:var(--text2);text-decoration:none;font-size:.85rem;font-weight:500;transition:color .2s}.nav-links a:hover{color:var(--cyan)}
+.nav-cta{background:var(--cyan);color:#000;padding:.55rem 1.5rem;border-radius:8px;font-weight:700;font-size:.85rem;text-decoration:none;transition:all .2s}.nav-cta:hover{background:#fff;box-shadow:0 0 20px rgba(0,229,255,.15)}
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:7rem 2rem 4rem;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(ellipse at 50% 20%,rgba(0,229,255,.06) 0%,transparent 50%);animation:glow 8s ease-in-out infinite alternate}
+@keyframes glow{0%{transform:scale(1)}100%{transform:scale(1.1) translateY(-2%)}}
+.hero-badge{display:inline-flex;align-items:center;gap:.5rem;background:var(--surface);border:1px solid var(--border);border-radius:50px;padding:.4rem 1.2rem;font-size:.78rem;color:var(--text2);margin-bottom:2rem;animation:fadeUp .8s ease}
+.hero-badge b{color:var(--cyan)}
+.hero h1{font-size:clamp(2.5rem,7vw,4.5rem);font-weight:900;line-height:1.05;margin-bottom:1.5rem;animation:fadeUp .8s ease .1s both}
+.hero h1 em{font-style:normal;background:linear-gradient(135deg,var(--cyan),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero>p{font-size:clamp(1rem,2.5vw,1.2rem);color:var(--text2);max-width:550px;margin-bottom:2.5rem;animation:fadeUp .8s ease .2s both;font-weight:300}
+.hero-btns{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;animation:fadeUp .8s ease .3s both}
+.btn{padding:.85rem 2.2rem;border-radius:10px;font-weight:700;font-size:1rem;text-decoration:none;transition:all .3s;font-family:var(--font);cursor:pointer;display:inline-block}
+.btn-p{background:var(--cyan);color:#000;border:none;box-shadow:0 4px 25px rgba(0,229,255,.3)}.btn-p:hover{background:#fff;transform:translateY(-2px)}
+.btn-s{background:transparent;color:var(--text);border:1px solid var(--border)}.btn-s:hover{border-color:var(--cyan);color:var(--cyan)}
+.mockup{margin-top:3rem;animation:fadeUp 1s ease .5s both;max-width:800px;width:100%;border-radius:16px;border:1px solid var(--border);background:var(--surface);overflow:hidden;box-shadow:0 25px 80px rgba(0,0,0,.5)}
+.mockup-bar{background:var(--bg2);padding:.5rem 1rem;display:flex;gap:.4rem;border-bottom:1px solid var(--border)}
+.mockup-bar i{width:8px;height:8px;border-radius:50%;display:block}
+.mockup-grid{padding:1.5rem;display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem}
+.mc{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem;text-align:center}
+.mc b{font-size:1.6rem;font-weight:800;font-family:var(--mono);display:block}
+.mc small{font-size:.6rem;color:var(--text2);letter-spacing:1px}
+.strip{padding:2.5rem 2rem;background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.strip-inner{max-width:900px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem;text-align:center}
+.strip-inner div{font-size:.72rem;color:var(--text2);letter-spacing:1px}
+.strip-inner span{font-size:2rem;display:block;margin-bottom:.2rem}
+.sec{padding:5rem 2rem}
+.sec-label{font-size:.72rem;color:var(--cyan);letter-spacing:3px;font-weight:600;text-align:center;margin-bottom:.75rem}
+.sec-title{font-size:clamp(1.6rem,4vw,2.5rem);font-weight:800;text-align:center;margin-bottom:.75rem}
+.sec-sub{font-size:.95rem;color:var(--text2);text-align:center;max-width:500px;margin:0 auto 3rem;font-weight:300}
+.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.25rem;max-width:1100px;margin:0 auto}
+.fc{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.5rem;transition:all .3s;position:relative;overflow:hidden}
+.fc:hover{border-color:var(--cyan);transform:translateY(-3px);box-shadow:0 10px 30px rgba(0,229,255,.06)}
+.fc::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0;transition:opacity .3s}.fc:hover::after{opacity:1}
+.fc span{font-size:2rem;display:block;margin-bottom:.75rem}
+.fc h3{font-size:1.05rem;font-weight:700;margin-bottom:.4rem}
+.fc p{font-size:.82rem;color:var(--text2);line-height:1.5}
+.ct{max-width:700px;margin:0 auto;width:100%;border-collapse:collapse}
+.ct th{text-align:left;padding:.75rem .5rem;font-size:.7rem;color:var(--text2);letter-spacing:1px;border-bottom:2px solid var(--border)}
+.ct th:not(:first-child){text-align:center}
+.ct td{padding:.6rem .5rem;font-size:.82rem;border-bottom:1px solid rgba(42,42,58,.5)}
+.ct td:not(:first-child){text-align:center}
+.ct .y{color:var(--green);font-weight:700}.ct .n{color:var(--red);opacity:.4}
+.ct .hl{background:rgba(0,229,255,.03)}
+.steps{max-width:700px;margin:0 auto;display:grid;gap:1.5rem}
+.step{display:flex;gap:1.25rem;align-items:flex-start}
+.step-n{min-width:44px;height:44px;background:var(--surface);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;color:var(--cyan)}
+.step h3{font-size:1rem;font-weight:700;margin-bottom:.2rem}.step p{font-size:.85rem;color:var(--text2)}
+.pc{max-width:420px;margin:0 auto;background:var(--surface);border:2px solid var(--cyan);border-radius:16px;padding:2.5rem 2rem;text-align:center;position:relative;box-shadow:0 0 40px rgba(0,229,255,.08)}
+.pc::before{content:'14 DÍAS GRATIS';position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--cyan);color:#000;font-size:.65rem;font-weight:800;padding:3px 16px;border-radius:20px;letter-spacing:1px}
+.pc h3{font-size:1rem;font-weight:700;letter-spacing:2px;color:var(--text2);margin-bottom:.75rem}
+.pc .price{font-size:3rem;font-weight:900;font-family:var(--mono);color:var(--cyan)}.pc .price span{font-size:.85rem;color:var(--text2);font-weight:400}
+.pc .gs{font-size:.9rem;color:var(--text2);margin-bottom:1.5rem}
+.pc ul{list-style:none;text-align:left;margin-bottom:2rem}
+.pc li{padding:.35rem 0;font-size:.85rem;display:flex;gap:.5rem;align-items:center}.pc li::before{content:'✓';color:var(--green);font-weight:700}
+.pc a{display:block;width:100%;padding:.85rem;border-radius:10px;font-weight:700;font-size:1rem;text-align:center;background:var(--cyan);color:#000;text-decoration:none;transition:all .2s;font-family:var(--font)}.pc a:hover{background:#fff}
+.cta{padding:5rem 2rem;text-align:center;position:relative;overflow:hidden}
+.cta::before{content:'';position:absolute;bottom:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(ellipse at 50% 80%,rgba(0,229,255,.05) 0%,transparent 50%)}
+.cta h2{font-size:clamp(1.6rem,4vw,2.2rem);font-weight:800;margin-bottom:.75rem}
+footer{padding:2.5rem 2rem;border-top:1px solid var(--border);text-align:center}
+footer p{font-size:.78rem;color:var(--text2)}footer a{color:var(--cyan);text-decoration:none}
+@keyframes fadeUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+.fi{opacity:0;transform:translateY(25px);transition:all .6s ease}.fi.v{opacity:1;transform:translateY(0)}
+@media(max-width:768px){nav{padding:.75rem 1rem}.nav-links a:not(.nav-cta){display:none}.mockup-grid{grid-template-columns:repeat(2,1fr)}.strip-inner{grid-template-columns:repeat(2,1fr);gap:1rem}.fg{grid-template-columns:1fr}.step{flex-direction:column;align-items:center;text-align:center}.ct th,.ct td{padding:.5rem .25rem;font-size:.72rem}}
+</style>
+</head>
+<body>
+<nav id="nav">
+  <a href="#" class="nav-logo">TALLER<span>PRO</span></a>
+  <div class="nav-links">
+    <a href="#features">Funciones</a>
+    <a href="#compare">Comparar</a>
+    <a href="#pricing">Precio</a>
+    <a href="./index.html#nuevo-taller" class="nav-cta">EMPEZAR GRATIS</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-badge">🤖 <b>Nuevo</b> Asistente IA con voz en guaraní y español</div>
+  <h1>Tu taller, <em>bajo control.</em></h1>
+  <p>Organizá clientes, trabajos, inventario y cobros desde tu celular. Con inteligencia artificial que te entiende cuando hablás.</p>
+  <div class="hero-btns">
+    <a href="./index.html#nuevo-taller" class="btn btn-p">PROBAR 14 DÍAS GRATIS</a>
+    <a href="#features" class="btn btn-s">Ver funciones →</a>
+  </div>
+  <div class="mockup">
+    <div class="mockup-bar"><i style="background:var(--red)"></i><i style="background:var(--orange)"></i><i style="background:var(--green)"></i></div>
+    <div class="mockup-grid">
+      <div class="mc"><b style="color:var(--cyan)">247</b><small>CLIENTES</small></div>
+      <div class="mc"><b style="color:var(--orange)">18</b><small>EN PROGRESO</small></div>
+      <div class="mc"><b style="color:var(--green)">₲4.2M</b><small>INGRESOS MES</small></div>
+      <div class="mc"><b style="color:var(--red)">3</b><small>STOCK BAJO</small></div>
+    </div>
+  </div>
+</section>
+
+<section class="strip">
+  <div class="strip-inner">
+    <div><span>🤖</span>IA CON VOZ</div>
+    <div><span>📱</span>PORTAL CLIENTE</div>
+    <div><span>📸</span>FOTOS X ETAPA</div>
+    <div><span>💰</span>FINANZAS AUTO</div>
+  </div>
+</section>
+
+<section class="sec" id="features">
+  <div class="sec-label">FUNCIONES</div>
+  <div class="sec-title">Todo lo que tu taller necesita</div>
+  <div class="sec-sub">Más de 30 funciones integradas. Una sola app.</div>
+  <div class="fg">
+    <div class="fc fi"><span>🤖</span><h3>IA con Voz</h3><p>Hablale al celular: "entró la Toyota de Juan, frenos, 200 mil". La IA crea cliente, vehículo y trabajo sola. Entiende español, guaraní y jopara.</p></div>
+    <div class="fc fi"><span>🔧</span><h3>Trabajos por Tipo</h3><p>Mecánica, frenos, electricidad, chapa, aire acondicionado, diagnóstico. Con mecánicos asignados, horas y pago individual.</p></div>
+    <div class="fc fi"><span>📸</span><h3>Fotos por Etapa</h3><p>Recepción, proceso y entrega. El cliente ve todo desde su celular. Adiós reclamos falsos.</p></div>
+    <div class="fc fi"><span>📱</span><h3>Portal del Cliente</h3><p>Tu cliente entra con un código, ve sus autos, el estado del trabajo, aprueba presupuestos y agenda turnos solo.</p></div>
+    <div class="fc fi"><span>💰</span><h3>Finanzas Automáticas</h3><p>Trabajo finalizado = ingreso. Vale = egreso. Pago parcial = registrado. Sabé cuánto ganás de verdad, sin anotar nada.</p></div>
+    <div class="fc fi"><span>📦</span><h3>Inventario + Escáner</h3><p>Escaneá el código de barras y al toque sabés el stock. Se descuenta solo cuando lo usás. Zonas personalizables.</p></div>
+    <div class="fc fi"><span>📅</span><h3>Turnos</h3><p>Agenda con horarios. El cliente reserva solo. Confirmás con un toque. Creás trabajo directo desde el turno.</p></div>
+    <div class="fc fi"><span>👥</span><h3>Empleados y Vales</h3><p>Múltiples mecánicos por trabajo. Vales y adelantos que se descuentan del sueldo automáticamente a fin de mes.</p></div>
+    <div class="fc fi"><span>📄</span><h3>PDF Profesional</h3><p>Presupuestos con IVA, datos del taller, línea de firma. Compartí por WhatsApp con un botón.</p></div>
+    <div class="fc fi"><span>💳</span><h3>Pagos y Créditos</h3><p>Pagos parciales, efectivo, transferencia o crédito. Alerta de "dinero en la calle" en el dashboard.</p></div>
+    <div class="fc fi"><span>📊</span><h3>Reportes</h3><p>Ingresos del día, semana y mes. Top servicios rentables. Gráficos. Productividad por mecánico.</p></div>
+    <div class="fc fi"><span>📲</span><h3>WhatsApp + Offline</h3><p>Presupuestos y recordatorios por WhatsApp. Funciona sin internet. Se instala como app.</p></div>
+  </div>
+</section>
+
+<section class="sec" id="compare" style="background:var(--bg2)">
+  <div class="sec-label">COMPARACIÓN</div>
+  <div class="sec-title">¿Por qué TallerPro?</div>
+  <div class="sec-sub">Más funciones, mejor precio.</div>
+  <table class="ct">
+    <thead><tr><th>FUNCIÓN</th><th class="hl">TALLERPRO</th><th>OTROS</th></tr></thead>
+    <tbody>
+      <tr><td>Asistente IA con voz</td><td class="hl y">✓</td><td class="n">✕</td></tr>
+      <tr><td>Portal del cliente</td><td class="hl y">✓</td><td class="n">✕</td></tr>
+      <tr><td>Fotos por etapa</td><td class="hl y">✓</td><td class="n">✕</td></tr>
+      <tr><td>Finanzas automáticas</td><td class="hl y">✓</td><td class="n">✕</td></tr>
+      <tr><td>Escáner de código de barras</td><td class="hl y">✓</td><td class="n">✕</td></tr>
+      <tr><td>Pagos parciales y créditos</td><td class="hl y">✓</td><td class="n">✕</td></tr>
+      <tr><td>Vales de empleados</td><td class="hl y">✓</td><td class="n">✕</td></tr>
+      <tr><td>Funciona offline</td><td class="hl y">✓</td><td class="n">✕</td></tr>
+      <tr><td>Clientes y trabajos</td><td class="hl y">✓</td><td class="y">✓</td></tr>
+      <tr><td>Inventario</td><td class="hl y">✓</td><td class="y">✓</td></tr>
+      <tr><td>Presupuestos PDF</td><td class="hl y">✓</td><td class="y">✓</td></tr>
+      <tr><td style="font-weight:700">Precio/mes</td><td class="hl" style="color:var(--cyan);font-weight:700">₲250.000</td><td style="color:var(--text2)">₲70.000+</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="sec" id="how">
+  <div class="sec-label">CÓMO FUNCIONA</div>
+  <div class="sec-title">Empezá en 2 minutos</div>
+  <div class="sec-sub">Sin descargas. Abrí y usá.</div>
+  <div class="steps">
+    <div class="step fi"><div class="step-n">01</div><div><h3>Creá tu cuenta gratis</h3><p>Registrá tu taller. 14 días de prueba con todo habilitado.</p></div></div>
+    <div class="step fi"><div class="step-n">02</div><div><h3>Cargá clientes y vehículos</h3><p>Escribí o hablale a la IA. "Anotame a Juan, tiene una Hilux ABC123". Listo.</p></div></div>
+    <div class="step fi"><div class="step-n">03</div><div><h3>Invitá a tu equipo</h3><p>Código de invitación por WhatsApp. Mecánicos y clientes acceden con un click.</p></div></div>
+    <div class="step fi"><div class="step-n">04</div><div><h3>Gestioná todo desde el celular</h3><p>Trabajos, turnos, cobros, inventario, fotos. Todo conectado con finanzas.</p></div></div>
+  </div>
+</section>
+
+<section class="sec" id="pricing" style="background:var(--bg2)">
+  <div class="sec-label">PRECIO</div>
+  <div class="sec-title">Un solo plan, todo incluido</div>
+  <div class="sec-sub">Sin sorpresas. Sin funciones bloqueadas.</div>
+  <div class="pc fi">
+    <h3>TALLERPRO</h3>
+    <div class="price">₲250.000<span>/mes</span></div>
+    <div class="gs">~$30 USD · IVA incluido</div>
+    <ul>
+      <li>Usuarios y clientes ilimitados</li>
+      <li>Asistente IA con voz</li>
+      <li>Portal del cliente</li>
+      <li>Fotos por etapa</li>
+      <li>Inventario con escáner</li>
+      <li>Finanzas automáticas</li>
+      <li>Turnos inteligentes</li>
+      <li>Pagos parciales y créditos</li>
+      <li>Presupuestos PDF profesional</li>
+      <li>WhatsApp integrado</li>
+      <li>Reportes con gráficos</li>
+      <li>Funciona offline</li>
+      <li>4 idiomas (ES, GN, PT, EN)</li>
+    </ul>
+    <a href="./index.html#nuevo-taller">PROBAR 14 DÍAS GRATIS</a>
+    <p style="font-size:.75rem;color:var(--text2);margin-top:.75rem">Sin tarjeta de crédito · Cancelá cuando quieras</p>
+  </div>
+</section>
+
+<section class="cta">
+  <h2>¿Seguís anotando en un cuaderno?</h2>
+  <p style="color:var(--text2);margin-bottom:2rem;font-weight:300">Tu competencia ya se está digitalizando. No te quedes atrás.</p>
+  <a href="./index.html#nuevo-taller" class="btn btn-p">CREAR MI TALLER GRATIS</a>
+  <p style="font-size:.82rem;color:var(--text2);margin-top:1rem">✓ <span style="color:var(--green);font-weight:600">14 días gratis</span> · Sin tarjeta · Sin compromiso</p>
+  <div style="margin-top:2rem"><a href="https://wa.me/595982333971?text=Hola!%20Quiero%20saber%20más%20sobre%20TallerPro" style="display:inline-flex;align-items:center;gap:.5rem;background:rgba(37,211,102,.1);border:1px solid rgba(37,211,102,.25);border-radius:10px;padding:.6rem 1.5rem;color:#25d366;font-weight:600;text-decoration:none">💬 ¿Dudas? Hablanos por WhatsApp</a></div>
+</section>
+
+<footer>
+  <p style="margin-bottom:.5rem"><a href="#" style="font-weight:700;font-size:1.1rem;letter-spacing:2px">TALLERPRO</a></p>
+  <p>Sistema de gestión para talleres mecánicos · Paraguay 🇵🇾</p>
+  <p style="margin-top:.5rem">💬 <a href="https://wa.me/595982333971">WhatsApp</a> · © 2026 TallerPro</p>
+  <p style="margin-top:.5rem"><a href="./terminos.html">Términos</a> · <a href="./privacidad.html">Privacidad</a></p>
+</footer>
+
+<script>
+window.addEventListener('scroll',()=>{document.getElementById('nav').classList.toggle('scrolled',window.scrollY>50)});
+const obs=new IntersectionObserver(e=>{e.forEach(el=>{if(el.isIntersecting){el.target.classList.add('v');obs.unobserve(el.target)}})},{threshold:.1,rootMargin:'0px 0px -50px 0px'});
+document.querySelectorAll('.fi').forEach(el=>obs.observe(el));
+document.querySelectorAll('a[href^="#"]').forEach(a=>{a.addEventListener('click',e=>{e.preventDefault();const t=document.querySelector(a.getAttribute('href'));if(t)t.scrollIntoView({behavior:'smooth'})})});
+</script>
+</body>
+</html>
