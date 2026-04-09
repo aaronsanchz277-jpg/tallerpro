@@ -543,11 +543,7 @@ function translateLoginScreen() {
   setT('tab-nuevo-taller', 'loginNuevoTaller');
   setT('lt-registro-msg', 'loginRegistroMsg');
 }
-let currentUser   = null;   // Usuario autenticado de Supabase
-let currentPerfil = null;   // Perfil con rol y taller
-let currentPage   = 'dashboard';
-let loginTab      = 'login';
-let recoveryMode  = window.location.hash.includes('type=recovery');
+ 
 
 // Link de invitación: detectar ?taller=ID&codigo=XXXX (validado como UUID)
 const urlParams       = new URLSearchParams(window.location.search);
