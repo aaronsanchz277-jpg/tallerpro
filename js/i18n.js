@@ -225,7 +225,7 @@ const IDIOMAS = {
     yaVinculados:'OJUEHE VAEKUE', vehSinPropietario:'Ndaipóri mbyyrã dueño',
     modNuevoCliente: 'NUEVO CLIENTE',
     modEditarCliente: 'EDITAR CLIENTE',
-    modNuevoVehiculo: 'NUEVO VEHÍCULO', 
+    modNuevoVehiculo: 'NUEVO VEHÍCULO',
   },
   pt: {
     salir:'Sair', inicio:'INÍCIO', clientes:'CLIENTES', vehiculos:'VEÍCULOS',
@@ -543,15 +543,3 @@ function translateLoginScreen() {
   setT('tab-nuevo-taller', 'loginNuevoTaller');
   setT('lt-registro-msg', 'loginRegistroMsg');
 }
- 
-
-// Link de invitación: detectar ?taller=ID&codigo=XXXX (validado como UUID)
-const urlParams       = new URLSearchParams(window.location.search);
-const _rawTallerId    = urlParams.get('taller');
-const UUID_REGEX      = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const tallerIdFromUrl = (_rawTallerId && UUID_REGEX.test(_rawTallerId)) ? _rawTallerId : null;
-const codigoFromUrl   = urlParams.get('codigo') || null;
-
-// Splash: tiempo de inicio para sincronizar animación
-const splashStart = Date.now();
-
