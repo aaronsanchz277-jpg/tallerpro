@@ -1,12 +1,48 @@
 // ═══════════════════════════════════════════════════════════════
 //  TallerPro Service Worker — Offline + Background Sync
+//  v3.0 — Modular (35 archivos JS + CSS)
 // ═══════════════════════════════════════════════════════════════
-
-const CACHE_NAME = 'tallerpro-v2.2';
+const CACHE_NAME = 'tallerpro-v3.0';
 const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './css/styles.css',
+  './js/config.js',
+  './js/pwa.js',
+  './js/offline.js',
+  './js/i18n.js',
+  './js/ui.js',
+  './js/navigation.js',
+  './js/ia.js',
+  './js/push.js',
+  './js/auth.js',
+  './js/dashboard.js',
+  './js/clientes.js',
+  './js/vehiculos.js',
+  './js/reparaciones.js',
+  './js/inventario.js',
+  './js/creditos.js',
+  './js/empleados.js',
+  './js/facturacion.js',
+  './js/usuarios.js',
+  './js/cliente-view.js',
+  './js/mantenimientos.js',
+  './js/agenda.js',
+  './js/plan.js',
+  './js/admin.js',
+  './js/finanzas.js',
+  './js/mecanicos.js',
+  './js/barcode.js',
+  './js/caja.js',
+  './js/cuentas.js',
+  './js/perfil.js',
+  './js/presupuestos.js',
+  './js/quickservice.js',
+  './js/ventas.js',
+  './js/gastos.js',
+  './js/kanban.js',
+  './js/tests.js',
   'https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js'
 ];
@@ -45,13 +81,11 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(event.request)
         .then(response => {
-          // Cache successful API responses
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
           return response;
         })
         .catch(() => {
-          // Offline: return cached API response
           return caches.match(event.request).then(cached => {
             if (cached) return cached;
             return new Response(JSON.stringify([]), {
@@ -67,14 +101,12 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request).then(cached => {
       const networkFetch = fetch(event.request).then(response => {
-        // Update cache with fresh version
         if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
         return response;
       }).catch(() => cached);
-
       return cached || networkFetch;
     })
   );
