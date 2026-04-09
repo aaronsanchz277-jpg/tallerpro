@@ -24,7 +24,13 @@ function closeModal() {
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const tid = () => currentPerfil?.taller_id;
-function gs(n) { return parseFloat(n||0).toLocaleString('es-PY'); }
+
+// ✅ CORREGIDA: maneja NaN y strings no numéricos
+function gs(n) {
+  let num = parseFloat(n);
+  if (isNaN(num)) num = 0;
+  return num.toLocaleString('es-PY');
+}
 
 // Formatear teléfono: auto-agrupar dígitos (4-6)
 function formatPhone(input) {
@@ -208,7 +214,6 @@ function confirmar(msg, onConfirm) {
     if (btn) btn.addEventListener('click', () => { closeModal(); if (_pendingConfirm) { _pendingConfirm(); _pendingConfirm = null; } });
   }, 50);
 }
-
 
 // ─── cleanNum: Convertir valores a número limpio ────────────────────────────
 function cleanNum(v) {
