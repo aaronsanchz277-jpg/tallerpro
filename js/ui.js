@@ -25,14 +25,14 @@ function closeModal() {
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const tid = () => currentPerfil?.taller_id;
 
-// ✅ CORREGIDA: maneja NaN y strings no numéricos
+// Función gs CORREGIDA (maneja NaN)
 function gs(n) {
   let num = parseFloat(n);
   if (isNaN(num)) num = 0;
   return num.toLocaleString('es-PY');
 }
 
-// Formatear teléfono: auto-agrupar dígitos (4-6)
+// Formatear teléfono
 function formatPhone(input) {
   let v = input.value.replace(/\D/g, '');
   if (v.length > 10) v = v.slice(0, 10);
@@ -44,7 +44,7 @@ function formatPhone(input) {
   input.value = formatted;
 }
 
-// Generar HTML de input de teléfono con selector de país
+// Generar HTML de input de teléfono
 function phoneInput(id, value, placeholder) {
   const prefijos = [
     {code:'+595',flag:'🇵🇾',name:'PY'},
@@ -64,6 +64,7 @@ function phoneInput(id, value, placeholder) {
   const opts = prefijos.map(p => `<option value="${p.code}" ${p.code==='+595'?'selected':''}>${p.flag} ${p.code}</option>`).join('');
   return `<div class="phone-wrap"><select class="phone-prefix" id="${id}-prefix">${opts}</select><input class="form-input" id="${id}" type="tel" value="${h(value||'')}" placeholder="${placeholder||'0981 123 456'}" oninput="formatPhone(this)"></div>`;
 }
+
 function estadoBadge(e) { return { pendiente:'badge-yellow', en_progreso:'badge-orange', esperando_repuestos:'badge-blue', finalizado:'badge-green' }[e]||'badge-blue'; }
 function estadoLabel(e) { return { pendiente:t('repEstPendiente'), en_progreso:t('repEstProgreso'), esperando_repuestos:'Esperando repuestos', finalizado:t('repEstFinalizado') }[e]||e; }
 
@@ -109,7 +110,7 @@ function checkLoginRateLimit() {
   }
   _loginAttempts++;
   if (_loginAttempts >= 5) {
-    _loginLockUntil = Date.now() + 60000; // 60 segundos
+    _loginLockUntil = Date.now() + 60000;
     _loginAttempts = 0;
     showAuthError('Demasiados intentos. Esperá 60 segundos.');
     return false;
@@ -146,7 +147,7 @@ function guardando() {
   return false;
 }
 
-// ─── SEARCHABLE SELECT (para listas grandes de clientes/vehículos) ──────────
+// ─── SEARCHABLE SELECT ──────────────────────────────────────────────────────
 function searchableSelect(id, placeholder, searchFn) {
   return `<div style="position:relative">
     <input class="form-input" id="${id}-search" placeholder="${placeholder}" autocomplete="off"
@@ -189,7 +190,6 @@ function ssSetValue(id, value, label) {
   if (search) search.value = label || '';
 }
 
-// Click outside to close
 document.addEventListener('click', (e) => {
   document.querySelectorAll('[id$="-results"]').forEach(el => {
     if (!el.parentElement.contains(e.target)) el.style.display = 'none';
@@ -215,13 +215,11 @@ function confirmar(msg, onConfirm) {
   }, 50);
 }
 
-// ─── cleanNum: Convertir valores a número limpio ────────────────────────────
 function cleanNum(v) {
   const n = parseFloat(String(v).replace(/[^\d.-]/g, ''));
   return isNaN(n) ? 0 : n;
 }
 
-// ─── FOTO: Preview y validación (compartido entre vehiculos y empleados) ────
 const MAX_FOTO_SIZE = 5 * 1024 * 1024;
 const ALLOWED_FOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 let _pendingFotoFile = null;
