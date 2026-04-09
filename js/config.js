@@ -4,13 +4,20 @@
 // ════════════════════════════════════════════════════════════════
 
 // ─── SEGURIDAD: Escape de HTML para prevenir XSS ─────────────────────────────
+// ─── SEGURIDAD: Escape de HTML para prevenir XSS ─────────────────────────────
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   const s = String(str);
-  const div = document.createElement('div');
-  div.textContent = s;
-  return div.innerHTML;
+  // Reemplazo manual de caracteres peligrosos (más rápido que crear un div)
+  return s.replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  }).replace(/[\"]/g, '&quot;')
+    .replace(/[\']/g, '&#39;');
 }
+const h = escapeHtml;
 // Alias corto para usar en templates
 const h = escapeHtml;
 
