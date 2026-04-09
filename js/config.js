@@ -18,8 +18,6 @@ function escapeHtml(str) {
     .replace(/[\']/g, '&#39;');
 }
 const h = escapeHtml;
-// Alias corto para usar en templates
-const h = escapeHtml;
 
 // ─── CONFIGURACIÓN ────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://uggqqmsmxvafeyyinuir.supabase.co';
