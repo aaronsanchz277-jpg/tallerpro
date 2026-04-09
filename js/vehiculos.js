@@ -105,49 +105,6 @@ async function modalNuevoVehiculo() {
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
 }
 
-const MAX_FOTO_SIZE = 5 * 1024 * 1024; // 5MB
-const ALLOWED_FOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-let _pendingFotoFile = null; // Archivo comprimido listo para subir
-
-function previewFoto(input, hiddenId, previewId) {
-  const file = input.files[0];
-  _pendingFotoFile = null;
-  if (!file) return;
-  if (!ALLOWED_FOTO_TYPES.includes(file.type)) {
-    toast('Solo se permiten imágenes JPG, PNG o WebP','error');
-    input.value = '';
-    return;
-  }
-  if (file.size > MAX_FOTO_SIZE) {
-    toast('La imagen no puede superar 5MB','error');
-    input.value = '';
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = e => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const MAX_DIM = 800;
-      let w = img.width, ht = img.height;
-      if (w > MAX_DIM || ht > MAX_DIM) {
-        if (w > ht) { ht = Math.round(ht * MAX_DIM / w); w = MAX_DIM; }
-        else { w = Math.round(w * MAX_DIM / ht); ht = MAX_DIM; }
-      }
-      canvas.width = w; canvas.height = ht;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, ht);
-      // Preview
-      const previewUrl = canvas.toDataURL('image/jpeg', 0.7);
-      document.getElementById(previewId).innerHTML = `<img src="${previewUrl}" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">`;
-      // Guardar blob comprimido para subir a Storage
-      canvas.toBlob(blob => { _pendingFotoFile = blob; }, 'image/jpeg', 0.7);
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
-// Subir foto a Supabase Storage y devolver URL pública
 async function uploadFoto(vehiculoId) {
   if (!_pendingFotoFile) return null;
   const filePath = `${tid()}/${vehiculoId}_${Date.now()}.jpg`;
@@ -161,25 +118,15 @@ async function uploadFoto(vehiculoId) {
   return urlData.publicUrl;
 }
 
-// Validar que foto_url sea segura antes de renderizar
-function safeFotoUrl(url) {
-  if (!url) return '';
-  if (url.startsWith('data:image/jpeg') || url.startsWith('data:image/png') || url.startsWith('data:image/webp')) return url;
-  if (url.startsWith('https://')) return url;
-  return '';
-}
-
 async function guardarVehiculo(id=null) {
   if (guardando()) return;
   const patente = document.getElementById('f-patente').value.trim().toUpperCase();
   if (!patente) { toast('La patente es obligatoria','error'); return; }
   const cid = document.getElementById('f-cliente').value;
 
-  // Validar patente duplicada
   const { data: existente } = await sb.from('vehiculos').select('id').eq('taller_id',tid()).eq('patente',patente).maybeSingle();
   if (existente && existente.id !== id) { toast('Ya existe un vehículo con esa patente','error'); return; }
 
-  // Si hay foto nueva, subirla a Storage
   const vehiculoId = id || crypto.randomUUID();
   let fotoUrl = document.getElementById('f-foto-b64')?.value || null;
   if (_pendingFotoFile) {
@@ -229,16 +176,14 @@ async function modalEditarVehiculo(id) {
 
 async function eliminarVehiculo(id) {
   confirmar('Esta acción eliminará el vehículo permanentemente.', async () => {
-    // Limpiar foto del storage si existe
     try {
       const { data: veh } = await sb.from('vehiculos').select('foto_url').eq('id',id).single();
       if (veh?.foto_url && veh.foto_url.includes('/storage/')) {
         const path = veh.foto_url.split('/vehiculos/').pop();
         if (path) await sb.storage.from('vehiculos').remove([path]);
       }
-    } catch(e) { /* no bloquear eliminación por fallo de limpieza */ }
+    } catch(e) { }
     await offlineDelete('vehiculos', 'id', id);
     clearCache('vehiculos');toast('Vehículo eliminado'); navigate('vehiculos');
   });
 }
-
