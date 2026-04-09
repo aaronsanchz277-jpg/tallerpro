@@ -218,7 +218,6 @@ async function crearTallerDesdePrompt() {
 }
 
 // ─── AUTH UI ─────────────────────────────────────────────────────────────────
-let _loggedOutOnce = false;
 
 function showLogin() {
   document.getElementById('login-screen').style.display = 'flex';
