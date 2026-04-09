@@ -1,0 +1,244 @@
+// ─── VEHICULOS ───────────────────────────────────────────────────────────────
+async function vehiculos({ search='', offset=0 }={}) {
+  const cacheKey = `vehiculos_${search}_${offset}`;
+  const { data, count } = await cachedQuery(cacheKey, () => {
+    let q = sb.from('vehiculos').select('*, clientes(nombre)', {count:'exact'}).eq('taller_id', tid()).order('patente');
+    if (search) q = q.ilike('patente', `%${search}%`);
+    return q.range(offset, offset + PAGE_SIZE - 1);
+  });
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t('vehTitulo')} ${count ? `<span style="font-size:.75rem;color:var(--text2)">(${count})</span>` : ''}</div>
+      ${['admin','empleado'].includes(currentPerfil?.rol) ? `<button class="btn-add" onclick="modalNuevoVehiculo()">+ Nuevo</button>` : ''}
+    </div>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" placeholder="${t('dashBuscarPatente')}" value="${h(search)}" oninput="debounce('veh',()=>vehiculos({search:this.value}))" class="form-input" style="padding-left:2.5rem">
+    </div>
+    ${(data||[]).length===0 ? `<div class="empty"><p>${t('vehSinDatos')}</p></div>` :
+      (data||[]).map(v => `
+      <div class="card" onclick="detalleVehiculo('${v.id}')">
+        <div class="card-header">
+          <div class="card-avatar" style="font-size:.8rem;letter-spacing:1px">${h(v.patente)}</div>
+          <div class="card-info">
+            <div class="card-name">${h(v.marca)} ${h(v.modelo||'')}</div>
+            <div class="card-sub">${h(v.anio||'')} · ${v.clientes?h(v.clientes.nombre):t('vehSinProp')}</div>
+          </div>
+          ${v.foto_url ? `<img src="${safeFotoUrl(v.foto_url)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">` : ''}
+        </div>
+      </div>`).join('')}
+    ${renderPagination(count||0, offset, '_navVeh')}`;
+}
+function _navVeh(o) { vehiculos({offset:o}); }
+
+async function detalleVehiculo(id) {
+  let v, reps, mants;
+  try {
+    const results = await Promise.all([
+      sb.from('vehiculos').select('*, clientes(nombre,telefono)').eq('id',id).single(),
+      sb.from('reparaciones').select('*').eq('vehiculo_id',id).order('created_at',{ascending:false}),
+      sb.from('mantenimientos').select('*').eq('vehiculo_id',id).order('fecha_realizado',{ascending:false}).limit(10)
+    ]);
+    v = results[0].data; reps = results[1].data; mants = results[2].data;
+  } catch(e) { toast('Error al cargar vehículo','error'); navigate('vehiculos'); return; }
+  if (!v) { toast('Vehículo no encontrado','error'); navigate('vehiculos'); return; }
+  const isAdmin = currentPerfil?.rol==='admin';
+  const canEdit = ['admin','empleado'].includes(currentPerfil?.rol);
+  const totalGastado = (reps||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
+  const totalGanancia = (reps||[]).reduce((s,r)=>s+parseFloat(r.costo||0)-parseFloat(r.costo_repuestos||0),0);
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="detail-header">
+      <button class="back-btn" onclick="navigate('vehiculos')">${t('volver')}</button>
+      ${v.foto_url ? `<img src="${safeFotoUrl(v.foto_url)}" style="width:56px;height:56px;object-fit:cover;border-radius:12px;border:2px solid var(--accent)">` : `<div class="detail-avatar" style="font-size:.9rem">${h(v.patente)}</div>`}
+      <div><div class="detail-name">${h(v.marca)} ${h(v.modelo||'')}</div><div class="detail-sub">${h(v.anio||'')}</div></div>
+    </div>
+    ${v.foto_url ? `<img src="${safeFotoUrl(v.foto_url)}" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;margin-bottom:1rem;border:1px solid var(--border)">` : ''}
+    <div class="info-grid">
+      <div class="info-item"><div class="label">Patente</div><div class="value">${h(v.patente)}</div></div>
+      <div class="info-item"><div class="label">Marca</div><div class="value">${h(v.marca||'-')}</div></div>
+      <div class="info-item"><div class="label">Modelo</div><div class="value">${h(v.modelo||'-')}</div></div>
+      <div class="info-item"><div class="label">Año</div><div class="value">${h(v.anio||'-')}</div></div>
+      <div class="info-item"><div class="label">Propietario</div><div class="value">${v.clientes?h(v.clientes.nombre):t('vehSinProp')}</div></div>
+      <div class="info-item"><div class="label">Total facturado</div><div class="value" style="color:var(--accent)">₲${gs(totalGastado)}</div></div>
+    </div>
+    ${canEdit ? `<div style="display:flex;gap:.5rem;margin-bottom:1rem">
+      <button class="btn-secondary" style="margin:0" onclick="modalEditarVehiculo('${id}')">${t('editarBtn')}</button>
+      ${isAdmin ? `<button class="btn-danger" style="margin:0" onclick="eliminarVehiculo('${id}')">${t('eliminarBtn')}</button>` : ''}
+    </div>` : ''}
+
+    <div class="sub-section">
+      <div class="sub-section-title">📋 HISTORIAL COMPLETO (${(reps||[]).length + (mants||[]).length})</div>
+      ${(reps||[]).length===0 && (mants||[]).length===0 ? '<p style="color:var(--text2);font-size:.85rem">Sin historial</p>' : ''}
+      ${(reps||[]).map(r => `<div class="card" style="margin-bottom:.5rem" onclick="detalleReparacion('${r.id}')"><div class="card-header"><div class="card-avatar">🔧</div><div class="card-info"><div class="card-name">${h(r.descripcion)}</div><div class="card-sub">₲${gs(r.costo)}${r.costo_repuestos?' · Ganancia: ₲'+gs(r.costo-r.costo_repuestos):''} · ${formatFecha(r.fecha)}</div></div><span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span></div></div>`).join('')}
+      ${(mants||[]).map(m => `<div class="card" style="margin-bottom:.5rem"><div class="card-header"><div class="card-avatar">🛡️</div><div class="card-info"><div class="card-name">${h(m.tipo||'Mantenimiento')}</div><div class="card-sub">${m.kilometraje?m.kilometraje+' km · ':''}${m.fecha_realizado?formatFecha(m.fecha_realizado):''}</div></div><span class="card-badge badge-blue">Preventivo</span></div></div>`).join('')}
+    </div>`;
+}
+
+async function modalNuevoVehiculo() {
+  const { data:cls } = await sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre');
+  openModal(`
+    <div class="modal-title">${t("modNuevoVehiculo")}</div>
+    <div class="form-group"><label class="form-label">Patente *</label><input class="form-input" id="f-patente" placeholder="ABC 123" style="text-transform:uppercase"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblMarca")}</label><input class="form-input" id="f-marca" placeholder="Toyota"></div>
+      <div class="form-group"><label class="form-label">${t("lblModelo")}</label><input class="form-input" id="f-modelo" placeholder="Corolla"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblAnio")}</label><input class="form-input" id="f-anio" type="number" placeholder="2020"></div>
+      <div class="form-group"><label class="form-label">${t("lblColor")}</label><input class="form-input" id="f-color" placeholder="Blanco"></div>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblPropietario")}</label>
+      <select class="form-input" id="f-cliente">
+        <option value="">${t("vehSinProp")}</option>
+        ${(cls||[]).map(c => `<option value="${c.id}">${h(c.nombre)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t("lblFotoVeh")}</label>
+      <input type="file" id="f-foto-file" accept="image/*" capture="environment" class="form-input" style="padding:.4rem" onchange="previewFoto(this,'f-foto-b64','foto-prev')">
+      <div id="foto-prev" style="margin-top:.5rem"></div>
+      <input type="hidden" id="f-foto-b64">
+    </div>
+    <button class="btn-primary" onclick="guardarVehiculo()">${t('guardar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+const MAX_FOTO_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_FOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+let _pendingFotoFile = null; // Archivo comprimido listo para subir
+
+function previewFoto(input, hiddenId, previewId) {
+  const file = input.files[0];
+  _pendingFotoFile = null;
+  if (!file) return;
+  if (!ALLOWED_FOTO_TYPES.includes(file.type)) {
+    toast('Solo se permiten imágenes JPG, PNG o WebP','error');
+    input.value = '';
+    return;
+  }
+  if (file.size > MAX_FOTO_SIZE) {
+    toast('La imagen no puede superar 5MB','error');
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_DIM = 800;
+      let w = img.width, ht = img.height;
+      if (w > MAX_DIM || ht > MAX_DIM) {
+        if (w > ht) { ht = Math.round(ht * MAX_DIM / w); w = MAX_DIM; }
+        else { w = Math.round(w * MAX_DIM / ht); ht = MAX_DIM; }
+      }
+      canvas.width = w; canvas.height = ht;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, ht);
+      // Preview
+      const previewUrl = canvas.toDataURL('image/jpeg', 0.7);
+      document.getElementById(previewId).innerHTML = `<img src="${previewUrl}" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">`;
+      // Guardar blob comprimido para subir a Storage
+      canvas.toBlob(blob => { _pendingFotoFile = blob; }, 'image/jpeg', 0.7);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Subir foto a Supabase Storage y devolver URL pública
+async function uploadFoto(vehiculoId) {
+  if (!_pendingFotoFile) return null;
+  const filePath = `${tid()}/${vehiculoId}_${Date.now()}.jpg`;
+  const { data, error } = await sb.storage.from('vehiculos').upload(filePath, _pendingFotoFile, {
+    contentType: 'image/jpeg',
+    upsert: true
+  });
+  if (error) { console.error('Upload error:', error); toast('Error al subir foto','error'); return null; }
+  const { data: urlData } = sb.storage.from('vehiculos').getPublicUrl(filePath);
+  _pendingFotoFile = null;
+  return urlData.publicUrl;
+}
+
+// Validar que foto_url sea segura antes de renderizar
+function safeFotoUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('data:image/jpeg') || url.startsWith('data:image/png') || url.startsWith('data:image/webp')) return url;
+  if (url.startsWith('https://')) return url;
+  return '';
+}
+
+async function guardarVehiculo(id=null) {
+  if (guardando()) return;
+  const patente = document.getElementById('f-patente').value.trim().toUpperCase();
+  if (!patente) { toast('La patente es obligatoria','error'); return; }
+  const cid = document.getElementById('f-cliente').value;
+
+  // Validar patente duplicada
+  const { data: existente } = await sb.from('vehiculos').select('id').eq('taller_id',tid()).eq('patente',patente).maybeSingle();
+  if (existente && existente.id !== id) { toast('Ya existe un vehículo con esa patente','error'); return; }
+
+  // Si hay foto nueva, subirla a Storage
+  const vehiculoId = id || crypto.randomUUID();
+  let fotoUrl = document.getElementById('f-foto-b64')?.value || null;
+  if (_pendingFotoFile) {
+    toast('Subiendo foto...','info');
+    const url = await uploadFoto(vehiculoId);
+    if (url) fotoUrl = url;
+  }
+
+  const data = { patente, marca:document.getElementById('f-marca').value, modelo:document.getElementById('f-modelo').value, anio:parseInt(document.getElementById('f-anio').value)||null, color:document.getElementById('f-color')?.value||null, cliente_id:cid||null, taller_id:tid(), foto_url:fotoUrl||null };
+  if (!id) data.id = vehiculoId;
+  const { error } = id ? await offlineUpdate('vehiculos', data, 'id', id) : await offlineInsert('vehiculos', data);
+  if (error) { toast('Error: '+error.message,'error'); return; }
+  toast('Vehículo guardado','success'); closeModal(); vehiculos();
+}
+
+async function modalEditarVehiculo(id) {
+  const [{ data:v }, { data:cls }] = await Promise.all([
+    sb.from('vehiculos').select('*').eq('id',id).single(),
+    sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre')
+  ]);
+  openModal(`
+    <div class="modal-title">${t("modEditarVehiculo")}</div>
+    <div class="form-group"><label class="form-label">Patente *</label><input class="form-input" id="f-patente" value="${h(v.patente||'')}" style="text-transform:uppercase"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblMarca")}</label><input class="form-input" id="f-marca" value="${h(v.marca||'')}"></div>
+      <div class="form-group"><label class="form-label">${t("lblModelo")}</label><input class="form-input" id="f-modelo" value="${h(v.modelo||'')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblAnio")}</label><input class="form-input" id="f-anio" type="number" value="${h(v.anio||'')}"></div>
+      <div class="form-group"><label class="form-label">${t("lblColor")}</label><input class="form-input" id="f-color" value="${h(v.color||'')}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblPropietario")}</label>
+      <select class="form-input" id="f-cliente">
+        <option value="">${t("vehSinProp")}</option>
+        ${(cls||[]).map(c => `<option value="${c.id}" ${c.id===v.cliente_id?'selected':''}>${h(c.nombre)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">${t("lblNuevaFoto")}</label>
+      <input type="file" id="f-foto-file" accept="image/*" capture="environment" class="form-input" style="padding:.4rem" onchange="previewFoto(this,'f-foto-b64','foto-prev')">
+      <div id="foto-prev">${v.foto_url?`<img src="${safeFotoUrl(v.foto_url)}" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-top:.5rem">`:''}</div>
+      <input type="hidden" id="f-foto-b64" value="${h(v.foto_url||'')}">
+    </div>
+    <button class="btn-primary" onclick="guardarVehiculo('${id}')">${t('actualizar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function eliminarVehiculo(id) {
+  confirmar('Esta acción eliminará el vehículo permanentemente.', async () => {
+    // Limpiar foto del storage si existe
+    try {
+      const { data: veh } = await sb.from('vehiculos').select('foto_url').eq('id',id).single();
+      if (veh?.foto_url && veh.foto_url.includes('/storage/')) {
+        const path = veh.foto_url.split('/vehiculos/').pop();
+        if (path) await sb.storage.from('vehiculos').remove([path]);
+      }
+    } catch(e) { /* no bloquear eliminación por fallo de limpieza */ }
+    await offlineDelete('vehiculos', 'id', id);
+    clearCache('vehiculos');toast('Vehículo eliminado'); navigate('vehiculos');
+  });
+}
+
