@@ -141,6 +141,9 @@ const IDIOMAS = {
     mantTipos:'Cambio de aceite,Filtro de aceite,Filtro de aire,Frenos,Correa de distribución,Alineación y balanceo,Revisión general,Cambio de neumáticos,Líquido de frenos,Refrigerante',
   },
   gn: {
+    modNuevoCliente: 'NUEVO CLIENTE',
+    modEditarCliente: 'EDITAR CLIENTE',
+    modNuevoVehiculo: 'NUEVO VEHÍCULO',
     salir:'Sali', inicio:'PYPE', clientes:'MBOROKUÁI', vehiculos:'MBYYRÃ',
     reparaciones:'MBOGUATAHA', inventario:'MBOGUATA', creditos:"MOÑE'Ẽ",
     empleados:"MBA'APOHÁRA", facturas:'MBYATY', reportes:"MOMBE'U",
