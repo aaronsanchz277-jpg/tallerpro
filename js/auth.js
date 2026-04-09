@@ -12,6 +12,23 @@ function hideSplash(immediate = false) {
   }, remaining);
 }
 
+// ─── VARIABLES GLOBALES DE AUTENTICACIÓN ──────────────────────────────────────
+let currentUser   = null;   // Usuario autenticado de Supabase
+let currentPerfil = null;   // Perfil con rol y taller
+let currentPage   = 'dashboard';
+let loginTab      = 'login';
+let recoveryMode  = window.location.hash.includes('type=recovery');
+let _loggedOutOnce = false;   // ← MOVIDA AQUÍ, al principio del archivo
+
+// Link de invitación: detectar ?taller=ID&codigo=XXXX (validado como UUID)
+const urlParams       = new URLSearchParams(window.location.search);
+const _rawTallerId    = urlParams.get('taller');
+const UUID_REGEX      = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const tallerIdFromUrl = (_rawTallerId && UUID_REGEX.test(_rawTallerId)) ? _rawTallerId : null;
+const codigoFromUrl   = urlParams.get('codigo') || null;
+
+// Splash: tiempo de inicio para sincronizar animación
+const splashStart = Date.now();
 // ─── INIT ────────────────────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
   if (recoveryMode) {
