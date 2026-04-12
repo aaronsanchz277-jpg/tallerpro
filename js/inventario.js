@@ -51,6 +51,10 @@ function _navInv(o) { inventario({offset:o}); }
 
 function modalNuevoItem() {
   openModal(`
+    <div class="form-group">
+    <label class="form-label">Ubicación</label>
+    <select class="form-input" id="f-ubicacion"></select>
+    </div>
     <div class="modal-title">${t("modNuevoProducto")}</div>
     <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" placeholder="Aceite motor 5W30"></div>
     <div class="form-group"><label class="form-label">Código de barras</label>
