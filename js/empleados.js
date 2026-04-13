@@ -93,6 +93,7 @@ function modalNuevoEmpleado() {
     <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" placeholder="Carlos Rodríguez"></div>
     <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" placeholder="Mecánico, Electricista..."></div>
     <div class="form-group"><label class="form-label">Sueldo mensual ₲</label><input class="form-input" id="f-sueldo" type="number" placeholder="0"></div>
+    <div class="form-group"><label class="form-label">Máx. trabajos simultáneos</label><input class="form-input" id="f-max-trabajos" type="number" min="1" value="3"></div>
     <div class="form-group"><label class="form-label">Teléfono</label>${phoneInput('f-tel','','0981 123 456')}</div>
     <button class="btn-primary" onclick="guardarEmpleado()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
@@ -102,7 +103,14 @@ async function guardarEmpleado(id=null) {
   if (guardando()) return;
   const nombre = document.getElementById('f-nombre').value.trim();
   if (!nombre) { toast('El nombre es obligatorio','error'); return; }
-  const data = { nombre, rol:document.getElementById('f-rol').value, sueldo:parseFloat(document.getElementById('f-sueldo')?.value)||0, telefono:document.getElementById('f-tel').value, taller_id:tid() };
+  const data = { 
+    nombre, 
+    rol: document.getElementById('f-rol').value, 
+    sueldo: parseFloat(document.getElementById('f-sueldo')?.value)||0, 
+    max_trabajos_simultaneos: parseInt(document.getElementById('f-max-trabajos')?.value) || 3,
+    telefono: document.getElementById('f-tel').value, 
+    taller_id: tid() 
+  };
   const { error } = id ? await offlineUpdate('empleados', data, 'id', id) : await offlineInsert('empleados', data);
   if (error) { toast('Error: '+error.message,'error'); return; }
   clearCache('empleados');toast(id?'Empleado actualizado':'Empleado guardado','success');
@@ -116,6 +124,7 @@ async function modalEditarEmpleado(id) {
     <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" value="${h(e.nombre||'')}"></div>
     <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" value="${h(e.rol||'')}"></div>
     <div class="form-group"><label class="form-label">Sueldo mensual ₲</label><input class="form-input" id="f-sueldo" type="number" value="${e.sueldo||0}"></div>
+    <div class="form-group"><label class="form-label">Máx. trabajos simultáneos</label><input class="form-input" id="f-max-trabajos" type="number" min="1" value="${e.max_trabajos_simultaneos||3}"></div>
     <div class="form-group"><label class="form-label">Teléfono</label>${phoneInput('f-tel',e.telefono,'0981 123 456')}</div>
     <button class="btn-primary" onclick="guardarEmpleado('${id}')">${t('actualizar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
@@ -183,7 +192,6 @@ async function guardarVale(empleadoId) {
   const fecha = document.getElementById('f-vale-fecha').value;
   const { error } = await sb.from('vales_empleado').insert({ empleado_id:empleadoId, monto, concepto, fecha, taller_id:tid() });
   if (error) { toast('Error: '+error.message,'error'); return; }
-  // Auto-generar egreso en Finanzas
   const { data: emp } = await sb.from('empleados').select('nombre').eq('id',empleadoId).single();
   const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id',tid()).eq('nombre','Vales/Adelantos').limit(1);
   if (cats?.length) {
@@ -247,4 +255,3 @@ async function eliminarTrabajo(trabajoId, empleadoId) {
     toast('Registro eliminado'); detalleEmpleado(empleadoId);
   });
 }
-
