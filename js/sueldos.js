@@ -108,10 +108,48 @@ async function generarLiquidaciones(periodoId) {
 
 async function registrarPagoSueldo(liquidacionId) {
   confirmar('¿Marcar esta liquidación como pagada?', async () => {
-    await sb.from('liquidaciones').update({ estado:'pagado', fecha_pago:new Date().toISOString().split('T')[0] }).eq('id', liquidacionId);
-    toast('✓ Sueldo marcado como pagado','success');
-    const { data: liq } = await sb.from('liquidaciones').select('periodo_id').eq('id', liquidacionId).single();
-    if (liq) detallePeriodo(liq.periodo_id);
+    // Obtener datos de la liquidación (monto, empleado, período)
+    const { data: liq, error: liqErr } = await sb.from('liquidaciones')
+      .select('*, empleados(nombre), periodos_sueldo(fecha_inicio, fecha_fin)')
+      .eq('id', liquidacionId)
+      .single();
+    if (liqErr || !liq) { toast('Error al obtener liquidación','error'); return; }
+
+    // Actualizar estado y fecha de pago
+    const fechaPago = new Date().toISOString().split('T')[0];
+    await sb.from('liquidaciones').update({ estado:'pagado', fecha_pago: fechaPago }).eq('id', liquidacionId);
+
+    // Crear movimiento financiero (egreso)
+    const { data: cats } = await sb.from('categorias_financieras')
+      .select('id')
+      .eq('taller_id', tid())
+      .eq('nombre', 'Sueldos')
+      .limit(1);
+    let catId = cats?.[0]?.id;
+    if (!catId) {
+      // Crear categoría 'Sueldos' si no existe
+      const { data: newCat, error: catErr } = await sb.from('categorias_financieras')
+        .insert({ taller_id: tid(), nombre: 'Sueldos', tipo: 'egreso', es_fija: true })
+        .select().single();
+      if (!catErr && newCat) catId = newCat.id;
+    }
+    if (catId) {
+      const descripcion = `Pago de sueldo a ${liq.empleados?.nombre || 'empleado'} (período ${formatFecha(liq.periodos_sueldo?.fecha_inicio)} - ${formatFecha(liq.periodos_sueldo?.fecha_fin)})`;
+      await sb.from('movimientos_financieros').insert({
+        taller_id: tid(),
+        tipo: 'egreso',
+        categoria_id: catId,
+        monto: liq.total_liquidado,
+        descripcion: descripcion,
+        fecha: fechaPago,
+        referencia_id: liquidacionId
+      });
+    }
+
+    toast('✓ Sueldo marcado como pagado y registrado en Finanzas', 'success');
+    // Refrescar vista
+    const { data: liq2 } = await sb.from('liquidaciones').select('periodo_id').eq('id', liquidacionId).single();
+    if (liq2) detallePeriodo(liq2.periodo_id);
   });
 }
 
