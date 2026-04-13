@@ -1,9 +1,10 @@
-// ─── NAVIGATION ──────────────────────────────────────────────────────────────
 // ─── FUNCIÓN PARA VERIFICAR SI EL USUARIO TIENE PRIVILEGIOS DE ADMINISTRADOR ───
 function esAdmin() {
   const rol = currentPerfil?.rol;
   return rol === 'admin' || rol === 'superadmin';
 }
+
+// ─── NAVIGATION ──────────────────────────────────────────────────────────────
 function buildNav() {
   const rol = currentPerfil?.rol;
   const bottomItems = [];
@@ -161,4 +162,3 @@ async function navigate(page, params = {}) {
     catch(err) { console.error(`Error en ${page}:`, err); document.getElementById('main-content').innerHTML = `<div class="empty"><p>Error al cargar. <button onclick="navigate('${page}')" style="color:var(--accent);background:none;border:none;cursor:pointer;text-decoration:underline">Reintentar</button></p></div>`; }
   }
 }
-
