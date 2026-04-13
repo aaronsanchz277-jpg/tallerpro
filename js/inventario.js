@@ -8,7 +8,6 @@ async function inventario({ search='', offset=0, zona='' }={}) {
     return q.range(offset, offset + PAGE_SIZE - 1);
   });
 
-  // Obtener todas las zonas únicas
   const { data: allItems } = await sb.from('inventario').select('zona').eq('taller_id',tid()).limit(1000);
   const zonas = [...new Set((allItems||[]).map(i=>i.zona).filter(Boolean))].sort();
 
@@ -18,6 +17,7 @@ async function inventario({ search='', offset=0, zona='' }={}) {
       <div style="display:flex;gap:.3rem">
         <button onclick="barcode_scan()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.4rem .6rem;cursor:pointer;color:var(--accent);font-size:.9rem" title="Escanear">📷</button>
         <button onclick="modalEntradaMercaderia()" style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;color:var(--success);font-size:.72rem;font-family:var(--font-head)">📥 Entrada</button>
+        <button onclick="modalGestionarUbicaciones()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.4rem .6rem;cursor:pointer;color:var(--accent);font-size:.9rem" title="Gestionar ubicaciones">📍</button>
         <button class="btn-add" onclick="modalNuevoItem()">+ Nuevo</button>
       </div>
     </div>
@@ -36,7 +36,7 @@ async function inventario({ search='', offset=0, zona='' }={}) {
           <div class="inv-icon">📦</div>
           <div class="inv-info">
             <div class="inv-name">${h(item.nombre)}</div>
-            <div class="inv-meta">${h(item.categoria||t('sinCategoria'))}${item.zona?' · 📍'+h(item.zona):''} · ₲${gs(item.precio_unitario)} c/u</div>
+            <div class="inv-meta">${h(item.categoria||t('sinCategoria'))}${item.zona?' · 📍'+h(item.zona):''}${item.ubicacion_id?' · 🗂️':' '} · ₲${gs(item.precio_unitario)} c/u</div>
           </div>
           <div class="inv-stock">
             <div class="inv-qty ${bajo?'stock-low':'stock-ok'}">${item.cantidad}</div>
@@ -51,10 +51,6 @@ function _navInv(o) { inventario({offset:o}); }
 
 function modalNuevoItem() {
   openModal(`
-    <div class="form-group">
-    <label class="form-label">Ubicación</label>
-    <select class="form-input" id="f-ubicacion"></select>
-    </div>
     <div class="modal-title">${t("modNuevoProducto")}</div>
     <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" placeholder="Aceite motor 5W30"></div>
     <div class="form-group"><label class="form-label">Código de barras</label>
@@ -64,6 +60,7 @@ function modalNuevoItem() {
       </div>
     </div>
     <div class="form-group"><label class="form-label">${t("lblCategoria")}</label><input class="form-input" id="f-cat" placeholder="Lubricantes, Frenos..."></div>
+    <div class="form-group"><label class="form-label">Ubicación</label><select class="form-input" id="f-ubicacion"></select></div>
     <div class="form-group"><label class="form-label">Ubicación / Zona</label><select class="form-input" id="f-zona"><option value="">Sin zona</option></select></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">${t("lblCantidad")}</label><input class="form-input" id="f-qty" type="number" value="0" min="0"></div>
@@ -71,18 +68,27 @@ function modalNuevoItem() {
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">${t("lblStockMin")}</label><input class="form-input" id="f-min" type="number" value="5" min="0"></div>
-      <div class="form-group"><label class="form-label">${t("lblPrecioUnit")}</label><input class="form-input" id="f-precio" type="number" min="0" value="0" min="0"></div>
+      <div class="form-group"><label class="form-label">${t("lblPrecioUnit")}</label><input class="form-input" id="f-precio" type="number" min="0" value="0"></div>
     </div>
     <button class="btn-primary" onclick="guardarItem()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
   cargarZonasSelect('f-zona');
+  cargarUbicaciones('f-ubicacion');
 }
 
 async function guardarItem(id=null) {
   if (guardando()) return;
   const nombre = document.getElementById('f-nombre').value.trim();
   if (!nombre) { toast('El nombre es obligatorio','error'); return; }
-  const data = { nombre, categoria:document.getElementById('f-cat').value, zona:document.getElementById('f-zona')?.value||null, cantidad:parseFloat(document.getElementById('f-qty').value)||0, unidad:document.getElementById('f-unidad').value||'unidad', stock_minimo:parseFloat(document.getElementById('f-min').value)||5, precio_unitario:parseFloat(document.getElementById('f-precio').value)||0, codigo_barras:document.getElementById('f-barcode')?.value?.trim()||null, taller_id:tid() };
+  const nuevoPrecio = parseFloat(document.getElementById('f-precio').value)||0;
+  const ubicacionId = document.getElementById('f-ubicacion')?.value||null;
+  const data = { nombre, categoria:document.getElementById('f-cat').value, zona:document.getElementById('f-zona')?.value||null, cantidad:parseFloat(document.getElementById('f-qty').value)||0, unidad:document.getElementById('f-unidad').value||'unidad', stock_minimo:parseFloat(document.getElementById('f-min').value)||5, precio_unitario:nuevoPrecio, codigo_barras:document.getElementById('f-barcode')?.value?.trim()||null, ubicacion_id:ubicacionId, taller_id:tid() };
+  if (id) {
+    const { data: prev } = await sb.from('inventario').select('precio_unitario').eq('id',id).single();
+    if (prev && parseFloat(prev.precio_unitario) !== nuevoPrecio) {
+      await sb.from('historial_precios').insert({ producto_id:id, precio_anterior:prev.precio_unitario, precio_nuevo:nuevoPrecio, taller_id:tid(), fecha:new Date().toISOString() }).catch(()=>{});
+    }
+  }
   const { error } = id ? await offlineUpdate('inventario', data, 'id', id) : await offlineInsert('inventario', data);
   if (error) { toast('Error: '+error.message,'error'); return; }
   toast('Producto guardado','success'); closeModal(); inventario();
@@ -101,6 +107,7 @@ async function modalEditarItem(id) {
       </div>
     </div>
     <div class="form-group"><label class="form-label">${t("lblCategoria")}</label><input class="form-input" id="f-cat" value="${h(item.categoria||'')}"></div>
+    <div class="form-group"><label class="form-label">Ubicación</label><select class="form-input" id="f-ubicacion"></select></div>
     <div class="form-group"><label class="form-label">Ubicación / Zona</label><select class="form-input" id="f-zona"><option value="">Sin zona</option></select></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">${t("lblCantidad")}</label><input class="form-input" id="f-qty" type="number" value="${item.cantidad||0}" min="0"></div>
@@ -117,6 +124,7 @@ async function modalEditarItem(id) {
     </div>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
   cargarZonasSelect('f-zona', item.zona);
+  cargarUbicaciones('f-ubicacion', item.ubicacion_id);
 }
 
 async function cargarZonasSelect(selectId, valorActual) {
@@ -140,7 +148,6 @@ async function cargarZonasSelect(selectId, valorActual) {
 }
 
 function modalDescontarStock(id, nombre, stockActual) {
-  // Cargar reparaciones activas para vincular
   sb.from('reparaciones').select('id,descripcion,vehiculos(patente)').eq('taller_id',tid()).in('estado',['pendiente','en_progreso','esperando_repuestos']).order('created_at',{ascending:false}).limit(20).then(({data:repsActivas}) => {
     openModal(`
       <div class="modal-title">${t("modDescontarStock")}</div>
@@ -166,10 +173,8 @@ async function descontarStock(id, stockActual) {
   const motivo = document.getElementById('f-motivo')?.value || '';
   const { error } = await offlineUpdate('inventario', { cantidad: stockActual - descuento }, 'id', id);
   if (error) { toast('Error','error'); return; }
-  // Registrar el descuento vinculado a la reparación
   const { data: item } = await sb.from('inventario').select('nombre,precio_unitario').eq('id',id).single();
   if (repId && item) {
-    // Sumar al costo_repuestos de la reparación
     const { data: rep } = await sb.from('reparaciones').select('costo_repuestos').eq('id',repId).single();
     const costoTotal = parseFloat(rep?.costo_repuestos||0) + (parseFloat(item.precio_unitario||0) * descuento);
     await sb.from('reparaciones').update({ costo_repuestos: costoTotal }).eq('id', repId);
@@ -184,7 +189,6 @@ async function eliminarItem(id) {
   });
 }
 
-// ─── ENTRADA DE MERCADERÍA ──────────────────────────────────────────────────
 async function modalEntradaMercaderia() {
   const { data: items } = await sb.from('inventario').select('id,nombre,cantidad,precio_unitario').eq('taller_id',tid()).order('nombre').limit(200);
   openModal(`
@@ -226,7 +230,6 @@ async function modalEntradaMercaderia() {
 
 async function guardarEntrada() {
   if (guardando()) return;
-  if (guardando()) return;
   const proveedor = document.getElementById('f-ent-prov').value.trim();
   if (!proveedor) { toast('El proveedor es obligatorio','error'); return; }
   let itemId = document.getElementById('f-ent-item').value;
@@ -237,7 +240,6 @@ async function guardarEntrada() {
   const fecha = document.getElementById('f-ent-fecha').value;
   const crearDeuda = document.getElementById('f-ent-deuda').checked;
 
-  // Crear producto nuevo si es necesario
   if (itemId === '__nuevo__') {
     const nombre = document.getElementById('f-ent-nombre').value.trim();
     if (!nombre) { toast('El nombre del producto es obligatorio','error'); return; }
@@ -248,12 +250,10 @@ async function guardarEntrada() {
 
   if (!itemId) { toast('Seleccioná un producto','error'); return; }
 
-  // Sumar al stock
   const { data: item } = await sb.from('inventario').select('cantidad,nombre,precio_unitario').eq('id',itemId).single();
   const nuevoStock = parseFloat(item?.cantidad||0) + qty;
   await sb.from('inventario').update({ cantidad: nuevoStock, precio_unitario: costoUnit || item?.precio_unitario }).eq('id', itemId);
 
-  // Registrar movimiento de entrada
   await sb.from('movimientos_inventario').insert({
     taller_id: tid(),
     inventario_id: itemId,
@@ -266,7 +266,6 @@ async function guardarEntrada() {
     notas: 'Compra a ' + proveedor
   });
 
-  // Crear cuenta a pagar si es deuda
   if (crearDeuda && costoUnit * qty > 0) {
     await sb.from('cuentas_pagar').insert({
       taller_id: tid(),
@@ -278,7 +277,6 @@ async function guardarEntrada() {
     });
   }
 
-  // Registrar egreso en finanzas si NO es deuda (pagó al contado)
   if (!crearDeuda && costoUnit * qty > 0) {
     const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id',tid()).eq('nombre','Repuestos').limit(1);
     if (cats?.length) {
@@ -321,4 +319,3 @@ function agregarZonaRapida() {
   toast('Zona "'+zona+'" disponible. Asignala a un producto.','success');
   closeModal();
 }
-
