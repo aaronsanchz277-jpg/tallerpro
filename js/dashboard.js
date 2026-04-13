@@ -10,6 +10,13 @@ async function dashboard() {
 
   const hoy = fechaHoy();
   const primerMes = primerDiaMes();
+  const primerSemana = (() => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(diff);
+    return d.toISOString().split('T')[0];
+  })();
 
   const [
     { count: totalClientes },
@@ -19,7 +26,10 @@ async function dashboard() {
     { data: repsHoy },
     { data: ingresosMes },
     { data: stockBajo },
-    { data: recientes }
+    { data: recientes },
+    { count: vehiculosHoy },
+    { count: vehiculosSemana },
+    { count: vehiculosMes }
   ] = await Promise.all([
     cachedQuery('dash_clientes', () => sb.from('clientes').select('*',{count:'exact',head:true}).eq('taller_id',tid())),
     cachedQuery('dash_vehiculos', () => sb.from('vehiculos').select('*',{count:'exact',head:true}).eq('taller_id',tid())),
@@ -28,14 +38,16 @@ async function dashboard() {
     cachedQuery('dash_hoy', () => sb.from('reparaciones').select('id').eq('taller_id',tid()).eq('fecha',hoy)),
     cachedQuery('dash_ingresos', () => sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerMes)),
     cachedQuery('dash_stock', () => sb.from('inventario').select('nombre,cantidad,stock_minimo').eq('taller_id',tid())),
-    cachedQuery('dash_recientes', () => sb.from('reparaciones').select('*, vehiculos(patente,marca)').eq('taller_id',tid()).order('created_at',{ascending:false}).limit(5))
+    cachedQuery('dash_recientes', () => sb.from('reparaciones').select('*, vehiculos(patente,marca)').eq('taller_id',tid()).order('created_at',{ascending:false}).limit(5)),
+    cachedQuery('dash_veh_hoy', () => sb.from('reparaciones').select('*',{count:'exact',head:true}).eq('taller_id',tid()).eq('fecha',hoy)),
+    cachedQuery('dash_veh_semana', () => sb.from('reparaciones').select('*',{count:'exact',head:true}).eq('taller_id',tid()).gte('fecha',primerSemana)),
+    cachedQuery('dash_veh_mes', () => sb.from('reparaciones').select('*',{count:'exact',head:true}).eq('taller_id',tid()).gte('fecha',primerMes))
   ]);
 
   const totalCrédito = (creditos||[]).reduce((s,f) => s+parseFloat(f.monto||0), 0);
   const totalMes = (ingresosMes||[]).reduce((s,r) => s+parseFloat(r.costo||0), 0);
   const alertasStock = (stockBajo||[]).filter(i => parseFloat(i.cantidad) <= parseFloat(i.stock_minimo));
 
-  // Ingresos de QuickService y POS del mes
   let totalQSMes = 0, totalPOSMes = 0, totalGastosMes = 0;
   if (currentPerfil?.rol === 'admin') {
     const [{ data:qsMes },{ data:posMes },{ data:gastosMes }] = await Promise.all([
@@ -48,7 +60,6 @@ async function dashboard() {
     totalGastosMes = (gastosMes||[]).reduce((s,r) => s+parseFloat(r.monto||0), 0);
   }
 
-  // Dinero en la calle: pagos parciales pendientes
   let deudoresHTML = '';
   if (currentPerfil?.rol === 'admin') {
     const { data: repsConDeuda } = await sb.from('reparaciones').select('id,descripcion,costo,clientes(nombre)').eq('taller_id',tid()).eq('estado','finalizado').gt('costo',0).limit(50);
@@ -74,7 +85,6 @@ async function dashboard() {
     }
   }
 
-  // Cuentas a pagar vencidas/por vencer
   let cuentasVencidasHTML = '';
   if (currentPerfil?.rol === 'admin') {
     const { data: cuentasP } = await sb.from('cuentas_pagar').select('proveedor,monto,fecha_vencimiento').eq('taller_id',tid()).eq('pagada',false).order('fecha_vencimiento').limit(10);
@@ -102,6 +112,13 @@ async function dashboard() {
       </div>
       <div style="font-size:.75rem;color:var(--text2);margin-bottom:1rem">${t('bienvenido')}, ${h(currentPerfil?.nombre||'')}</div>
 
+      ${alertasStock.length > 0 ? `
+      <div style="background:rgba(255,68,68,.1);border-left:4px solid var(--danger);border-radius:8px;padding:.75rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between">
+        <div><span style="font-weight:bold;color:var(--danger)">⚠️ ${alertasStock.length} producto(s) con stock bajo</span><br><span style="font-size:.75rem;color:var(--text2)">Revisá el inventario para reponer</span></div>
+        <button onclick="navigate('inventario')" style="background:var(--danger);color:#fff;border:none;border-radius:6px;padding:.3rem .8rem;cursor:pointer;font-size:.75rem">Ver</button>
+      </div>
+      ` : ''}
+
       ${getInstallBanner()}
       ${getSuscripcionBanner()}
       ${typeof getPushBanner === 'function' ? getPushBanner() : ''}
@@ -118,6 +135,11 @@ async function dashboard() {
         <div class="stat-card" onclick="reparaciones({filtro:'en_progreso'})" style="cursor:pointer"><div class="stat-value" style="color:var(--accent2)">${enProgreso||0}</div><div class="stat-label">${t('dashEnProgreso')}</div></div>
         <div class="stat-card" onclick="reparaciones({filtro:'hoy'})" style="cursor:pointer"><div class="stat-value" style="color:var(--success)">${(repsHoy||[]).length}</div><div class="stat-label">${t('repHoy2')}</div></div>
         ${currentPerfil?.rol==='admin'?`<div class="stat-card" onclick="navigate('creditos')" style="cursor:pointer"><div class="stat-value" style="color:var(--danger)">₲${gs(totalCrédito)}</div><div class="stat-label">${t('dashCreditos')}</div></div>`:`<div class="stat-card"><div class="stat-value">${totalVehiculos||0}</div><div class="stat-label">${t('dashVehiculos')}</div></div>`}
+      </div>
+      <div class="stats-grid" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="stat-card" onclick="reparaciones({filtro:'hoy'})" style="cursor:pointer"><div class="stat-value" style="color:var(--accent2)">${vehiculosHoy||0}</div><div class="stat-label">Vehículos hoy</div></div>
+        <div class="stat-card" onclick="reparaciones({filtro:'semana'})" style="cursor:pointer"><div class="stat-value">${vehiculosSemana||0}</div><div class="stat-label">Esta semana</div></div>
+        <div class="stat-card" onclick="reparaciones({filtro:'mes'})" style="cursor:pointer"><div class="stat-value">${vehiculosMes||0}</div><div class="stat-label">Este mes</div></div>
       </div>
 
       ${currentPerfil?.rol==='admin'?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
@@ -140,14 +162,7 @@ async function dashboard() {
       </div>`:''}`:''}
 
       ${deudoresHTML}
-
       ${cuentasVencidasHTML}
-
-      ${alertasStock.length > 0 ? `
-      <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:.75rem;margin-bottom:1rem;cursor:pointer" onclick="navigate('inventario')">
-        <div style="font-size:.72rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">${t('dashStockBajo')}</div>
-        ${alertasStock.map(i => `<div style="font-size:.82rem;color:var(--text2);padding:.2rem 0">${h(i.nombre)} — <span style="color:var(--danger);font-weight:600">${i.cantidad} ${t('dashRestantes')}</span></div>`).join('')}
-      </div>` : ''}
 
       <div style="font-family:var(--font-head);font-size:.9rem;color:var(--text2);margin-bottom:.6rem;letter-spacing:2px">${t('dashRecientes')}</div>
       ${(recientes||[]).length===0 ? `<div class="empty"><p>${t('dashSinReps')}</p></div>` :
@@ -165,7 +180,6 @@ async function dashboard() {
     </div>`;
 }
 
-// ─── BÚSQUEDA POR PATENTE ─────────────────────────────────────────────────────
 let patenteBusquedaTimer = null;
 async function buscarPatente(valor) {
   const resultsEl = document.getElementById('patente-results');
@@ -238,7 +252,6 @@ async function reportes() {
   const ganMes = (repsMes||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
   const totalCréditos = (creditosPend||[]).reduce((s,f)=>s+parseFloat(f.monto||0),0);
 
-  // Ingresos adicionales y gastos del mes
   let repQSMes=0, repPOSMes=0, repGastosMes=0;
   const [{data:_qsM},{data:_posM},{data:_gastM}] = await Promise.all([
     sb.from('quickservices').select('total').eq('taller_id',tid()).gte('created_at',primerMes+'T00:00:00'),
@@ -276,129 +289,4 @@ async function reportes() {
       ${repGastosMes>0?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:.75rem;cursor:pointer" onclick="navigate('gastos')">
           <div style="font-size:.68rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">GASTOS MES</div>
-          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--danger)">₲${gs(repGastosMes)}</div>
-        </div>
-        <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem">
-          <div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">GANANCIA NETA</div>
-          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${gananciaNeta>=0?'var(--success)':'var(--danger)'}">₲${gs(gananciaNeta)}</div>
-        </div>
-      </div>`:''}
-      <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-size:.72rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">${t('repFiados')}</div>
-          <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--danger)">₲${gs(totalCréditos)}</div>
-        </div>
-        <button onclick="navigate('creditos')" style="background:rgba(255,68,68,.15);border:1px solid rgba(255,68,68,.3);color:var(--danger);border-radius:8px;padding:.5rem .75rem;font-size:.8rem;cursor:pointer">${t('repVerCreditos')}</button>
-      </div>
-      ${topServicios.length > 0 ? `
-      <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.6rem">${t('repTopServ')}</div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem">
-        ${topServicios.map(([desc,total],i) => `
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border)">
-            <div style="display:flex;gap:.5rem;align-items:center">
-              <span style="font-family:var(--font-head);font-size:.85rem;color:var(--accent2)">#${i+1}</span>
-              <span style="font-size:.85rem">${h(desc)}</span>
-            </div>
-            <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">₲${gs(total)}</span>
-          </div>`).join('')}
-      </div>` : `<div class="empty"><p>${t('repSinReps2')}</p></div>`}
-
-      ${(() => {
-        const empStats = {};
-        (repsPorEmpleado||[]).forEach(r => {
-          if (!r.reparaciones || r.reparaciones.taller_id !== tid()) return;
-          if (r.reparaciones.fecha < primerMes) return;
-          const nombre = r.nombre_mecanico || 'Sin nombre';
-          if (!empStats[nombre]) empStats[nombre] = { total:0, finalizadas:0, ingresos:0, horas:0 };
-          empStats[nombre].total++;
-          empStats[nombre].horas += parseFloat(r.horas||0);
-          if (r.reparaciones.estado === 'finalizado') { empStats[nombre].finalizadas++; empStats[nombre].ingresos += parseFloat(r.reparaciones.costo||0); }
-        });
-        const empArr = Object.entries(empStats).sort((a,b)=>b[1].ingresos-a[1].ingresos);
-        if (empArr.length === 0) return '';
-        return `
-        <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.6rem">PRODUCTIVIDAD POR EMPLEADO (MES)</div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem">
-          ${empArr.map(([nombre, s], i) => {
-            const pct = empArr[0][1].ingresos > 0 ? Math.round(s.ingresos / empArr[0][1].ingresos * 100) : 0;
-            return `
-            <div style="padding:.6rem 0;${i<empArr.length-1?'border-bottom:1px solid var(--border)':''}">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
-                <div style="display:flex;gap:.5rem;align-items:center">
-                  <div style="width:28px;height:28px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:var(--accent)">${h(nombre).charAt(0)}</div>
-                  <span style="font-size:.85rem;font-weight:500">${h(nombre)}</span>
-                </div>
-                <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">₲${gs(s.ingresos)}</span>
-              </div>
-              <div style="display:flex;gap:1rem;font-size:.72rem;color:var(--text2);margin-left:2.3rem">
-                <span>${s.finalizadas} finalizadas</span>
-                <span>${s.total} asignadas</span>
-                <span>${s.horas}h trabajadas</span>
-              </div>
-              <div style="margin-left:2.3rem;margin-top:.3rem;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden">
-                <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:2px"></div>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>`;
-      })()}
-
-      <div class="chart-container" id="chart-ingresos-container" style="display:none">
-        <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.5rem">INGRESOS DIARIOS</div>
-        <canvas id="chart-ingresos"></canvas>
-      </div>
-
-      <div class="chart-container" id="chart-servicios-container" style="display:none">
-        <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.5rem">${t('repTopServ')}</div>
-        <canvas id="chart-servicios"></canvas>
-      </div>
-    </div>`;
-
-  // Renderizar gráficos
-  renderReportCharts(repsMes||[], topServicios);
-}
-
-async function renderReportCharts(repsMes, topServicios) {
-  try {
-    await loadChartJs();
-    const Chart = window.Chart;
-    Chart.defaults.color = '#8888aa';
-    Chart.defaults.borderColor = '#2a2a3a';
-
-    // Gráfico de ingresos diarios del mes
-    if (repsMes.length > 0) {
-      const porDia = {};
-      repsMes.forEach(r => {
-        const dia = r.fecha || 'Sin fecha';
-        porDia[dia] = (porDia[dia]||0) + parseFloat(r.costo||0);
-      });
-      const dias = Object.keys(porDia).sort();
-      const montos = dias.map(d => porDia[d]);
-
-      document.getElementById('chart-ingresos-container').style.display = 'block';
-      new Chart(document.getElementById('chart-ingresos'), {
-        type: 'bar',
-        data: {
-          labels: dias.map(d => { if (!d || !d.includes('-')) return d; const p = d.split('-'); return p[2]+'/'+p[1]; }),
-          datasets: [{ label: 'Ingresos ₲', data: montos, backgroundColor: 'rgba(0,229,255,.4)', borderColor: '#00e5ff', borderWidth: 1, borderRadius: 4 }]
-        },
-        options: { responsive:true, plugins:{ legend:{display:false} }, scales:{ y:{ beginAtZero:true, ticks:{ callback: v => '₲'+gs(v) } } } }
-      });
-    }
-
-    // Gráfico de top servicios
-    if (topServicios.length > 0) {
-      document.getElementById('chart-servicios-container').style.display = 'block';
-      const colors = ['#00e5ff','#ff6b35','#00ff88','#ffcc00','#ff4444'];
-      new Chart(document.getElementById('chart-servicios'), {
-        type: 'doughnut',
-        data: {
-          labels: topServicios.map(([desc]) => desc.length > 20 ? desc.slice(0,20)+'…' : desc),
-          datasets: [{ data: topServicios.map(([,total]) => total), backgroundColor: colors.slice(0, topServicios.length), borderWidth: 0 }]
-        },
-        options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ boxWidth:12, padding:8, font:{size:11} } } } }
-      });
-    }
-  } catch(e) { console.warn('Charts failed to load:', e); }
-}
-
+          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--danger)">₲${gs(repGast
