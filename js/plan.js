@@ -224,7 +224,7 @@ async function activarPlan365Dias(tallerId, subId) {
   closeModal(); superAdminPanel();
 }
 
-// ─── CONFIGURAR DATOS DEL TALLER ────────────────────────────────────────────
+// ─── CONFIGURAR DATOS DEL TALLER (solo admin o superadmin) ───────────────────
 async function modalConfigDatos() {
   const { data: taller } = await sb.from('talleres').select('*').eq('id', tid()).single();
   if (!taller) return;
