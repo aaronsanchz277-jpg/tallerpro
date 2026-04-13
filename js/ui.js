@@ -265,4 +265,9 @@ function safeFotoUrl(url) {
   if (url.startsWith('data:image/jpeg') || url.startsWith('data:image/png') || url.startsWith('data:image/webp')) return url;
   if (url.startsWith('https://')) return url;
   return '';
+  // ─── FUNCIÓN PARA VERIFICAR SI EL USUARIO TIENE PRIVILEGIOS DE ADMINISTRADOR ───
+function esAdmin() {
+  const rol = currentPerfil?.rol;
+  return rol === 'admin' || rol === 'superadmin';
+}
 }
