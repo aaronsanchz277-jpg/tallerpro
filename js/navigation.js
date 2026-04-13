@@ -1,4 +1,9 @@
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
+// ─── FUNCIÓN PARA VERIFICAR SI EL USUARIO TIENE PRIVILEGIOS DE ADMINISTRADOR ───
+function esAdmin() {
+  const rol = currentPerfil?.rol;
+  return rol === 'admin' || rol === 'superadmin';
+}
 function buildNav() {
   const rol = currentPerfil?.rol;
   const bottomItems = [];
