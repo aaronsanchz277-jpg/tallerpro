@@ -289,4 +289,125 @@ async function reportes() {
       ${repGastosMes>0?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:.75rem;cursor:pointer" onclick="navigate('gastos')">
           <div style="font-size:.68rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">GASTOS MES</div>
-          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--danger)">₲${gs(repGast
+          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--danger)">₲${gs(repGastosMes)}</div>
+        </div>
+        <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem">
+          <div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">GANANCIA NETA</div>
+          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${gananciaNeta>=0?'var(--success)':'var(--danger)'}">₲${gs(gananciaNeta)}</div>
+        </div>
+      </div>`:''}
+      <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:.72rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">${t('repFiados')}</div>
+          <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--danger)">₲${gs(totalCréditos)}</div>
+        </div>
+        <button onclick="navigate('creditos')" style="background:rgba(255,68,68,.15);border:1px solid rgba(255,68,68,.3);color:var(--danger);border-radius:8px;padding:.5rem .75rem;font-size:.8rem;cursor:pointer">${t('repVerCreditos')}</button>
+      </div>
+      ${topServicios.length > 0 ? `
+      <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.6rem">${t('repTopServ')}</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem">
+        ${topServicios.map(([desc,total],i) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;gap:.5rem;align-items:center">
+              <span style="font-family:var(--font-head);font-size:.85rem;color:var(--accent2)">#${i+1}</span>
+              <span style="font-size:.85rem">${h(desc)}</span>
+            </div>
+            <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">₲${gs(total)}</span>
+          </div>`).join('')}
+      </div>` : `<div class="empty"><p>${t('repSinReps2')}</p></div>`}
+
+      ${(() => {
+        const empStats = {};
+        (repsPorEmpleado||[]).forEach(r => {
+          if (!r.reparaciones || r.reparaciones.taller_id !== tid()) return;
+          if (r.reparaciones.fecha < primerMes) return;
+          const nombre = r.nombre_mecanico || 'Sin nombre';
+          if (!empStats[nombre]) empStats[nombre] = { total:0, finalizadas:0, ingresos:0, horas:0 };
+          empStats[nombre].total++;
+          empStats[nombre].horas += parseFloat(r.horas||0);
+          if (r.reparaciones.estado === 'finalizado') { empStats[nombre].finalizadas++; empStats[nombre].ingresos += parseFloat(r.reparaciones.costo||0); }
+        });
+        const empArr = Object.entries(empStats).sort((a,b)=>b[1].ingresos-a[1].ingresos);
+        if (empArr.length === 0) return '';
+        return `
+        <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.6rem">PRODUCTIVIDAD POR EMPLEADO (MES)</div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem">
+          ${empArr.map(([nombre, s], i) => {
+            const pct = empArr[0][1].ingresos > 0 ? Math.round(s.ingresos / empArr[0][1].ingresos * 100) : 0;
+            return `
+            <div style="padding:.6rem 0;${i<empArr.length-1?'border-bottom:1px solid var(--border)':''}">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+                <div style="display:flex;gap:.5rem;align-items:center">
+                  <div style="width:28px;height:28px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:var(--accent)">${h(nombre).charAt(0)}</div>
+                  <span style="font-size:.85rem;font-weight:500">${h(nombre)}</span>
+                </div>
+                <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">₲${gs(s.ingresos)}</span>
+              </div>
+              <div style="display:flex;gap:1rem;font-size:.72rem;color:var(--text2);margin-left:2.3rem">
+                <span>${s.finalizadas} finalizadas</span>
+                <span>${s.total} asignadas</span>
+                <span>${s.horas}h trabajadas</span>
+              </div>
+              <div style="margin-left:2.3rem;margin-top:.3rem;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden">
+                <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:2px"></div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+      })()}
+
+      <div class="chart-container" id="chart-ingresos-container" style="display:none">
+        <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.5rem">INGRESOS DIARIOS</div>
+        <canvas id="chart-ingresos"></canvas>
+      </div>
+
+      <div class="chart-container" id="chart-servicios-container" style="display:none">
+        <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.5rem">${t('repTopServ')}</div>
+        <canvas id="chart-servicios"></canvas>
+      </div>
+    </div>`;
+
+  renderReportCharts(repsMes||[], topServicios);
+}
+
+async function renderReportCharts(repsMes, topServicios) {
+  try {
+    await loadChartJs();
+    const Chart = window.Chart;
+    Chart.defaults.color = '#8888aa';
+    Chart.defaults.borderColor = '#2a2a3a';
+
+    if (repsMes.length > 0) {
+      const porDia = {};
+      repsMes.forEach(r => {
+        const dia = r.fecha || 'Sin fecha';
+        porDia[dia] = (porDia[dia]||0) + parseFloat(r.costo||0);
+      });
+      const dias = Object.keys(porDia).sort();
+      const montos = dias.map(d => porDia[d]);
+
+      document.getElementById('chart-ingresos-container').style.display = 'block';
+      new Chart(document.getElementById('chart-ingresos'), {
+        type: 'bar',
+        data: {
+          labels: dias.map(d => { if (!d || !d.includes('-')) return d; const p = d.split('-'); return p[2]+'/'+p[1]; }),
+          datasets: [{ label: 'Ingresos ₲', data: montos, backgroundColor: 'rgba(0,229,255,.4)', borderColor: '#00e5ff', borderWidth: 1, borderRadius: 4 }]
+        },
+        options: { responsive:true, plugins:{ legend:{display:false} }, scales:{ y:{ beginAtZero:true, ticks:{ callback: v => '₲'+gs(v) } } } }
+      });
+    }
+
+    if (topServicios.length > 0) {
+      document.getElementById('chart-servicios-container').style.display = 'block';
+      const colors = ['#00e5ff','#ff6b35','#00ff88','#ffcc00','#ff4444'];
+      new Chart(document.getElementById('chart-servicios'), {
+        type: 'doughnut',
+        data: {
+          labels: topServicios.map(([desc]) => desc.length > 20 ? desc.slice(0,20)+'…' : desc),
+          datasets: [{ data: topServicios.map(([,total]) => total), backgroundColor: colors.slice(0, topServicios.length), borderWidth: 0 }]
+        },
+        options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ boxWidth:12, padding:8, font:{size:11} } } } }
+      });
+    }
+  } catch(e) { console.warn('Charts failed to load:', e); }
+}
