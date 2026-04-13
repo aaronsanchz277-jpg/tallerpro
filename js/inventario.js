@@ -1,15 +1,13 @@
 // ─── INVENTARIO ──────────────────────────────────────────────────────────────
-async function inventario({ search='', offset=0, zona='' }={}) {
-  const cacheKey = `inventario_${search}_${offset}_${zona}`;
-  const { data, count } = await cachedQuery(cacheKey, () => {
-    let q = sb.from('inventario').select('*', {count:'exact'}).eq('taller_id',tid()).order('nombre');
-    if (search) q = q.ilike('nombre',`%${search}%`);
-    if (zona) q = q.eq('zona', zona);
-    return q.range(offset, offset + PAGE_SIZE - 1);
-  });
+async function inventario({ search='', offset=0, ubicacion_id='' }={}) {
+  const cacheKey = `inventario_${search}_${offset}_${ubicacion_id}`;
+  let q = sb.from('inventario').select('*, ubicaciones(nombre)', {count:'exact'}).eq('taller_id',tid()).order('nombre');
+  if (search) q = q.ilike('nombre',`%${search}%`);
+  if (ubicacion_id) q = q.eq('ubicacion_id', ubicacion_id);
+  const { data, count } = await cachedQuery(cacheKey, () => q.range(offset, offset + PAGE_SIZE - 1));
 
-  const { data: allItems } = await sb.from('inventario').select('zona').eq('taller_id',tid()).limit(1000);
-  const zonas = [...new Set((allItems||[]).map(i=>i.zona).filter(Boolean))].sort();
+  // Obtener todas las ubicaciones para el filtro rápido
+  const { data: ubicaciones } = await sb.from('ubicaciones').select('id,nombre,padre_id').eq('taller_id', tid()).order('nombre');
 
   document.getElementById('main-content').innerHTML = `
     <div class="section-header">
@@ -21,13 +19,14 @@ async function inventario({ search='', offset=0, zona='' }={}) {
         <button class="btn-add" onclick="modalNuevoItem()">+ Nuevo</button>
       </div>
     </div>
-    ${zonas.length > 0 ? `<div style="display:flex;gap:.3rem;margin-bottom:.75rem;overflow-x:auto;padding-bottom:.3rem">
-      <button onclick="inventario({zona:''})" style="background:${!zona?'var(--accent)':'var(--surface2)'};color:${!zona?'#000':'var(--text2)'};border:1px solid ${!zona?'var(--accent)':'var(--border)'};border-radius:8px;padding:.3rem .6rem;font-size:.72rem;cursor:pointer;white-space:nowrap">Todos</button>
-      ${zonas.map(z => `<button onclick="inventario({zona:'${h(z)}'})" style="background:${zona===z?'var(--accent)':'var(--surface2)'};color:${zona===z?'#000':'var(--text2)'};border:1px solid ${zona===z?'var(--accent)':'var(--border)'};border-radius:8px;padding:.3rem .6rem;font-size:.72rem;cursor:pointer;white-space:nowrap">📍 ${h(z)}</button>`).join('')}
+    ${(ubicaciones||[]).length > 0 ? `
+    <div style="display:flex;gap:.3rem;margin-bottom:.75rem;overflow-x:auto;padding-bottom:.3rem">
+      <button onclick="inventario({ubicacion_id:''})" style="background:${!ubicacion_id?'var(--accent)':'var(--surface2)'};color:${!ubicacion_id?'#000':'var(--text2)'};border:1px solid ${!ubicacion_id?'var(--accent)':'var(--border)'};border-radius:8px;padding:.3rem .6rem;font-size:.72rem;cursor:pointer;white-space:nowrap">Todos</button>
+      ${ubicaciones.map(u => `<button onclick="inventario({ubicacion_id:'${u.id}'})" style="background:${ubicacion_id===u.id?'var(--accent)':'var(--surface2)'};color:${ubicacion_id===u.id?'#000':'var(--text2)'};border:1px solid ${ubicacion_id===u.id?'var(--accent)':'var(--border)'};border-radius:8px;padding:.3rem .6rem;font-size:.72rem;cursor:pointer;white-space:nowrap">📍 ${h(u.nombre)}</button>`).join('')}
     </div>` : ''}
     <div class="search-box">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" placeholder="${t('invBuscar')}" value="${h(search)}" oninput="debounce('inv',()=>inventario({search:this.value,zona:'${zona}'}))" class="form-input" style="padding-left:2.5rem">
+      <input type="text" placeholder="${t('invBuscar')}" value="${h(search)}" oninput="debounce('inv',()=>inventario({search:this.value,ubicacion_id:'${ubicacion_id}'}))" class="form-input" style="padding-left:2.5rem">
     </div>
     ${(data||[]).length===0 ? `<div class="empty"><p>${t('invSinDatos')}</p></div>` :
       (data||[]).map(item => {
@@ -36,7 +35,7 @@ async function inventario({ search='', offset=0, zona='' }={}) {
           <div class="inv-icon">📦</div>
           <div class="inv-info">
             <div class="inv-name">${h(item.nombre)}</div>
-            <div class="inv-meta">${h(item.categoria||t('sinCategoria'))}${item.zona?' · 📍'+h(item.zona):''}${item.ubicacion_id?' · 🗂️':' '} · ₲${gs(item.precio_unitario)} c/u</div>
+            <div class="inv-meta">${h(item.categoria||t('sinCategoria'))}${item.ubicaciones?.nombre?' · 📍'+h(item.ubicaciones.nombre):''} · ₲${gs(item.precio_unitario)} c/u</div>
           </div>
           <div class="inv-stock">
             <div class="inv-qty ${bajo?'stock-low':'stock-ok'}">${item.cantidad}</div>
@@ -61,7 +60,6 @@ function modalNuevoItem() {
     </div>
     <div class="form-group"><label class="form-label">${t("lblCategoria")}</label><input class="form-input" id="f-cat" placeholder="Lubricantes, Frenos..."></div>
     <div class="form-group"><label class="form-label">Ubicación</label><select class="form-input" id="f-ubicacion"></select></div>
-    <div class="form-group"><label class="form-label">Ubicación / Zona</label><select class="form-input" id="f-zona"><option value="">Sin zona</option></select></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">${t("lblCantidad")}</label><input class="form-input" id="f-qty" type="number" value="0" min="0"></div>
       <div class="form-group"><label class="form-label">${t("lblUnidad")}</label><input class="form-input" id="f-unidad" placeholder="unidad, litro..."></div>
@@ -72,7 +70,6 @@ function modalNuevoItem() {
     </div>
     <button class="btn-primary" onclick="guardarItem()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
-  cargarZonasSelect('f-zona');
   cargarUbicaciones('f-ubicacion');
 }
 
@@ -82,7 +79,17 @@ async function guardarItem(id=null) {
   if (!nombre) { toast('El nombre es obligatorio','error'); return; }
   const nuevoPrecio = parseFloat(document.getElementById('f-precio').value)||0;
   const ubicacionId = document.getElementById('f-ubicacion')?.value||null;
-  const data = { nombre, categoria:document.getElementById('f-cat').value, zona:document.getElementById('f-zona')?.value||null, cantidad:parseFloat(document.getElementById('f-qty').value)||0, unidad:document.getElementById('f-unidad').value||'unidad', stock_minimo:parseFloat(document.getElementById('f-min').value)||5, precio_unitario:nuevoPrecio, codigo_barras:document.getElementById('f-barcode')?.value?.trim()||null, ubicacion_id:ubicacionId, taller_id:tid() };
+  const data = { 
+    nombre, 
+    categoria: document.getElementById('f-cat').value, 
+    cantidad: parseFloat(document.getElementById('f-qty').value)||0, 
+    unidad: document.getElementById('f-unidad').value||'unidad', 
+    stock_minimo: parseFloat(document.getElementById('f-min').value)||5, 
+    precio_unitario: nuevoPrecio, 
+    codigo_barras: document.getElementById('f-barcode')?.value?.trim()||null, 
+    ubicacion_id: ubicacionId, 
+    taller_id: tid() 
+  };
   if (id) {
     const { data: prev } = await sb.from('inventario').select('precio_unitario').eq('id',id).single();
     if (prev && parseFloat(prev.precio_unitario) !== nuevoPrecio) {
@@ -108,7 +115,6 @@ async function modalEditarItem(id) {
     </div>
     <div class="form-group"><label class="form-label">${t("lblCategoria")}</label><input class="form-input" id="f-cat" value="${h(item.categoria||'')}"></div>
     <div class="form-group"><label class="form-label">Ubicación</label><select class="form-input" id="f-ubicacion"></select></div>
-    <div class="form-group"><label class="form-label">Ubicación / Zona</label><select class="form-input" id="f-zona"><option value="">Sin zona</option></select></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">${t("lblCantidad")}</label><input class="form-input" id="f-qty" type="number" value="${item.cantidad||0}" min="0"></div>
       <div class="form-group"><label class="form-label">${t("lblUnidad")}</label><input class="form-input" id="f-unidad" value="${h(item.unidad||'unidad')}"></div>
@@ -123,28 +129,7 @@ async function modalEditarItem(id) {
       ${isAdmin?`<button class="btn-danger" style="margin:0" onclick="eliminarItem('${id}')">${t('eliminarBtn')}</button>`:''}
     </div>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
-  cargarZonasSelect('f-zona', item.zona);
   cargarUbicaciones('f-ubicacion', item.ubicacion_id);
-}
-
-async function cargarZonasSelect(selectId, valorActual) {
-  const { data } = await sb.from('inventario').select('zona').eq('taller_id',tid()).limit(1000);
-  const zonas = [...new Set((data||[]).map(i=>i.zona).filter(Boolean))].sort();
-  const sel = document.getElementById(selectId);
-  if (!sel) return;
-  sel.innerHTML = '<option value="">Sin zona</option>' +
-    zonas.map(z => `<option value="${h(z)}" ${z===valorActual?'selected':''}>${h(z)}</option>`).join('') +
-    '<option value="__nueva__">+ Crear nueva zona...</option>';
-  sel.onchange = function() {
-    if (this.value === '__nueva__') {
-      const nueva = prompt('Nombre de la nueva zona:');
-      if (nueva?.trim()) {
-        const opt = document.createElement('option');
-        opt.value = nueva.trim(); opt.textContent = nueva.trim(); opt.selected = true;
-        sel.insertBefore(opt, sel.lastElementChild);
-      } else { this.value = valorActual || ''; }
-    }
-  };
 }
 
 function modalDescontarStock(id, nombre, stockActual) {
@@ -189,6 +174,7 @@ async function eliminarItem(id) {
   });
 }
 
+// ─── ENTRADA DE MERCADERÍA (sin cambios, pero usa ubicación) ─────────────────
 async function modalEntradaMercaderia() {
   const { data: items } = await sb.from('inventario').select('id,nombre,cantidad,precio_unitario').eq('taller_id',tid()).order('nombre').limit(200);
   openModal(`
@@ -287,35 +273,4 @@ async function guardarEntrada() {
   clearCache('inventario'); clearCache('cuentas'); clearCache('finanzas');
   toast(`✓ ${qty} unidades de ${item?.nombre||'producto'} ingresadas — ₲${gs(costoUnit*qty)}`,'success');
   closeModal(); inventario();
-}
-
-async function modalGestionarZonas() {
-  const { data: items } = await sb.from('inventario').select('zona').eq('taller_id',tid()).limit(1000);
-  const zonas = [...new Set((items||[]).map(i=>i.zona).filter(Boolean))].sort();
-  openModal(`
-    <div class="modal-title">📍 Gestionar Zonas</div>
-    <div style="font-size:.8rem;color:var(--text2);margin-bottom:1rem">Las zonas te permiten organizar tu inventario por ubicación física</div>
-    <div id="zonas-list" style="margin-bottom:1rem">
-      ${zonas.length === 0 ? '<div style="font-size:.82rem;color:var(--text2);padding:.5rem 0">No hay zonas creadas. Agregá una zona al crear o editar un producto.</div>' :
-        zonas.map(z => {
-          const count = (items||[]).filter(i=>i.zona===z).length;
-          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border)">
-            <div><span style="font-size:.85rem">${h(z)}</span> <span style="font-size:.7rem;color:var(--text2)">(${count} productos)</span></div>
-          </div>`;
-        }).join('')}
-    </div>
-    <div style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">AGREGAR ZONA</div>
-    <div style="display:flex;gap:.4rem">
-      <input class="form-input" id="f-nueva-zona" placeholder="Estante A, Depósito 2..." style="flex:1">
-      <button onclick="agregarZonaRapida()" class="btn-add" style="font-size:.8rem;padding:.4rem .8rem">+</button>
-    </div>
-    <div style="font-size:.7rem;color:var(--text2);margin-top:.3rem">La zona se crea cuando asignás un producto a ella.</div>
-    <button class="btn-secondary" style="margin-top:1rem" onclick="closeModal()">Cerrar</button>`);
-}
-
-function agregarZonaRapida() {
-  const zona = document.getElementById('f-nueva-zona').value.trim();
-  if (!zona) { toast('Escribí un nombre de zona','error'); return; }
-  toast('Zona "'+zona+'" disponible. Asignala a un producto.','success');
-  closeModal();
 }
