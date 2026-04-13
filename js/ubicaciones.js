@@ -1,30 +1,23 @@
 // ============================================
 // MEJORA #5 – UBICACIONES JERÁRQUICAS
-// Permite organizar el inventario en ubicaciones físicas
-// (Ej: Estante A → Balda 2 → Caja 3)
 // ============================================
 
-// Cargar ubicaciones en un <select> de forma jerárquica (sin recursión infinita)
 async function cargarUbicaciones(selectId, valorActual = null) {
   try {
     const { data: todas } = await sb.from('ubicaciones')
       .select('id,nombre,padre_id')
       .eq('taller_id', tid())
       .order('nombre');
-
     const sel = document.getElementById(selectId);
     if (!sel) return;
     sel.innerHTML = '<option value="">Sin ubicación</option>';
     if (!todas || todas.length === 0) return;
-
-    // Construir árbol en memoria
     const hijosPorPadre = {};
     todas.forEach(u => {
       const key = u.padre_id || 'null';
       if (!hijosPorPadre[key]) hijosPorPadre[key] = [];
       hijosPorPadre[key].push(u);
     });
-
     function agregarOpciones(padreId, nivel = 0) {
       const hijos = hijosPorPadre[padreId === null ? 'null' : padreId] || [];
       hijos.forEach(h => {
@@ -36,31 +29,22 @@ async function cargarUbicaciones(selectId, valorActual = null) {
         agregarOpciones(h.id, nivel + 1);
       });
     }
-
     agregarOpciones(null);
-  } catch (e) {
-    console.warn('Error cargando ubicaciones:', e);
-  }
+  } catch (e) { console.warn(e); }
 }
 
-// Modal para gestionar ubicaciones (solo admin)
 async function modalGestionarUbicaciones() {
   const { data: todas } = await sb.from('ubicaciones')
-    .select('*')
-    .eq('taller_id', tid())
-    .order('nombre');
-
-  // Construir árbol visual
+    .select('*').eq('taller_id', tid()).order('nombre');
   const hijosPorPadre = {};
   (todas || []).forEach(u => {
     const key = u.padre_id || 'null';
     if (!hijosPorPadre[key]) hijosPorPadre[key] = [];
     hijosPorPadre[key].push(u);
   });
-
   function renderArbol(padreId, nivel = 0) {
     const hijos = hijosPorPadre[padreId === null ? 'null' : padreId] || [];
-    if (hijos.length === 0) return '';
+    if (!hijos.length) return '';
     return hijos.map(u => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem 0 .4rem ${nivel * 1.5}rem;border-bottom:1px solid var(--border)">
         <span style="font-size:.85rem">${'📁'.repeat(nivel > 0 ? 0 : 1)}${nivel > 0 ? '📄' : ''} ${escapeHtml(u.nombre)}</span>
@@ -69,7 +53,6 @@ async function modalGestionarUbicaciones() {
       ${renderArbol(u.id, nivel + 1)}
     `).join('');
   }
-
   openModal(`
     <div class="modal-title">📍 Gestionar Ubicaciones</div>
     <div style="margin-bottom:1rem;max-height:300px;overflow-y:auto">
@@ -94,37 +77,22 @@ async function modalGestionarUbicaciones() {
 
 async function guardarUbicacion() {
   const nombre = document.getElementById('f-ubi-nombre').value.trim();
-  if (!nombre) {
-    toast('El nombre es obligatorio', 'error');
-    return;
-  }
+  if (!nombre) { toast('El nombre es obligatorio','error'); return; }
   const padreId = document.getElementById('f-ubi-padre').value || null;
-  const { error } = await sb.from('ubicaciones').insert({
-    nombre,
-    padre_id: padreId,
-    taller_id: tid()
-  });
-  if (error) {
-    toast('Error: ' + error.message, 'error');
-    return;
-  }
-  toast('Ubicación creada', 'success');
-  modalGestionarUbicaciones(); // recargar modal
+  const { error } = await sb.from('ubicaciones').insert({ nombre, padre_id: padreId, taller_id: tid() });
+  if (error) { toast('Error: '+error.message,'error'); return; }
+  toast('Ubicación creada','success');
+  modalGestionarUbicaciones();
 }
 
 async function eliminarUbicacion(id) {
   confirmar('¿Eliminar esta ubicación? También se eliminarán sus sub-ubicaciones.', async () => {
-    const { error } = await sb.from('ubicaciones').delete().eq('id', id);
-    if (error) {
-      toast('Error: ' + error.message, 'error');
-      return;
-    }
-    toast('Ubicación eliminada', 'success');
+    await sb.from('ubicaciones').delete().eq('id', id);
+    toast('Ubicación eliminada','success');
     modalGestionarUbicaciones();
   });
 }
 
-// Exponer funciones globales
 window.cargarUbicaciones = cargarUbicaciones;
 window.modalGestionarUbicaciones = modalGestionarUbicaciones;
 window.guardarUbicacion = guardarUbicacion;
