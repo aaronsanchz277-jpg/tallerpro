@@ -39,8 +39,6 @@ window.addEventListener('load', async () => {
   try {
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
-      // Si viene de la landing con #nuevo-taller pero ya tiene sesión, 
-      // cerrar sesión para que pueda crear un taller nuevo
       if (window.location.hash === '#nuevo-taller') {
         await sb.auth.signOut();
         hideSplash(true);
@@ -53,7 +51,6 @@ window.addEventListener('load', async () => {
     } else {
       hideSplash();
       showLogin();
-      // Si viene de la landing, abrir tab de nuevo taller
       if (window.location.hash === '#nuevo-taller') {
         setTimeout(() => switchLoginTab('nuevo-taller'), 100);
       }
@@ -77,7 +74,6 @@ sb.auth.onAuthStateChange(async (event, session) => {
     currentPerfil = null;
     showLogin();
   } else if (event === 'TOKEN_REFRESHED' && !session) {
-    // Token refresh falló — sesión expirada
     toast('Tu sesión expiró. Volvé a iniciar sesión.','error');
     currentUser = null;
     currentPerfil = null;
@@ -108,8 +104,6 @@ async function loadPerfil(user) {
       .maybeSingle();
     if (error) { console.error('loadPerfil error:', error); showLogin(); return; }
     if (!perfil) {
-      // Usuario sin perfil — puede ser un registro incompleto
-      // Mostrar prompt de código para que se vincule a un taller
       currentPerfil = { id: user.id, nombre: user.email, rol: 'cliente', taller_id: null };
       showCodigoPrompt();
       return;
@@ -167,7 +161,6 @@ async function aplicarCodigo() {
     if (error) { errEl.textContent = 'Error: ' + error.message; errEl.style.display = 'block'; return; }
     if (!result?.ok) { errEl.textContent = result?.error || 'Código inválido o ya utilizado'; errEl.style.display = 'block'; return; }
     
-    // Recargar perfil
     const { data: perfil } = await sb.from('perfiles')
       .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion)')
       .eq('id', currentUser.id).maybeSingle();
@@ -189,11 +182,9 @@ async function crearTallerDesdePrompt() {
   if (!nombre || !tallerNombre) { errEl.textContent = 'Completá tu nombre y el nombre del taller'; errEl.style.display = 'block'; return; }
 
   try {
-    // Crear taller
     const { data: taller, error: tallerErr } = await sb.from('talleres').insert({ nombre: tallerNombre, telefono: tallerTel }).select().single();
     if (tallerErr || !taller) { errEl.textContent = 'Error al crear el taller: ' + (tallerErr?.message || ''); errEl.style.display = 'block'; return; }
 
-    // Crear o actualizar perfil como admin
     const { data: existePerfil } = await sb.from('perfiles').select('id').eq('id', currentUser.id).maybeSingle();
     if (existePerfil) {
       await sb.from('perfiles').update({ nombre, rol: 'admin', taller_id: taller.id }).eq('id', currentUser.id);
@@ -201,11 +192,9 @@ async function crearTallerDesdePrompt() {
       await sb.from('perfiles').insert({ id: currentUser.id, nombre, rol: 'admin', taller_id: taller.id });
     }
 
-    // Crear suscripción trial 14 días
     const trialEnd = new Date(); trialEnd.setDate(trialEnd.getDate() + 14);
     await sb.from('suscripciones').insert({ taller_id: taller.id, plan_id: 'premium', estado: 'trial', fecha_vencimiento: trialEnd.toISOString().split('T')[0] });
 
-    // Recargar perfil y entrar
     const { data: perfil } = await sb.from('perfiles').select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion)').eq('id', currentUser.id).maybeSingle();
     currentPerfil = perfil;
     toast(`¡Bienvenido ${nombre}! Tu taller fue creado.`, 'success');
@@ -227,7 +216,6 @@ function showLogin() {
   } else {
     showLoginNormal();
   }
-  // Si ya estuvo loggeado antes, ocultar "Nuevo Taller" — solo se crea taller desde la landing
   if (_loggedOutOnce) {
     const tabNuevo = document.getElementById('tab-nuevo-taller');
     if (tabNuevo) tabNuevo.style.display = 'none';
@@ -238,7 +226,6 @@ function showLoginNormal(fromInvite) {
   document.getElementById('login-normal').style.display = 'block';
   document.getElementById('login-invitacion').style.display = 'none';
   switchLoginTab('login');
-  // Si viene de invitación, ocultar tab "Nuevo Taller"
   const tabNuevo = document.getElementById('tab-nuevo-taller');
   if (tabNuevo) tabNuevo.style.display = fromInvite ? 'none' : '';
 }
@@ -248,9 +235,7 @@ function showLoginInvitacion() {
   document.getElementById('login-invitacion').style.display = 'block';
 }
 
-function onCodigoInput(val) {
-  // No-op: el tipo de código (empleado/cliente) se valida server-side al registrarse
-}
+function onCodigoInput(val) {}
 
 // ─── SUSCRIPCIÓN ────────────────────────────────────────────────────────────
 let currentSuscripcion = null;
@@ -264,7 +249,6 @@ async function cargarSuscripcion() {
     .maybeSingle();
   
   if (sub) {
-    // Verificar si el trial o suscripción venció
     const hoy = new Date().toISOString().split('T')[0];
     if ((sub.estado === 'trial' || sub.estado === 'activa') && sub.fecha_vencimiento && sub.fecha_vencimiento < hoy) {
       sub.estado = 'vencida';
@@ -273,18 +257,12 @@ async function cargarSuscripcion() {
     currentSuscripcion = sub;
     currentPlan = sub.planes;
   } else {
-    // Taller sin suscripción — darle acceso completo como fallback
     currentSuscripcion = { estado: 'activa', plan_id: 'premium' };
     currentPlan = { id:'premium', nombre:'TallerPro', max_usuarios:999, tiene_agenda:true, tiene_mantenimientos:true, tiene_reportes:true, tiene_emails:true };
   }
 }
 
-function planPermite(feature) { return true; //
-  if (!currentPlan) return false;
-  if (currentSuscripcion?.estado === 'vencida') return false;
-  return currentPlan[feature] === true;
-}
-
+function planPermite(feature) { return true; }
 function planActivo() {
   return currentSuscripcion && (currentSuscripcion.estado === 'trial' || currentSuscripcion.estado === 'activa');
 }
@@ -352,6 +330,21 @@ function switchLoginTab(tab) {
   }
 }
 
+// ─── FUNCIÓN PARA ALTERNAR RAZÓN SOCIAL EN INVITACIÓN ───────────────────────
+function toggleRazonSocialInv() {
+  const tipo = document.getElementById('inv-tipo-persona')?.value;
+  const razonDiv = document.getElementById('inv-campo-razon-social');
+  const labelId = document.getElementById('inv-label-identificacion');
+  if (!razonDiv || !labelId) return;
+  if (tipo === 'juridica') {
+    razonDiv.style.display = 'block';
+    labelId.textContent = 'RUC';
+  } else {
+    razonDiv.style.display = 'none';
+    labelId.textContent = 'CI / RUC';
+  }
+}
+
 // ─── MANEJO DE AUTENTICACIÓN ──────────────────────────────────────────────────
 async function handleRegistroInvitacion() {
   const nombre = document.getElementById('inv-nombre').value.trim();
@@ -360,6 +353,9 @@ async function handleRegistroInvitacion() {
   const codigo = document.getElementById('inv-codigo').value.trim().toUpperCase();
   const email = document.getElementById('inv-email').value.trim();
   const pass = document.getElementById('inv-pass').value;
+  const tipoPersona = document.getElementById('inv-tipo-persona').value;
+  const rucCi = document.getElementById('inv-ruc-ci').value;
+  const razonSocial = document.getElementById('inv-razon-social').value;
   const errEl = document.getElementById('inv-error');
   const btn = document.querySelector('#login-invitacion .btn-primary');
   errEl.style.display = 'none';
@@ -373,7 +369,6 @@ async function handleRegistroInvitacion() {
   btn.disabled = true;
 
   try {
-    // 1. Crear cuenta
     const { data, error } = await sb.auth.signUp({ email, password: pass });
     if (error) {
       errEl.textContent = error.message;
@@ -388,7 +383,6 @@ async function handleRegistroInvitacion() {
       return;
     }
 
-    // 2. Aplicar código via RPC (crea perfil + asigna rol + marca código)
     const { data: result, error: rpcError } = await sb.rpc('aplicar_codigo', { p_codigo: codigo, p_user_id: data.user.id });
     
     if (rpcError || !result?.ok) {
@@ -398,22 +392,55 @@ async function handleRegistroInvitacion() {
       return;
     }
 
-    // 3. Actualizar nombre en perfil
     const nombreCompleto = `${nombre} ${apellido}`;
     await sb.from('perfiles').update({ nombre: nombreCompleto }).eq('id', data.user.id);
 
-    // 4. Si es cliente, actualizar nombre y teléfono en ficha de cliente
+    // Obtener el taller_id del perfil recién creado (o del código)
+    const { data: perfilActual } = await sb.from('perfiles').select('taller_id').eq('id', data.user.id).single();
+    const tallerId = perfilActual?.taller_id;
+
     if (result.rol === 'cliente') {
       const { data: perfil } = await sb.from('perfiles').select('cliente_id').eq('id', data.user.id).maybeSingle();
       if (perfil?.cliente_id) {
-        await sb.from('clientes').update({ nombre: nombreCompleto, telefono: telefono || null }).eq('id', perfil.cliente_id);
+        await sb.from('clientes').update({
+          nombre: nombreCompleto,
+          telefono: telefono || null,
+          tipo_persona: tipoPersona,
+          ruc_ci: rucCi || null,
+          razon_social: razonSocial || null
+        }).eq('id', perfil.cliente_id);
+      } else {
+        // Si no tiene cliente_id, crear cliente nuevo
+        const { data: nuevoCliente } = await sb.from('clientes').insert({
+          nombre: nombreCompleto,
+          telefono: telefono || null,
+          tipo_persona: tipoPersona,
+          ruc_ci: rucCi || null,
+          razon_social: razonSocial || null,
+          taller_id: tallerId
+        }).select().single();
+        if (nuevoCliente) {
+          await sb.from('perfiles').update({ cliente_id: nuevoCliente.id }).eq('id', data.user.id);
+        }
+      }
+    } else if (result.rol === 'empleado') {
+      // Crear registro en la tabla empleados
+      const { data: empExist } = await sb.from('empleados').select('id').eq('user_id', data.user.id).maybeSingle();
+      if (!empExist) {
+        await sb.from('empleados').insert({
+          nombre: nombreCompleto,
+          telefono: telefono || null,
+          rol: 'Mecánico',
+          sueldo: 0,
+          taller_id: tallerId,
+          user_id: data.user.id
+        });
       }
     }
 
     toast(`¡Bienvenido ${nombre}!`, 'success');
     btn.textContent = 'REGISTRARME'; btn.disabled = false;
 
-    // 5. Ingresar directamente
     await loadPerfil(data.user);
   } catch(e) {
     console.error('handleRegistroInvitacion error:', e);
@@ -453,12 +480,10 @@ async function handleAuth() {
     btn.textContent = 'CREANDO TALLER...';
     
     try {
-      // 1. Crear cuenta
       const { data, error } = await sb.auth.signUp({ email, password: pass });
       if (error) { showAuthError(error.message); btn.textContent = 'CREAR TALLER'; btn.disabled = false; return; }
       if (!data.user) { showAuthError('Error al crear la cuenta. Intentá de nuevo.'); btn.textContent = 'CREAR TALLER'; btn.disabled = false; return; }
       
-      // 2. Crear taller
       const { data: taller, error: tallerErr } = await sb.from('talleres').insert({ nombre: tallerNombre, telefono: tallerTel }).select().single();
       if (tallerErr || !taller) { 
         showAuthError('Error al crear el taller: ' + (tallerErr?.message || 'intentá de nuevo')); 
@@ -466,7 +491,6 @@ async function handleAuth() {
         return; 
       }
       
-      // 3. Crear perfil admin
       const { error: perfilErr } = await sb.from('perfiles').insert({ id: data.user.id, nombre, rol: 'admin', taller_id: taller.id });
       if (perfilErr) { 
         showAuthError('Error al crear el perfil: ' + perfilErr.message); 
@@ -474,21 +498,17 @@ async function handleAuth() {
         return; 
       }
 
-      // 3.5 Crear suscripción trial (14 días Premium)
       const trialEnd = new Date(); trialEnd.setDate(trialEnd.getDate() + 14);
       await sb.from('suscripciones').insert({ taller_id: taller.id, plan_id: 'premium', estado: 'trial', fecha_vencimiento: trialEnd.toISOString().split('T')[0] });
       
-      // 4. Intentar login automático
       const { data: loginData, error: loginErr } = await sb.auth.signInWithPassword({ email, password: pass });
       if (loginErr) {
-        // Si falla el auto-login (ej: requiere confirmación email), mandar al login
         toast('¡Taller creado! Ingresá con tu email y contraseña.', 'success');
         btn.textContent = 'CREAR TALLER'; btn.disabled = false;
         switchLoginTab('login');
         return;
       }
       
-      // 5. Entrar directo
       toast(`¡Bienvenido ${h(nombre)}! Tu taller fue creado.`, 'success');
       await loadPerfil(loginData.user);
       
@@ -499,7 +519,6 @@ async function handleAuth() {
     }
   }
 }
-
 
 async function handleForgotPassword() {
   const email = document.getElementById('auth-email').value.trim();
