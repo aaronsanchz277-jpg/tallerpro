@@ -1,180 +1,5 @@
-// ─── INVENTARIO ──────────────────────────────────────────────────────────────
-async function inventario({ search='', offset=0, ubicacion_id='' }={}) {
-  const cacheKey = `inventario_${search}_${offset}_${ubicacion_id}`;
-  let q = sb.from('inventario').select('*, ubicaciones(nombre)', {count:'exact'}).eq('taller_id',tid()).order('nombre');
-  if (search) q = q.ilike('nombre',`%${search}%`);
-  if (ubicacion_id) q = q.eq('ubicacion_id', ubicacion_id);
-  const { data, count } = await cachedQuery(cacheKey, () => q.range(offset, offset + PAGE_SIZE - 1));
+// ─── ENTRADA DE MERCADERÍA (Compra a proveedor) ─────────────────────────────
 
-  // Obtener todas las ubicaciones para el filtro rápido
-  const { data: ubicaciones } = await sb.from('ubicaciones').select('id,nombre,padre_id').eq('taller_id', tid()).order('nombre');
-
-  document.getElementById('main-content').innerHTML = `
-    <div class="section-header">
-      <div class="section-title">${t('invTitulo')} ${count ? `<span style="font-size:.75rem;color:var(--text2)">(${count})</span>` : ''}</div>
-      <div style="display:flex;gap:.3rem">
-        <button onclick="barcode_scan()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.4rem .6rem;cursor:pointer;color:var(--accent);font-size:.9rem" title="Escanear">📷</button>
-        <button onclick="modalEntradaMercaderia()" style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;color:var(--success);font-size:.72rem;font-family:var(--font-head)">📥 Entrada</button>
-        <button onclick="modalGestionarUbicaciones()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.4rem .6rem;cursor:pointer;color:var(--accent);font-size:.9rem" title="Gestionar ubicaciones">📍</button>
-        <button class="btn-add" onclick="modalNuevoItem()">+ Nuevo</button>
-      </div>
-    </div>
-    ${(ubicaciones||[]).length > 0 ? `
-    <div style="display:flex;gap:.3rem;margin-bottom:.75rem;overflow-x:auto;padding-bottom:.3rem">
-      <button onclick="inventario({ubicacion_id:''})" style="background:${!ubicacion_id?'var(--accent)':'var(--surface2)'};color:${!ubicacion_id?'#000':'var(--text2)'};border:1px solid ${!ubicacion_id?'var(--accent)':'var(--border)'};border-radius:8px;padding:.3rem .6rem;font-size:.72rem;cursor:pointer;white-space:nowrap">Todos</button>
-      ${ubicaciones.map(u => `<button onclick="inventario({ubicacion_id:'${u.id}'})" style="background:${ubicacion_id===u.id?'var(--accent)':'var(--surface2)'};color:${ubicacion_id===u.id?'#000':'var(--text2)'};border:1px solid ${ubicacion_id===u.id?'var(--accent)':'var(--border)'};border-radius:8px;padding:.3rem .6rem;font-size:.72rem;cursor:pointer;white-space:nowrap">📍 ${h(u.nombre)}</button>`).join('')}
-    </div>` : ''}
-    <div class="search-box">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" placeholder="${t('invBuscar')}" value="${h(search)}" oninput="debounce('inv',()=>inventario({search:this.value,ubicacion_id:'${ubicacion_id}'}))" class="form-input" style="padding-left:2.5rem">
-    </div>
-    ${(data||[]).length===0 ? `<div class="empty"><p>${t('invSinDatos')}</p></div>` :
-      (data||[]).map(item => {
-        const bajo = parseFloat(item.cantidad)<=parseFloat(item.stock_minimo);
-        return `<div class="inv-card" onclick="modalEditarItem('${item.id}')">
-          <div class="inv-icon">📦</div>
-          <div class="inv-info">
-            <div class="inv-name">${h(item.nombre)}</div>
-            <div class="inv-meta">${h(item.categoria||t('sinCategoria'))}${item.ubicaciones?.nombre?' · 📍'+h(item.ubicaciones.nombre):''} · ₲${gs(item.precio_unitario)} c/u</div>
-          </div>
-          <div class="inv-stock">
-            <div class="inv-qty ${bajo?'stock-low':'stock-ok'}">${item.cantidad}</div>
-            <div class="inv-unit">${h(item.unidad)}</div>
-            ${bajo?'<div style="font-size:.65rem;color:var(--danger)">⚠ BAJO</div>':''}
-          </div>
-        </div>`;
-      }).join('')}
-    ${renderPagination(count||0, offset, '_navInv')}`;
-}
-function _navInv(o) { inventario({offset:o}); }
-
-function modalNuevoItem() {
-  openModal(`
-    <div class="modal-title">${t("modNuevoProducto")}</div>
-    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" placeholder="Aceite motor 5W30"></div>
-    <div class="form-group"><label class="form-label">Código de barras</label>
-      <div style="display:flex;gap:.4rem">
-        <input class="form-input" id="f-barcode" placeholder="Escanear o escribir" style="flex:1">
-        <button onclick="barcode_scan('f-barcode')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 .6rem;cursor:pointer;color:var(--accent);font-size:1.1rem" title="Escanear">📷</button>
-      </div>
-    </div>
-    <div class="form-group"><label class="form-label">${t("lblCategoria")}</label><input class="form-input" id="f-cat" placeholder="Lubricantes, Frenos..."></div>
-    <div class="form-group"><label class="form-label">Ubicación</label><select class="form-input" id="f-ubicacion"></select></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">${t("lblCantidad")}</label><input class="form-input" id="f-qty" type="number" value="0" min="0"></div>
-      <div class="form-group"><label class="form-label">${t("lblUnidad")}</label><input class="form-input" id="f-unidad" placeholder="unidad, litro..."></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">${t("lblStockMin")}</label><input class="form-input" id="f-min" type="number" value="5" min="0"></div>
-      <div class="form-group"><label class="form-label">${t("lblPrecioUnit")}</label><input class="form-input" id="f-precio" type="number" min="0" value="0"></div>
-    </div>
-    <button class="btn-primary" onclick="guardarItem()">${t('guardar')}</button>
-    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
-  cargarUbicaciones('f-ubicacion');
-}
-
-async function guardarItem(id=null) {
-  if (guardando()) return;
-  const nombre = document.getElementById('f-nombre').value.trim();
-  if (!nombre) { toast('El nombre es obligatorio','error'); return; }
-  const nuevoPrecio = parseFloat(document.getElementById('f-precio').value)||0;
-  const ubicacionId = document.getElementById('f-ubicacion')?.value||null;
-  const data = { 
-    nombre, 
-    categoria: document.getElementById('f-cat').value, 
-    cantidad: parseFloat(document.getElementById('f-qty').value)||0, 
-    unidad: document.getElementById('f-unidad').value||'unidad', 
-    stock_minimo: parseFloat(document.getElementById('f-min').value)||5, 
-    precio_unitario: nuevoPrecio, 
-    codigo_barras: document.getElementById('f-barcode')?.value?.trim()||null, 
-    ubicacion_id: ubicacionId, 
-    taller_id: tid() 
-  };
-  if (id) {
-    const { data: prev } = await sb.from('inventario').select('precio_unitario').eq('id',id).single();
-    if (prev && parseFloat(prev.precio_unitario) !== nuevoPrecio) {
-      await sb.from('historial_precios').insert({ producto_id:id, precio_anterior:prev.precio_unitario, precio_nuevo:nuevoPrecio, taller_id:tid(), fecha:new Date().toISOString() }).catch(()=>{});
-    }
-  }
-  const { error } = id ? await offlineUpdate('inventario', data, 'id', id) : await offlineInsert('inventario', data);
-  if (error) { toast('Error: '+error.message,'error'); return; }
-  toast('Producto guardado','success'); closeModal(); inventario();
-}
-
-async function modalEditarItem(id) {
-  const { data:item } = await sb.from('inventario').select('*').eq('id',id).single();
-  const isAdmin = currentPerfil?.rol==='admin';
-  openModal(`
-    <div class="modal-title">${t("modEditarProducto")}</div>
-    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" value="${h(item.nombre||'')}"></div>
-    <div class="form-group"><label class="form-label">Código de barras</label>
-      <div style="display:flex;gap:.4rem">
-        <input class="form-input" id="f-barcode" value="${h(item.codigo_barras||'')}" placeholder="Escanear o escribir" style="flex:1">
-        <button onclick="barcode_scan('f-barcode')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 .6rem;cursor:pointer;color:var(--accent);font-size:1.1rem" title="Escanear">📷</button>
-      </div>
-    </div>
-    <div class="form-group"><label class="form-label">${t("lblCategoria")}</label><input class="form-input" id="f-cat" value="${h(item.categoria||'')}"></div>
-    <div class="form-group"><label class="form-label">Ubicación</label><select class="form-input" id="f-ubicacion"></select></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">${t("lblCantidad")}</label><input class="form-input" id="f-qty" type="number" value="${item.cantidad||0}" min="0"></div>
-      <div class="form-group"><label class="form-label">${t("lblUnidad")}</label><input class="form-input" id="f-unidad" value="${h(item.unidad||'unidad')}"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">${t("lblStockMin")}</label><input class="form-input" id="f-min" type="number" value="${item.stock_minimo||5}" min="0"></div>
-      <div class="form-group"><label class="form-label">${t("lblPrecioUnit")}</label><input class="form-input" id="f-precio" type="number" min="0" value="${item.precio_unitario||0}"></div>
-    </div>
-    <button class="btn-primary" onclick="guardarItem('${id}')">${t('actualizar')}</button>
-    <div style="display:flex;gap:.5rem">
-      <button class="btn-secondary" style="margin:0;flex:1" onclick="modalDescontarStock('${id}','${h(item.nombre)}',${item.cantidad})">- Descontar stock</button>
-      ${isAdmin?`<button class="btn-danger" style="margin:0" onclick="eliminarItem('${id}')">${t('eliminarBtn')}</button>`:''}
-    </div>
-    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
-  cargarUbicaciones('f-ubicacion', item.ubicacion_id);
-}
-
-function modalDescontarStock(id, nombre, stockActual) {
-  sb.from('reparaciones').select('id,descripcion,vehiculos(patente)').eq('taller_id',tid()).in('estado',['pendiente','en_progreso','esperando_repuestos']).order('created_at',{ascending:false}).limit(20).then(({data:repsActivas}) => {
-    openModal(`
-      <div class="modal-title">${t("modDescontarStock")}</div>
-      <p style="color:var(--text2);font-size:.85rem;margin-bottom:1rem">${nombre} · ${t('stockActual')}: <strong style="color:var(--accent)">${stockActual}</strong></p>
-      <div class="form-group"><label class="form-label">${t("lblCantDescontar")}</label><input class="form-input" id="f-descuento" type="number" value="1" min="1" max="${stockActual}"></div>
-      <div class="form-group"><label class="form-label">Para reparación (opcional)</label>
-        <select class="form-input" id="f-desc-rep">
-          <option value="">Sin vincular</option>
-          ${(repsActivas||[]).map(r => `<option value="${r.id}">${h(r.descripcion)}${r.vehiculos?' — '+h(r.vehiculos.patente):''}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-group"><label class="form-label">${t("lblMotivo")}</label><input class="form-input" id="f-motivo" placeholder="Usado en reparación..."></div>
-      <button class="btn-primary" onclick="descontarStock('${id}',${stockActual})">DESCONTAR</button>
-      <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
-  });
-}
-
-async function descontarStock(id, stockActual) {
-  const descuento = parseFloat(document.getElementById('f-descuento').value)||0;
-  if (descuento<=0) { toast('Ingresá una cantidad válida','error'); return; }
-  if (descuento>stockActual) { toast('No hay suficiente stock','error'); return; }
-  const repId = document.getElementById('f-desc-rep')?.value || null;
-  const motivo = document.getElementById('f-motivo')?.value || '';
-  const { error } = await offlineUpdate('inventario', { cantidad: stockActual - descuento }, 'id', id);
-  if (error) { toast('Error','error'); return; }
-  const { data: item } = await sb.from('inventario').select('nombre,precio_unitario').eq('id',id).single();
-  if (repId && item) {
-    const { data: rep } = await sb.from('reparaciones').select('costo_repuestos').eq('id',repId).single();
-    const costoTotal = parseFloat(rep?.costo_repuestos||0) + (parseFloat(item.precio_unitario||0) * descuento);
-    await sb.from('reparaciones').update({ costo_repuestos: costoTotal }).eq('id', repId);
-  }
-  clearCache('inventario');toast(`Stock actualizado${repId?' y vinculado al trabajo':''}`,'success'); closeModal(); inventario();
-}
-
-async function eliminarItem(id) {
-  confirmar('Esta acción eliminará el producto permanentemente.', async () => {
-    await offlineDelete('inventario', 'id', id);
-    clearCache('inventario');toast('Producto eliminado'); inventario();
-  });
-}
-
-// ─── ENTRADA DE MERCADERÍA (sin cambios, pero usa ubicación) ─────────────────
 async function modalEntradaMercaderia() {
   const { data: items } = await sb.from('inventario').select('id,nombre,cantidad,precio_unitario').eq('taller_id',tid()).order('nombre').limit(200);
   openModal(`
@@ -190,6 +15,8 @@ async function modalEntradaMercaderia() {
     </div>
     <div id="ent-nuevo-item" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.75rem">
       <div class="form-group"><label class="form-label">Nombre del producto *</label><input class="form-input" id="f-ent-nombre" placeholder="Filtro de aceite..."></div>
+      <div class="form-group"><label class="form-label">Categoría</label><input class="form-input" id="f-ent-cat" placeholder="Filtros, Lubricantes..."></div>
+      <div class="form-group"><label class="form-label">Unidad</label><input class="form-input" id="f-ent-unidad" value="unidad" placeholder="unidad, litro..."></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Cantidad *</label><input class="form-input" id="f-ent-qty" type="number" min="1" value="1"></div>
@@ -197,50 +24,103 @@ async function modalEntradaMercaderia() {
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Factura / Ref</label><input class="form-input" id="f-ent-factura" placeholder="#001-001-0001234"></div>
-      <div class="form-group"><label class="form-label">Fecha</label><input class="form-input" id="f-ent-fecha" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="form-group"><label class="form-label">Fecha</label><input class="form-input" id="f-ent-fecha" type="date" value="${fechaHoy()}"></div>
     </div>
     <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:1rem">
       <input type="checkbox" id="f-ent-deuda" style="width:18px;height:18px;accent-color:var(--accent)">
       <label for="f-ent-deuda" style="font-size:.82rem;color:var(--text2)">Queda como deuda (crear cuenta a pagar)</label>
     </div>
+    <div style="background:var(--surface2);border-radius:8px;padding:.5rem;margin-bottom:1rem">
+      <div style="display:flex;justify-content:space-between;font-size:.8rem">
+        <span>Total compra:</span>
+        <span id="ent-total" style="font-family:var(--font-head);color:var(--danger)">₲0</span>
+      </div>
+    </div>
     <button class="btn-primary" onclick="guardarEntrada()">Registrar entrada</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
-  document.getElementById('f-ent-item').onchange = function() {
-    document.getElementById('ent-nuevo-item').style.display = this.value === '__nuevo__' ? 'block' : 'none';
-    if (this.value && this.value !== '__nuevo__') {
-      const opt = this.selectedOptions[0];
-      document.getElementById('f-ent-costo').value = opt.dataset.precio || '';
-    }
-  };
+    
+  // Event listeners para calcular total en tiempo real
+  setTimeout(() => {
+    const qtyInput = document.getElementById('f-ent-qty');
+    const costoInput = document.getElementById('f-ent-costo');
+    const updateTotal = () => {
+      const qty = parseFloat(qtyInput?.value) || 0;
+      const costo = parseFloat(costoInput?.value) || 0;
+      document.getElementById('ent-total').textContent = '₲' + gs(qty * costo);
+    };
+    qtyInput?.addEventListener('input', updateTotal);
+    costoInput?.addEventListener('input', updateTotal);
+    
+    document.getElementById('f-ent-item').onchange = function() {
+      document.getElementById('ent-nuevo-item').style.display = this.value === '__nuevo__' ? 'block' : 'none';
+      if (this.value && this.value !== '__nuevo__') {
+        const opt = this.selectedOptions[0];
+        document.getElementById('f-ent-costo').value = opt.dataset.precio || '';
+        updateTotal();
+      }
+    };
+  }, 100);
 }
 
 async function guardarEntrada() {
   if (guardando()) return;
+  
   const proveedor = document.getElementById('f-ent-prov').value.trim();
   if (!proveedor) { toast('El proveedor es obligatorio','error'); return; }
+  
   let itemId = document.getElementById('f-ent-item').value;
-  const qty = parseInt(document.getElementById('f-ent-qty').value) || 0;
+  const qty = parseFloat(document.getElementById('f-ent-qty').value) || 0;
   if (qty <= 0) { toast('La cantidad debe ser mayor a 0','error'); return; }
+  
   const costoUnit = parseFloat(document.getElementById('f-ent-costo').value) || 0;
-  const factura = document.getElementById('f-ent-factura').value;
+  const factura = document.getElementById('f-ent-factura').value.trim();
   const fecha = document.getElementById('f-ent-fecha').value;
   const crearDeuda = document.getElementById('f-ent-deuda').checked;
+  
+  let nombreProducto = '';
+  let precioAnterior = 0;
+  let stockAnterior = 0;
 
+  // Si es producto nuevo, crearlo primero
   if (itemId === '__nuevo__') {
     const nombre = document.getElementById('f-ent-nombre').value.trim();
     if (!nombre) { toast('El nombre del producto es obligatorio','error'); return; }
-    const { data: nuevo, error } = await sb.from('inventario').insert({ nombre, cantidad: 0, precio_unitario: costoUnit, stock_minimo: 5, unidad: 'unidad', taller_id: tid() }).select('id').single();
+    const categoria = document.getElementById('f-ent-cat')?.value || '';
+    const unidad = document.getElementById('f-ent-unidad')?.value || 'unidad';
+    
+    const { data: nuevo, error } = await sb.from('inventario').insert({
+      nombre,
+      categoria,
+      unidad,
+      cantidad: 0,
+      precio_unitario: costoUnit,
+      stock_minimo: 5,
+      taller_id: tid()
+    }).select('id').single();
+    
     if (error) { toast('Error creando producto: '+error.message,'error'); return; }
     itemId = nuevo.id;
+    nombreProducto = nombre;
+    stockAnterior = 0;
+  } else {
+    // Obtener datos actuales del producto
+    const { data: item } = await sb.from('inventario').select('nombre,cantidad,precio_unitario').eq('id', itemId).single();
+    if (!item) { toast('Producto no encontrado','error'); return; }
+    nombreProducto = item.nombre;
+    stockAnterior = parseFloat(item.cantidad) || 0;
+    precioAnterior = parseFloat(item.precio_unitario) || 0;
   }
-
-  if (!itemId) { toast('Seleccioná un producto','error'); return; }
-
-  const { data: item } = await sb.from('inventario').select('cantidad,nombre,precio_unitario').eq('id',itemId).single();
-  const nuevoStock = parseFloat(item?.cantidad||0) + qty;
-  await sb.from('inventario').update({ cantidad: nuevoStock, precio_unitario: costoUnit || item?.precio_unitario }).eq('id', itemId);
-
-  await sb.from('movimientos_inventario').insert({
+  
+  // Actualizar stock y precio de venta si cambió
+  const nuevoStock = stockAnterior + qty;
+  const updates = { cantidad: nuevoStock };
+  if (costoUnit > 0 && costoUnit !== precioAnterior) {
+    updates.precio_unitario = costoUnit;
+  }
+  await sb.from('inventario').update(updates).eq('id', itemId);
+  
+  // Registrar movimiento de inventario
+  const { data: mov, error: movError } = await sb.from('movimientos_inventario').insert({
     taller_id: tid(),
     inventario_id: itemId,
     tipo: 'entrada',
@@ -250,27 +130,87 @@ async function guardarEntrada() {
     factura_ref: factura || null,
     fecha,
     notas: 'Compra a ' + proveedor
-  });
-
-  if (crearDeuda && costoUnit * qty > 0) {
-    await sb.from('cuentas_pagar').insert({
+  }).select('id').single();
+  
+  if (movError) console.warn('Error registrando movimiento:', movError);
+  
+  const totalCompra = qty * costoUnit;
+  const movimientoId = mov?.id;
+  
+  // ─── INTEGRACIÓN CON FINANZAS Y CUENTAS A PAGAR ───────────────────────────
+  if (crearDeuda && totalCompra > 0) {
+    // Crear cuenta a pagar
+    const { data: cuenta, error: cuentaError } = await sb.from('cuentas_pagar').insert({
       taller_id: tid(),
       proveedor,
-      monto: costoUnit * qty,
+      monto: totalCompra,
       fecha_vencimiento: null,
-      notas: (item?.nombre||'Productos') + ' x' + qty + (factura?' — Fact: '+factura:''),
+      notas: `${nombreProducto} x${qty} (Costo unit: ₲${gs(costoUnit)})${factura ? ' — Fact: '+factura : ''}`,
       pagada: false
-    });
-  }
-
-  if (!crearDeuda && costoUnit * qty > 0) {
-    const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id',tid()).eq('nombre','Repuestos').limit(1);
-    if (cats?.length) {
-      await sb.from('movimientos_financieros').insert({ taller_id:tid(), tipo:'egreso', categoria_id:cats[0].id, monto:costoUnit*qty, descripcion:'Compra: '+(item?.nombre||'')+' x'+qty+' — '+proveedor, fecha });
+    }).select('id').single();
+    
+    if (cuentaError) {
+      toast('Error creando cuenta a pagar: '+cuentaError.message, 'error');
+    } else {
+      toast('✓ Cuenta a pagar registrada', 'info');
+    }
+  } else if (totalCompra > 0) {
+    // Pago al contado: registrar egreso en finanzas
+    try {
+      // Buscar o crear categoría "Repuestos"
+      let categoriaId;
+      const { data: cats } = await sb.from('categorias_financieras')
+        .select('id')
+        .eq('taller_id', tid())
+        .eq('nombre', 'Repuestos')
+        .limit(1);
+      
+      if (cats?.length) {
+        categoriaId = cats[0].id;
+      } else {
+        const { data: nuevaCat } = await sb.from('categorias_financieras')
+          .insert({ taller_id: tid(), nombre: 'Repuestos', tipo: 'egreso', es_fija: true })
+          .select('id')
+          .single();
+        categoriaId = nuevaCat?.id;
+      }
+      
+      if (categoriaId) {
+        await sb.from('movimientos_financieros').insert({
+          taller_id: tid(),
+          tipo: 'egreso',
+          categoria_id: categoriaId,
+          monto: totalCompra,
+          descripcion: `Compra: ${nombreProducto} x${qty} — ${proveedor}${factura ? ' (Fact: '+factura+')' : ''}`,
+          fecha,
+          referencia_id: movimientoId,
+          referencia_tabla: 'movimientos_inventario'
+        });
+      }
+    } catch (e) {
+      console.warn('Error registrando egreso en finanzas:', e);
     }
   }
-
-  clearCache('inventario'); clearCache('cuentas'); clearCache('finanzas');
-  toast(`✓ ${qty} unidades de ${item?.nombre||'producto'} ingresadas — ₲${gs(costoUnit*qty)}`,'success');
-  closeModal(); inventario();
+  
+  // Si el costo unitario cambió, registrar en historial de precios
+  if (costoUnit > 0 && costoUnit !== precioAnterior && itemId !== '__nuevo__') {
+    await sb.from('historial_precios').insert({
+      producto_id: itemId,
+      precio_anterior: precioAnterior,
+      precio_nuevo: costoUnit,
+      motivo: 'Compra a ' + proveedor,
+      taller_id: tid(),
+      fecha: new Date().toISOString()
+    }).catch(() => {});
+  }
+  
+  clearCache('inventario');
+  clearCache('cuentas');
+  clearCache('finanzas');
+  clearCache('dash_gastos_mes');
+  clearCache('dash_stock');
+  
+  toast(`✓ Entrada registrada: ${qty} x ${nombreProducto} — Total: ₲${gs(totalCompra)}`, 'success');
+  closeModal();
+  inventario();
 }
