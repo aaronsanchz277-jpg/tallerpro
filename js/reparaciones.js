@@ -6,11 +6,22 @@ const TIPOS_TRABAJO = [
 ];
 const TIPO_ICONS = { 'Mecánica general':'🔧', 'Cambio de aceite / Service':'🛢️', 'Frenos':'🛑', 'Suspensión / Tren delantero':'🔩', 'Electricidad':'⚡', 'Chapa y pintura':'🎨', 'Aire acondicionado':'❄️', 'Diagnóstico':'🔍', 'Otro':'📋' };
 
+// Función auxiliar para inicio de semana (lunes)
+function inicioSemana() {
+  const d = new Date();
+  const day = d.getDay(); // 0 domingo
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  return d.toISOString().split('T')[0];
+}
+
 async function reparaciones({ filtro='todos', search='', offset=0, tipo='' }={}) {
   const cacheKey = `reparaciones_${filtro}_${search}_${offset}_${tipo}`;
   const { data, count } = await cachedQuery(cacheKey, () => {
     let q = sb.from('reparaciones').select('*, vehiculos(patente,marca), clientes(nombre)', {count:'exact'}).eq('taller_id',tid()).order('created_at',{ascending:false});
     if (filtro==='hoy') q = q.eq('fecha', new Date().toISOString().split('T')[0]);
+    else if (filtro==='semana') q = q.gte('fecha', inicioSemana());
+    else if (filtro==='mes') q = q.gte('fecha', primerDiaMes());
     else if (filtro!=='todos') q = q.eq('estado',filtro);
     if (tipo) q = q.eq('tipo_trabajo', tipo);
     if (search) q = q.ilike('descripcion', `%${search}%`);
@@ -80,6 +91,8 @@ async function detalleReparacion(id) {
       <div class="info-item"><div class="label">Vehículo</div><div class="value">${r.vehiculos?h(r.vehiculos.patente)+' '+h(r.vehiculos.marca||''):'-'}</div></div>
       <div class="info-item"><div class="label">Cliente</div><div class="value">${r.clientes?h(r.clientes.nombre):'-'}</div></div>
       <div class="info-item"><div class="label">Aprobación</div><div class="value"><span class="card-badge ${aprobBadge}">${aprobLabel}</span></div></div>
+      ${r.kilometraje_ingreso?`<div class="info-item"><div class="label">Km ingreso</div><div class="value">${r.kilometraje_ingreso.toLocaleString()} km</div></div>`:''}
+      ${r.combustible_ingreso?`<div class="info-item"><div class="label">Combustible</div><div class="value">${h(r.combustible_ingreso)}</div></div>`:''}
     </div>
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
@@ -231,9 +244,7 @@ async function agregarRepuestoATrabajo(repId) {
   const precio = parseFloat(opt.dataset.precio) || 0;
   const stock = parseFloat(opt.dataset.stock) || 0;
   if (qty > stock) { toast('No hay suficiente stock','error'); return; }
-  // Descontar del inventario
   await sb.from('inventario').update({ cantidad: stock - qty }).eq('id', itemId);
-  // Sumar al costo_repuestos
   const { data: rep } = await sb.from('reparaciones').select('costo_repuestos').eq('id',repId).single();
   const nuevoCosto = parseFloat(rep?.costo_repuestos||0) + (precio * qty);
   await sb.from('reparaciones').update({ costo_repuestos: nuevoCosto }).eq('id', repId);
@@ -271,16 +282,13 @@ async function guardarActualizarCosto(id) {
 
 async function cambiarEstado(id, estado) {
   await offlineUpdate('reparaciones', { estado }, 'id', id);
-  // Auto-generar ingreso en Finanzas cuando se finaliza
   if (estado === 'finalizado') {
     const { data: rep } = await sb.from('reparaciones').select('costo,descripcion,clientes(nombre)').eq('id',id).single();
     if (rep?.costo > 0) {
       const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id',tid()).eq('nombre','Reparaciones').limit(1);
       if (cats?.length) {
-        // Verificar que no se haya generado ya el ingreso de finalización
         const { data: existe } = await sb.from('movimientos_financieros').select('id').eq('taller_id',tid()).eq('referencia_id',id).eq('descripcion','Trabajo: '+(rep.descripcion||'')+(rep.clientes?' — '+rep.clientes.nombre:'')).limit(1);
         if (!existe?.length) {
-          // Restar pagos parciales ya registrados en finanzas
           const { data: pagosYaReg } = await sb.from('movimientos_financieros').select('monto').eq('taller_id',tid()).eq('referencia_id',id).ilike('descripcion','Pago:%').limit(50);
           const yaRegistrado = (pagosYaReg||[]).reduce((s,p) => s+parseFloat(p.monto||0), 0);
           const montoRestante = parseFloat(rep.costo) - yaRegistrado;
@@ -450,7 +458,6 @@ async function guardarPagoReparacion(repId) {
   const fecha = new Date().toISOString().split('T')[0];
   const { error } = await sb.from('pagos_reparacion').insert({ reparacion_id:repId, monto, metodo, notas, fecha, taller_id:tid() });
   if (error) { toast('Error: '+error.message,'error'); return; }
-  // Auto-generar ingreso en Finanzas (solo si NO es crédito)
   if (metodo !== 'Crédito') {
     const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id',tid()).eq('nombre','Reparaciones').limit(1);
     if (cats?.length) {
@@ -459,7 +466,6 @@ async function guardarPagoReparacion(repId) {
     }
   }
   clearCache('reparaciones');toast('Pago registrado','success');
-  // Si es crédito, crear un fiado automáticamente
   if (metodo === 'Crédito') {
     const { data: rep } = await sb.from('reparaciones').select('cliente_id,descripcion').eq('id',repId).single();
     if (rep?.cliente_id) {
@@ -470,7 +476,6 @@ async function guardarPagoReparacion(repId) {
   modalPagosReparacion(repId);
 }
 
-// ─── RECORDATORIO WHATSAPP (mantenimientos) ─────────────────────────────────
 function enviarRecordatorioWhatsApp(clienteNombre, clienteTel, vehiculo, servicio, fechaProx) {
   if (!clienteTel) { toast('El cliente no tiene teléfono registrado','error'); return; }
   const tel = clienteTel.replace(/\D/g, '');
@@ -478,7 +483,6 @@ function enviarRecordatorioWhatsApp(clienteNombre, clienteTel, vehiculo, servici
   window.open(`https://wa.me/595${tel}?text=${encodeURIComponent(msg)}`);
 }
 
-// ─── APROBACIÓN DE PRESUPUESTO (CLIENTE) ────────────────────────────────────
 async function aprobarPresupuestoCliente(repId, decision) {
   const confirmMsg = decision === 'aprobado' 
     ? '¿Confirmás que aprobás este presupuesto?' 
@@ -515,6 +519,15 @@ async function modalNuevaReparacion() {
     <div class="form-row">
       <div class="form-group"><label class="form-label">${t("lblCosto")}</label><input class="form-input" id="f-costo" type="number" min="0" placeholder="Total facturado"></div>
       <div class="form-group"><label class="form-label">Costo repuestos</label><input class="form-input" id="f-costo-rep" type="number" min="0" placeholder="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Kilometraje actual</label><input class="form-input" id="f-km" type="number" placeholder="Ej: 45000"></div>
+      <div class="form-group"><label class="form-label">Combustible</label>
+        <select class="form-input" id="f-combustible">
+          <option value="RESERVA">RESERVA</option><option value="1/4">1/4</option><option value="1/2" selected>1/2</option>
+          <option value="3/4">3/4</option><option value="LLENO">LLENO</option>
+        </select>
+      </div>
     </div>
     <div class="form-group"><label class="form-label">${t("lblFecha")}</label><input class="form-input" id="f-fecha" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
     <div class="form-group"><label class="form-label">${t("lblEstado")}</label>
@@ -562,7 +575,6 @@ async function modalNuevaReparacion() {
     <button class="btn-primary" onclick="guardarReparacion()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
   window._repItems = [];
-  // Registrar búsquedas para selects
   ssRegister('f-cliente', async (q) => {
     const { data } = await sb.from('clientes').select('id,nombre,telefono').eq('taller_id',tid()).ilike('nombre','%'+q+'%').limit(8);
     return (data||[]).map(c => ({ id:c.id, label:c.nombre+(c.telefono?' — '+c.telefono:'') }));
@@ -638,7 +650,6 @@ async function guardarReparacion(id=null) {
   let vid = document.getElementById('f-vehiculo').value;
   const cid = document.getElementById('f-cliente').value;
 
-  // Crear vehículo inline si se llenó el formulario
   const nvPatente = document.getElementById('f-nv-patente')?.value?.trim()?.toUpperCase();
   if (!vid && nvPatente) {
     const { data: nuevoVeh, error: vErr } = await sb.from('vehiculos').insert({
@@ -657,11 +668,23 @@ async function guardarReparacion(id=null) {
 
   const costoRep = parseFloat(document.getElementById('f-costo-rep')?.value) || 0;
   const tipoTrabajo = document.getElementById('f-tipo-trabajo')?.value || 'Mecánica general';
-  const data = { descripcion:desc, tipo_trabajo:tipoTrabajo, costo:parseFloat(document.getElementById('f-costo').value)||0, costo_repuestos:costoRep, fecha:document.getElementById('f-fecha').value, estado:document.getElementById('f-estado').value, vehiculo_id:vid||null, cliente_id:cid||null, notas:document.getElementById('f-notas').value, taller_id:tid() };
+  const data = { 
+    descripcion:desc, 
+    tipo_trabajo:tipoTrabajo, 
+    costo:parseFloat(document.getElementById('f-costo').value)||0, 
+    costo_repuestos:costoRep, 
+    fecha:document.getElementById('f-fecha').value, 
+    estado:document.getElementById('f-estado').value, 
+    vehiculo_id:vid||null, 
+    cliente_id:cid||null, 
+    notas:document.getElementById('f-notas').value, 
+    taller_id:tid(), 
+    kilometraje_ingreso:parseInt(document.getElementById('f-km')?.value)||null, 
+    combustible_ingreso:document.getElementById('f-combustible')?.value||null 
+  };
   const { data: saved, error } = id ? await sb.from('reparaciones').update(data).eq('id',id).select('id').single() : await sb.from('reparaciones').insert(data).select('id').single();
   if (error) { toast('Error: '+error.message,'error'); return; }
 
-  // Descontar items del inventario y vincular
   if (!id && window._repItems?.length && saved?.id) {
     for (const item of window._repItems) {
       const { data: inv } = await sb.from('inventario').select('cantidad').eq('id',item.id).single();
@@ -711,7 +734,6 @@ async function modalEditarReparacion(id) {
     <div class="form-group"><label class="form-label">${t("lblNotas")}</label><textarea class="form-input" id="f-notas" rows="2">${h(r.notas||'')}</textarea></div>
     <button class="btn-primary" onclick="guardarReparacion('${id}')">${t('actualizar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
-  // Set current values and register callbacks
   ssRegister('f-vehiculo', async (q) => {
     const { data } = await sb.from('vehiculos').select('id,patente,marca,modelo').eq('taller_id',tid()).or('patente.ilike.%'+q+'%,marca.ilike.%'+q+'%').limit(8);
     return (data||[]).map(v => ({ id:v.id, label:v.patente+' — '+v.marca+' '+(v.modelo||'') }));
@@ -720,7 +742,6 @@ async function modalEditarReparacion(id) {
     const { data } = await sb.from('clientes').select('id,nombre,telefono').eq('taller_id',tid()).ilike('nombre','%'+q+'%').limit(8);
     return (data||[]).map(c => ({ id:c.id, label:c.nombre+(c.telefono?' — '+c.telefono:'') }));
   });
-  // Pre-fill current vehicle/client
   if (r.vehiculo_id && vehs) {
     const v = vehs.find(v=>v.id===r.vehiculo_id);
     if (v) ssSetValue('f-vehiculo', v.id, v.patente+' — '+v.marca);
