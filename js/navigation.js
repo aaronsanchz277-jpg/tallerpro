@@ -7,7 +7,7 @@ function buildNav() {
   // === BOTTOM NAV (4 items más usados) ===
   bottomItems.push({ id: 'dashboard', label: t('navInicio'), icon: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>' });
 
-  if (rol === 'admin' || rol === 'empleado') {
+  if (rol === 'admin' || rol === 'empleado' || rol === 'superadmin') {
     bottomItems.push({ id: 'reparaciones', label: t('navReparaciones'), icon: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' });
     bottomItems.push({ id: 'clientes', label: t('navClientes'), icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' });
     bottomItems.push({ id: 'agenda', label: t('navAgenda'), icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' });
@@ -20,7 +20,7 @@ function buildNav() {
   }
 
   // === SIDEBAR (todas las secciones organizadas) ===
-  if (rol === 'admin' || rol === 'empleado') {
+  if (rol === 'admin' || rol === 'empleado' || rol === 'superadmin') {
     sidebarSections.push({ title: 'PRINCIPAL', items: [
       { id:'dashboard', label:'Inicio', icon:'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>' },
       { id:'reparaciones', label:'Trabajos', icon:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' },
@@ -43,7 +43,8 @@ function buildNav() {
     ]});
   }
 
-  if (rol === 'admin') {
+  // Sección VENTAS, FINANZAS y CONFIGURACIÓN solo para admin o superadmin
+  if (esAdmin()) {
     sidebarSections.push({ title: 'VENTAS', items: [
       { id:'presupuestos', label:'Presupuestos', icon:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>' },
       { id:'ventas-pos', label:'Ventas POS', icon:'<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>' },
@@ -59,6 +60,7 @@ function buildNav() {
     sidebarSections.push({ title: 'CONFIGURACIÓN', items: [
       { id:'empleados', label:'Empleados', icon:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' },
       { id:'usuarios', label:'Usuarios', icon:'<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>' },
+      { id:'sueldos', label:'Sueldos', icon:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
       { id:'mi-plan', label:'Mi Plan', icon:'<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>' },
       { id:'mi-perfil', label:'Mi Perfil', icon:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' },
     ]});
@@ -80,8 +82,8 @@ function buildNav() {
     ]});
   }
 
-  // Tests (solo admin)
-  if (rol === 'admin' && typeof tallerpro_testUI === 'function') {
+  // Tests (solo admin o superadmin)
+  if (esAdmin() && typeof tallerpro_testUI === 'function') {
     sidebarSections.push({ title: 'DEV', items: [
       { id:'_tests', label:'🧪 Tests', icon:'<path d="M9 2h6l-2 5h4l-7 9 2-6H7z"/>', onclick:'tallerpro_testUI()' },
     ]});
@@ -96,8 +98,8 @@ function buildNav() {
 
   // RENDER SIDEBAR
   const nombre = currentPerfil?.nombre || '';
-  const rolLabel = { admin:'Administrador', empleado:'Empleado', cliente:'Cliente' }[rol] || '';
-  const rolClass = { admin:'role-admin', empleado:'role-empleado', cliente:'role-cliente' }[rol] || '';
+  const rolLabel = { admin:'Administrador', empleado:'Empleado', cliente:'Cliente', superadmin:'Super Admin' }[rol] || '';
+  const rolClass = { admin:'role-admin', empleado:'role-empleado', cliente:'role-cliente', superadmin:'role-admin' }[rol] || '';
   document.getElementById('sidebar-user').textContent = nombre;
   document.getElementById('sidebar-role').innerHTML = `<span class="topbar-role ${rolClass}">${rolLabel}</span>`;
   
@@ -131,9 +133,9 @@ function closeSidebar() {
 
 async function navigate(page, params = {}) {
   const rol = currentPerfil?.rol;
-  // Proteger rutas de admin
-  const adminOnly = ['finanzas','facturacion','creditos','cuentas-pagar','reportes','empleados','usuarios','mi-plan','gastos','presupuestos','ventas-pos'];
-  if (adminOnly.includes(page) && rol !== 'admin') { toast('No tenés acceso a esta sección','error'); navigate('dashboard'); return; }
+  // Proteger rutas de admin (también para superadmin)
+  const adminOnly = ['finanzas','facturacion','creditos','cuentas-pagar','reportes','empleados','usuarios','mi-plan','gastos','presupuestos','ventas-pos','sueldos'];
+  if (adminOnly.includes(page) && !esAdmin()) { toast('No tenés acceso a esta sección','error'); navigate('dashboard'); return; }
   // Proteger rutas de admin/empleado
   const staffOnly = ['reparaciones','clientes','vehiculos','inventario','agenda','mantenimientos','quickservice','panel-trabajo'];
   if (staffOnly.includes(page) && rol === 'cliente') { navigate('mis-reparaciones'); return; }
@@ -148,7 +150,7 @@ async function navigate(page, params = {}) {
   const titles = { dashboard:t('inicio'), clientes:t('clientes'), vehiculos:t('vehiculos'), reparaciones:t('reparaciones'), inventario:t('inventario'), creditos:t('creditos'), empleados:t('empleados'), facturacion:t('facturas'), reportes:t('reportes'), usuarios:t('usuarios'), mantenimientos:t('navMantenimientos'), agenda:t('navAgenda'), 'mis-vehiculos':t('misAutos'), 'mis-reparaciones':t('misReps'), 'mis-mantenimientos':t('navMisMant'), 'mis-citas':t('navMisCitas') };
   
   document.getElementById('main-content').innerHTML = getSkeleton(page);
-  const pages = { dashboard, clientes, vehiculos, reparaciones, inventario, creditos, empleados, facturacion, reportes, usuarios, mantenimientos, agenda, finanzas, 'cuentas-pagar': cuentasPagar, 'mis-vehiculos': misVehiculos, 'mis-reparaciones': misReparaciones, 'mis-mantenimientos': misMantenimientos, 'mis-citas': misCitas, 'mi-plan': miPlan, 'super-admin': superAdminPanel, 'mis-trabajos': misTrabajos, 'mi-perfil': miPerfil, presupuestos, quickservice, 'ventas-pos': ventasPOS, gastos, 'panel-trabajo': panelTrabajo };
+  const pages = { dashboard, clientes, vehiculos, reparaciones, inventario, creditos, empleados, facturacion, reportes, usuarios, mantenimientos, agenda, finanzas, 'cuentas-pagar': cuentasPagar, 'mis-vehiculos': misVehiculos, 'mis-reparaciones': misReparaciones, 'mis-mantenimientos': misMantenimientos, 'mis-citas': misCitas, 'mi-plan': miPlan, 'super-admin': superAdminPanel, 'mis-trabajos': misTrabajos, 'mi-perfil': miPerfil, presupuestos, quickservice, 'ventas-pos': ventasPOS, gastos, 'panel-trabajo': panelTrabajo, sueldos };
   if (pages[page]) {
     try { await pages[page](params); }
     catch(err) { console.error(`Error en ${page}:`, err); document.getElementById('main-content').innerHTML = `<div class="empty"><p>Error al cargar. <button onclick="navigate('${page}')" style="color:var(--accent);background:none;border:none;cursor:pointer;text-decoration:underline">Reintentar</button></p></div>`; }
