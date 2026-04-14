@@ -52,14 +52,6 @@ async function reporteComparativas() {
     return (varPct > 0 ? '+' : '') + varPct.toFixed(1) + '%';
   }
 
-  function flecha(actual, anterior) {
-    return actual > anterior ? '↑' : actual < anterior ? '↓' : '→';
-  }
-
-  function colorVar(actual, anterior) {
-    return actual > anterior ? 'var(--success)' : actual < anterior ? 'var(--danger)' : 'var(--text2)';
-  }
-
   const ingresosMesActual = calcIngresos(repsActual, ventasActual);
   const ingresosMesAnterior = calcIngresos(repsAnterior, ventasAnterior);
   const gananciaMesActual = calcGanancia(repsActual);
@@ -82,7 +74,6 @@ async function reporteComparativas() {
       </div>
       
       <div id="comparativas-content">
-        <!-- Comparativa mensual -->
         <div style="font-family:var(--font-head);font-size:.9rem;color:var(--accent);margin-bottom:.5rem">📅 ESTE MES vs. MES ANTERIOR</div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
           ${renderFilaComparativa('Ingresos', ingresosMesActual, ingresosMesAnterior)}
@@ -92,7 +83,6 @@ async function reporteComparativas() {
           ${renderFilaComparativa('Ganancia neta', gananciaMesActual - gastosMesActual, gananciaMesAnterior - gastosMesAnterior)}
         </div>
 
-        <!-- Comparativa anual -->
         <div style="font-family:var(--font-head);font-size:.9rem;color:var(--accent);margin:1rem 0 .5rem">📆 ESTE AÑO vs. AÑO ANTERIOR</div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
           ${renderFilaComparativa('Ingresos', ingresosAnioActual, ingresosAnioAnterior)}
@@ -102,7 +92,6 @@ async function reporteComparativas() {
           ${renderFilaComparativa('Ganancia neta', gananciaAnioActual - gastosAnioActual, gananciaAnioAnterior - gastosAnioAnterior)}
         </div>
 
-        <!-- KPIs rápidos -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
           <div style="background:var(--surface2);border-radius:10px;padding:.6rem;text-align:center">
             <div style="font-size:.65rem;color:var(--text2)">Ticket promedio (mes)</div>
