@@ -42,7 +42,7 @@ async function usuarios() {
             <span style="font-family:var(--font-head);font-size:1.1rem;color:${c.tipo==='empleado'?'var(--accent2)':'var(--success)'};letter-spacing:3px">${h(c.codigo)}</span>
             <span style="font-size:.65rem;margin-left:.5rem;padding:2px 6px;border-radius:10px;background:${c.tipo==='empleado'?'rgba(255,107,53,.15)':'rgba(0,255,136,.15)'};color:${c.tipo==='empleado'?'var(--accent2)':'var(--success)'}">${c.tipo==='empleado'?'EMPLEADO':'CLIENTE'}</span>
           </div>
-          <button onclick="eliminarCodigo('${c.id}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 8px;cursor:pointer">✕</button>
+          <button onclick="eliminarCodigoConSafeCall('${c.id}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 8px;cursor:pointer">✕</button>
         </div>`).join('')}
     </div>` : ''}
 
@@ -52,32 +52,39 @@ async function usuarios() {
     ${renderSeccion(t('usClientes'), 'var(--success)', clientes)}`;
 }
 
+async function eliminarCodigoConSafeCall(id) {
+  await safeCall(async () => {
+    await eliminarCodigo(id);
+  }, null, 'No se pudo eliminar el código');
+}
+
 async function eliminarCodigo(id) {
   await sb.from('codigos_empleado').delete().eq('id', id);
-  toast('Código cancelado'); usuarios();
+  toast('Código cancelado');
+  usuarios();
 }
 
 async function cambiarRol(userId, rolActual) {
   const roles = ['admin','empleado','cliente'];
   const siguiente = roles[(roles.indexOf(rolActual)+1) % roles.length];
   confirmar(`¿Cambiar el rol a ${siguiente.toUpperCase()}?`, async () => {
-    await sb.from('perfiles').update({ rol: siguiente }).eq('id', userId);
-    toast('Rol actualizado','success'); usuarios();
+    await safeCall(async () => {
+      await sb.from('perfiles').update({ rol: siguiente }).eq('id', userId);
+      toast('Rol actualizado','success');
+      usuarios();
+    }, null, 'No se pudo cambiar el rol');
   });
 }
 
 async function modalVincularVehiculo(perfilId, nombreUsuario) {
-  // Obtener cliente_id del perfil
   const { data: perfil } = await sb.from('perfiles').select('cliente_id').eq('id', perfilId).maybeSingle();
 
-  // Vehículos sin propietario del taller
   const { data: vehiculosSin } = await sb.from('vehiculos')
     .select('id, patente, marca, modelo')
     .eq('taller_id', tid())
     .is('cliente_id', null)
     .order('patente');
 
-  // Vehículos ya asignados a este cliente
   let vehiculosAsignados = [];
   if (perfil?.cliente_id) {
     const { data } = await sb.from('vehiculos')
@@ -96,7 +103,7 @@ async function modalVincularVehiculo(perfilId, nombreUsuario) {
       ${vehiculosAsignados.map(v => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
           <span style="font-size:.85rem">${h(v.patente)} · ${h(v.marca)} ${h(v.modelo||'')}</span>
-          <button onclick="desvincularVehiculo('${v.id}','${perfilId}','${h(nombreUsuario)}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 8px;cursor:pointer">✕ Quitar</button>
+          <button onclick="desvincularVehiculoConSafeCall('${v.id}','${perfilId}','${h(nombreUsuario)}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 8px;cursor:pointer">✕ Quitar</button>
         </div>`).join('')}
     </div>` : ''}
 
@@ -105,20 +112,24 @@ async function modalVincularVehiculo(perfilId, nombreUsuario) {
     ${(vehiculosSin||[]).map(v => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
         <span style="font-size:.85rem">${h(v.patente)} · ${h(v.marca)} ${h(v.modelo||'')}</span>
-        <button onclick="vincularVehiculoACliente('${v.id}','${perfilId}','${h(nombreUsuario)}')" style="font-size:.7rem;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.3);color:var(--accent);border-radius:6px;padding:2px 8px;cursor:pointer">+ Asignar</button>
+        <button onclick="vincularVehiculoAClienteConSafeCall('${v.id}','${perfilId}','${h(nombreUsuario)}')" style="font-size:.7rem;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.3);color:var(--accent);border-radius:6px;padding:2px 8px;cursor:pointer">+ Asignar</button>
       </div>`).join('')}
     ` : `<p style="color:var(--text2);font-size:.82rem">No hay vehículos sin propietario.</p>`}
 
     <button class="btn-secondary" onclick="closeModal()" style="margin-top:1rem">CERRAR</button>`);
 }
 
+async function vincularVehiculoAClienteConSafeCall(vehiculoId, perfilId, nombreUsuario) {
+  await safeCall(async () => {
+    await vincularVehiculoACliente(vehiculoId, perfilId, nombreUsuario);
+  }, null, 'No se pudo vincular el vehículo');
+}
+
 async function vincularVehiculoACliente(vehiculoId, perfilId, nombreUsuario) {
-  // Obtener o crear ficha de cliente
   const { data: perfil } = await sb.from('perfiles').select('cliente_id, nombre').eq('id', perfilId).maybeSingle();
   let clienteId = perfil?.cliente_id;
 
   if (!clienteId) {
-    // Crear ficha de cliente si no existe
     const { data: cli } = await sb.from('clientes')
       .insert({ nombre: perfil?.nombre || nombreUsuario, taller_id: tid() })
       .select().single();
@@ -128,13 +139,21 @@ async function vincularVehiculoACliente(vehiculoId, perfilId, nombreUsuario) {
   }
 
   await offlineUpdate('vehiculos', { cliente_id: clienteId }, 'id', vehiculoId);
+  invalidateComponentCache();
   toast('Vehículo asignado','success');
   closeModal();
   modalVincularVehiculo(perfilId, nombreUsuario);
 }
 
+async function desvincularVehiculoConSafeCall(vehiculoId, perfilId, nombreUsuario) {
+  await safeCall(async () => {
+    await desvincularVehiculo(vehiculoId, perfilId, nombreUsuario);
+  }, null, 'No se pudo desvincular el vehículo');
+}
+
 async function desvincularVehiculo(vehiculoId, perfilId, nombreUsuario) {
   await offlineUpdate('vehiculos', { cliente_id: null }, 'id', vehiculoId);
+  invalidateComponentCache();
   toast('Vehículo desvinculado','success');
   closeModal();
   modalVincularVehiculo(perfilId, nombreUsuario);
@@ -155,7 +174,7 @@ function modalInvitarUsuario() {
       <p style="color:var(--text2);font-size:.82rem;margin-bottom:1rem">
         Generá un código y enviáselo al empleado junto con el link de registro.
       </p>
-      <button class="btn-primary" onclick="generarCodigo('empleado')">GENERAR CÓDIGO</button>
+      <button class="btn-primary" onclick="generarCodigoConSafeCall('empleado')">GENERAR CÓDIGO</button>
       <div id="codigo-generado-empleado" style="display:none;margin-top:1rem">
         <div style="background:var(--surface2);border:1px solid var(--accent2);border-radius:10px;padding:1rem;text-align:center;margin-bottom:.75rem">
           <div style="font-size:.72rem;color:var(--text2);margin-bottom:.4rem">CÓDIGO DE EMPLEADO</div>
@@ -174,7 +193,7 @@ function modalInvitarUsuario() {
       <p style="color:var(--text2);font-size:.82rem;margin-bottom:1rem">
         Generá un código y enviáselo al cliente junto con el link de registro.
       </p>
-      <button class="btn-primary" onclick="generarCodigo('cliente')">GENERAR CÓDIGO</button>
+      <button class="btn-primary" onclick="generarCodigoConSafeCall('cliente')">GENERAR CÓDIGO</button>
       <div id="codigo-generado-cliente" style="display:none;margin-top:1rem">
         <div style="background:var(--surface2);border:1px solid var(--success);border-radius:10px;padding:1rem;text-align:center;margin-bottom:.75rem">
           <div style="font-size:.72rem;color:var(--text2);margin-bottom:.4rem">CÓDIGO DE CLIENTE</div>
@@ -199,6 +218,12 @@ function switchInviteTab(tipo, btn) {
   document.getElementById('invite-cliente').style.display = tipo==='cliente' ? 'block' : 'none';
 }
 
+async function generarCodigoConSafeCall(tipo) {
+  await safeCall(async () => {
+    await generarCodigo(tipo);
+  }, null, 'No se pudo generar el código');
+}
+
 async function generarCodigo(tipo) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   for (let intento = 0; intento < 3; intento++) {
@@ -215,7 +240,8 @@ async function generarCodigo(tipo) {
       return;
     }
     if (error.code === '23505' || error.message?.includes('duplicate')) continue;
-    toast('Error al generar código','error'); return;
+    toast('Error al generar código','error');
+    return;
   }
   toast('Error: no se pudo generar código único','error');
 }
@@ -237,4 +263,3 @@ function compartirWhatsApp(tipo) {
   const texto = `Hola! Te invito a registrarte como ${tipoLabel} en *${tallerNombre}* en TallerPro.\n\n👉 Abrí este link:\n${link}\n\n🔑 Tu código: *${codigo}*\n\nEl código es de un solo uso.`;
   window.open('https://wa.me/?text=' + encodeURIComponent(texto));
 }
-
