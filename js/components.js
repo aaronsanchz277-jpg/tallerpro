@@ -69,7 +69,6 @@ function renderNotasTextarea(id, value = '', rows = 2) {
   return `<textarea class="form-input" id="${id}" rows="${rows}" placeholder="Observaciones...">${h(value)}</textarea>`;
 }
 
-// Interceptar operaciones offline para invalidar caché
 const originalOfflineInsert = offlineInsert;
 offlineInsert = async function(table, data) {
   const result = await originalOfflineInsert(table, data);
