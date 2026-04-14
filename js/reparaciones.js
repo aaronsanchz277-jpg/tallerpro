@@ -96,7 +96,6 @@ async function detalleReparacion(id) {
   const aprobBadge = aprobacion === 'aprobado' ? 'badge-green' : aprobacion === 'rechazado' ? 'badge-red' : 'badge-yellow';
   const aprobLabel = aprobacion === 'aprobado' ? '✓ Aprobado' : aprobacion === 'rechazado' ? '✕ Rechazado' : '⏳ Pendiente';
 
-  // Cargar ítems y pagos
   const items = await cargarItemsReparacion(id);
   const { data: pagos } = await sb.from('pagos_reparacion').select('monto').eq('reparacion_id', id);
   const totalPagado = (pagos||[]).reduce((s,p) => s + parseFloat(p.monto||0), 0);
@@ -143,7 +142,6 @@ async function detalleReparacion(id) {
       ${canEdit ? `<button onclick="modalActualizarCosto('${id}',${r.costo},${r.costo_repuestos||0})" style="width:100%;margin-top:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.4rem;font-size:.72rem;color:var(--text2);cursor:pointer">✏️ Actualizar costos</button>` : ''}
     </div>
 
-    <!-- ÍTEMS DETALLADOS -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
         <span style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:1px">📦 ÍTEMS DETALLADOS</span>
@@ -278,38 +276,40 @@ function llenarDesdeInventario() {
 }
 
 async function guardarItemReparacion(repId) {
-  const tipo = document.getElementById('item-tipo').value;
-  const desc = document.getElementById('item-desc').value.trim();
-  const cant = parseFloat(document.getElementById('item-cant').value) || 1;
-  const precio = parseFloat(document.getElementById('item-precio').value) || 0;
-  if (!desc) { toast('La descripción es obligatoria','error'); return; }
-  
-  const { error } = await sb.from('reparacion_items').insert({
-    reparacion_id: repId,
-    tipo,
-    descripcion: desc,
-    cantidad: cant,
-    precio_unitario: precio,
-    taller_id: tid()
-  });
-  if (error) { toast('Error: '+error.message,'error'); return; }
-  
-  const invId = document.getElementById('item-inv').value;
-  if (invId && tipo === 'producto') {
-    const { data: inv } = await sb.from('inventario').select('cantidad').eq('id', invId).single();
-    if (inv) {
-      await sb.from('inventario').update({ cantidad: Math.max(0, parseFloat(inv.cantidad) - cant) }).eq('id', invId);
+  await safeCall(async () => {
+    const tipo = document.getElementById('item-tipo').value;
+    const desc = document.getElementById('item-desc').value.trim();
+    const cant = parseFloat(document.getElementById('item-cant').value) || 1;
+    const precio = parseFloat(document.getElementById('item-precio').value) || 0;
+    if (!validateRequired(desc, 'Descripción')) return;
+    
+    const { error } = await sb.from('reparacion_items').insert({
+      reparacion_id: repId,
+      tipo,
+      descripcion: desc,
+      cantidad: cant,
+      precio_unitario: precio,
+      taller_id: tid()
+    });
+    if (error) { toast('Error: '+error.message,'error'); return; }
+    
+    const invId = document.getElementById('item-inv').value;
+    if (invId && tipo === 'producto') {
+      const { data: inv } = await sb.from('inventario').select('cantidad').eq('id', invId).single();
+      if (inv) {
+        await sb.from('inventario').update({ cantidad: Math.max(0, parseFloat(inv.cantidad) - cant) }).eq('id', invId);
+      }
     }
-  }
-  
-  const { data: rep } = await sb.from('reparaciones').select('costo_repuestos').eq('id', repId).single();
-  const nuevoCosto = parseFloat(rep?.costo_repuestos||0) + (tipo==='producto' ? precio*cant : 0);
-  await sb.from('reparaciones').update({ costo_repuestos: nuevoCosto }).eq('id', repId);
-  
-  clearCache('reparaciones'); clearCache('inventario');
-  toast('Ítem agregado', 'success');
-  closeModal();
-  detalleReparacion(repId);
+    
+    const { data: rep } = await sb.from('reparaciones').select('costo_repuestos').eq('id', repId).single();
+    const nuevoCosto = parseFloat(rep?.costo_repuestos||0) + (tipo==='producto' ? precio*cant : 0);
+    await sb.from('reparaciones').update({ costo_repuestos: nuevoCosto }).eq('id', repId);
+    
+    clearCache('reparaciones'); clearCache('inventario');
+    toast('Ítem agregado', 'success');
+    closeModal();
+    detalleReparacion(repId);
+  }, null, 'No se pudo agregar el ítem');
 }
 
 // ─── CAMBIAR ESTADO (con control de pagos) ──────────────────────────────────
@@ -412,62 +412,67 @@ async function modalPagosReparacion(repId, montoSugerido = null) {
 }
 
 async function guardarPagoReparacion(repId) {
-  if (guardando()) return;
-  const monto = parseFloat(document.getElementById('f-pago-monto').value);
-  if (!monto || monto <= 0) { toast('El monto debe ser mayor a 0','error'); return; }
-  const metodo = document.getElementById('f-pago-metodo').value;
-  const notas = document.getElementById('f-pago-notas').value;
-  const fecha = new Date().toISOString().split('T')[0];
-  
-  const { data: pago, error } = await sb.from('pagos_reparacion').insert({
-    reparacion_id: repId,
-    monto,
-    metodo,
-    notas,
-    fecha,
-    taller_id: tid()
-  }).select('id').single();
-  
-  if (error) { toast('Error: '+error.message,'error'); return; }
-  
-  if (metodo !== 'Crédito') {
-    const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id',tid()).eq('nombre','Reparaciones').limit(1);
-    if (cats?.length) {
-      const { data: rep } = await sb.from('reparaciones').select('descripcion').eq('id',repId).single();
-      await sb.from('movimientos_financieros').insert({
-        taller_id: tid(),
-        tipo: 'ingreso',
-        categoria_id: cats[0].id,
-        monto,
-        descripcion: 'Pago: ' + (rep?.descripcion||'') + ' (' + metodo + ')',
-        fecha,
-        referencia_id: pago.id,
-        referencia_tabla: 'pagos_reparacion'
-      });
+  await safeCall(async () => {
+    const monto = parseFloat(document.getElementById('f-pago-monto').value);
+    if (!validatePositiveNumber(monto, 'Monto')) return;
+    
+    const metodo = document.getElementById('f-pago-metodo').value;
+    const notas = document.getElementById('f-pago-notas').value;
+    const fecha = new Date().toISOString().split('T')[0];
+    
+    const { data: pago, error } = await sb.from('pagos_reparacion').insert({
+      reparacion_id: repId,
+      monto,
+      metodo,
+      notas,
+      fecha,
+      taller_id: tid()
+    }).select('id').single();
+    
+    if (error) { toast('Error: '+error.message,'error'); return; }
+    
+    if (metodo !== 'Crédito') {
+      const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id',tid()).eq('nombre','Reparaciones').limit(1);
+      if (cats?.length) {
+        const { data: rep } = await sb.from('reparaciones').select('descripcion').eq('id',repId).single();
+        await sb.from('movimientos_financieros').insert({
+          taller_id: tid(),
+          tipo: 'ingreso',
+          categoria_id: cats[0].id,
+          monto,
+          descripcion: 'Pago: ' + (rep?.descripcion||'') + ' (' + metodo + ')',
+          fecha,
+          referencia_id: pago.id,
+          referencia_tabla: 'pagos_reparacion'
+        });
+      }
+    } else {
+      const { data: rep } = await sb.from('reparaciones').select('cliente_id,descripcion').eq('id',repId).single();
+      if (rep?.cliente_id) {
+        await sb.from('fiados').insert({
+          cliente_id: rep.cliente_id,
+          monto,
+          descripcion: 'Crédito: ' + (rep.descripcion||''),
+          pagado: false,
+          taller_id: tid()
+        });
+        clearCache('creditos');
+      }
     }
-  } else {
-    const { data: rep } = await sb.from('reparaciones').select('cliente_id,descripcion').eq('id',repId).single();
-    if (rep?.cliente_id) {
-      await sb.from('fiados').insert({
-        cliente_id: rep.cliente_id,
-        monto,
-        descripcion: 'Crédito: ' + (rep.descripcion||''),
-        pagado: false,
-        taller_id: tid()
-      });
-      clearCache('creditos');
-    }
-  }
-  
-  clearCache('reparaciones');
-  toast('Pago registrado', 'success');
-  closeModal();
-  detalleReparacion(repId);
+    
+    clearCache('reparaciones');
+    toast('Pago registrado', 'success');
+    closeModal();
+    detalleReparacion(repId);
+  }, null, 'No se pudo registrar el pago');
 }
 
 // ─── MODALES DE NUEVA/EDITAR REPARACIÓN ─────────────────────────────────────
 async function modalNuevaReparacion() {
-  const { data:inv } = await sb.from('inventario').select('id,nombre,cantidad,precio_unitario').eq('taller_id',tid()).order('nombre').limit(200);
+  const clientesSelect = await renderClienteSelect('f-cliente', null, true);
+  const vehiculosSelect = await renderVehiculoSelect('f-vehiculo', null, null, true);
+  const estadoSelect = renderEstadoSelect('f-estado', 'pendiente');
+  
   openModal(`
     <div class="modal-title">Nuevo Trabajo</div>
     <div class="form-group"><label class="form-label">Tipo de trabajo</label>
@@ -477,8 +482,8 @@ async function modalNuevaReparacion() {
     </div>
     <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="f-desc" placeholder="Cambio de pastillas delanteras"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">${t("lblCosto")}</label><input class="form-input" id="f-costo" type="number" min="0" placeholder="Total facturado"></div>
-      <div class="form-group"><label class="form-label">Costo repuestos</label><input class="form-input" id="f-costo-rep" type="number" min="0" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">${t("lblCosto")}</label>${renderMontoInput('f-costo', '', 'Total facturado')}</div>
+      <div class="form-group"><label class="form-label">Costo repuestos</label>${renderMontoInput('f-costo-rep', '0', '0')}</div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Kilometraje actual</label><input class="form-input" id="f-km" type="number" placeholder="Ej: 45000"></div>
@@ -489,20 +494,10 @@ async function modalNuevaReparacion() {
         </select>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">${t("lblFecha")}</label><input class="form-input" id="f-fecha" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
-    <div class="form-group"><label class="form-label">${t("lblEstado")}</label>
-      <select class="form-input" id="f-estado">
-        <option value="pendiente">${t('repPendiente')}</option>
-        <option value="en_progreso">${t('repEnProgreso')}</option>
-        <option value="esperando_repuestos">Esperando repuestos</option>
-        <option value="finalizado">${t('repFinalizadas')}</option>
-      </select>
-    </div>
-    <div class="form-group"><label class="form-label">Cliente</label>
-      ${searchableSelect('f-cliente','Buscar cliente por nombre...')}
-    </div>
-    <div class="form-group"><label class="form-label">Vehículo</label>
-      ${searchableSelect('f-vehiculo','Buscar por patente o marca...')}
+    <div class="form-group"><label class="form-label">${t("lblFecha")}</label>${renderFechaInput('f-fecha')}</div>
+    <div class="form-group"><label class="form-label">${t("lblEstado")}</label>${estadoSelect}</div>
+    <div class="form-group"><label class="form-label">Cliente</label>${clientesSelect}</div>
+    <div class="form-group"><label class="form-label">Vehículo</label>${vehiculosSelect}
       <button onclick="toggleNuevoVehRep()" id="btn-toggle-nv" style="margin-top:.4rem;width:100%;background:rgba(0,229,255,.08);color:var(--accent);border:1px solid rgba(0,229,255,.2);border-radius:8px;padding:.45rem;font-size:.78rem;cursor:pointer;font-family:var(--font-head)">+ Registrar vehículo nuevo</button>
     </div>
     <div id="nuevo-veh-rep" style="display:none;background:var(--surface2);border:1px solid var(--accent);border-radius:10px;padding:.75rem;margin-bottom:.75rem">
@@ -521,51 +516,33 @@ async function modalNuevaReparacion() {
       </div>
       <div style="font-size:.7rem;color:var(--text2);margin-top:.3rem">Se vinculará al cliente seleccionado arriba automáticamente.</div>
     </div>
-    <div class="form-group"><label class="form-label">${t("lblNotas")}</label><textarea class="form-input" id="f-notas" rows="2"></textarea></div>
-    <button class="btn-primary" onclick="guardarReparacion()">${t('guardar')}</button>
+    <div class="form-group"><label class="form-label">${t("lblNotas")}</label>${renderNotasTextarea('f-notas')}</div>
+    <button class="btn-primary" onclick="guardarReparacionConSafeCall()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
-    
-  ssRegister('f-cliente', async (q) => {
-    const { data } = await sb.from('clientes').select('id,nombre,telefono').eq('taller_id',tid()).ilike('nombre','%'+q+'%').limit(8);
-    return (data||[]).map(c => ({ id:c.id, label:c.nombre+(c.telefono?' — '+c.telefono:'') }));
-  });
-  ssRegister('f-vehiculo', async (q) => {
-    const clienteId = document.getElementById('f-cliente')?.value;
-    let query = sb.from('vehiculos').select('id,patente,marca,modelo,clientes(nombre)').eq('taller_id',tid());
-    if (clienteId) query = query.eq('cliente_id', clienteId);
-    if (q) query = query.or('patente.ilike.%'+q+'%,marca.ilike.%'+q+'%');
-    const { data } = await query.limit(8);
-    return (data||[]).map(v => ({ id:v.id, label:v.patente+' — '+v.marca+' '+(v.modelo||'')+(v.clientes?' ('+v.clientes.nombre+')':'') }));
-  });
 }
 
 function toggleNuevoVehRep() {
   const el = document.getElementById('nuevo-veh-rep');
   const btn = document.getElementById('btn-toggle-nv');
-  const searchInput = document.getElementById('f-vehiculo-search');
   if (el.style.display === 'none') {
     el.style.display = 'block';
-    document.getElementById('f-vehiculo').value = '';
-    if (searchInput) { searchInput.value = ''; searchInput.disabled = true; searchInput.placeholder = 'Creando vehículo nuevo...'; }
     if (btn) btn.textContent = '✕ Cancelar vehículo nuevo';
-    if (btn) btn.style.background = 'rgba(255,68,68,.08)';
-    if (btn) btn.style.color = 'var(--danger)';
-    if (btn) btn.style.borderColor = 'rgba(255,68,68,.2)';
   } else {
     el.style.display = 'none';
-    if (searchInput) { searchInput.disabled = false; searchInput.placeholder = 'Buscar por patente o marca...'; }
     if (btn) btn.textContent = '+ Registrar vehículo nuevo';
-    if (btn) btn.style.background = 'rgba(0,229,255,.08)';
-    if (btn) btn.style.color = 'var(--accent)';
-    if (btn) btn.style.borderColor = 'rgba(0,229,255,.2)';
-    ['f-nv-patente','f-nv-marca','f-nv-modelo','f-nv-anio','f-nv-color'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
   }
 }
 
+async function guardarReparacionConSafeCall() {
+  await safeCall(async () => {
+    await guardarReparacion();
+  }, null, 'No se pudo guardar el trabajo');
+}
+
 async function guardarReparacion(id=null) {
-  if (guardando()) return;
   const desc = document.getElementById('f-desc').value.trim();
-  if (!desc) { toast('La descripción es obligatoria','error'); return; }
+  if (!validateRequired(desc, 'Descripción')) return;
+  
   let vid = document.getElementById('f-vehiculo').value;
   const cid = document.getElementById('f-cliente').value;
 
@@ -583,6 +560,7 @@ async function guardarReparacion(id=null) {
     if (vErr) { toast('Error creando vehículo: '+vErr.message,'error'); return; }
     vid = nuevoVeh.id;
     toast('Vehículo '+nvPatente+' creado','success');
+    invalidateComponentCache();
   }
 
   const costoRep = parseFloat(document.getElementById('f-costo-rep')?.value) || 0;
@@ -625,11 +603,11 @@ async function guardarReparacion(id=null) {
 }
 
 async function modalEditarReparacion(id) {
-  const [{ data:r }, { data:vehs }, { data:cls }] = await Promise.all([
-    sb.from('reparaciones').select('*').eq('id',id).single(),
-    sb.from('vehiculos').select('id,patente,marca').eq('taller_id',tid()).order('patente'),
-    sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre')
-  ]);
+  const [{ data:r }] = await Promise.all([sb.from('reparaciones').select('*').eq('id',id).single()]);
+  const clientesSelect = await renderClienteSelect('f-cliente', r.cliente_id, true);
+  const vehiculosSelect = await renderVehiculoSelect('f-vehiculo', r.vehiculo_id, null, true);
+  const estadoSelect = renderEstadoSelect('f-estado', r.estado);
+  
   openModal(`
     <div class="modal-title">Editar Trabajo</div>
     <div class="form-group"><label class="form-label">Tipo de trabajo</label>
@@ -639,52 +617,26 @@ async function modalEditarReparacion(id) {
     </div>
     <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="f-desc" value="${h(r.descripcion||'')}"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">${t("lblCosto")}</label><input class="form-input" id="f-costo" type="number" min="0" value="${r.costo||0}"></div>
-      <div class="form-group"><label class="form-label">Costo repuestos</label><input class="form-input" id="f-costo-rep" type="number" min="0" value="${r.costo_repuestos||0}"></div>
+      <div class="form-group"><label class="form-label">${t("lblCosto")}</label>${renderMontoInput('f-costo', r.costo||0)}</div>
+      <div class="form-group"><label class="form-label">Costo repuestos</label>${renderMontoInput('f-costo-rep', r.costo_repuestos||0)}</div>
     </div>
-    <div class="form-group"><label class="form-label">${t("lblFecha")}</label><input class="form-input" id="f-fecha" type="date" value="${r.fecha||''}"></div>
-    <div class="form-group"><label class="form-label">${t("lblEstado")}</label>
-      <select class="form-input" id="f-estado">
-        <option value="pendiente" ${r.estado==='pendiente'?'selected':''}>${t('repPendiente')}</option>
-        <option value="en_progreso" ${r.estado==='en_progreso'?'selected':''}>${t('repEnProgreso')}</option>
-        <option value="esperando_repuestos" ${r.estado==='esperando_repuestos'?'selected':''}>Esperando repuestos</option>
-        <option value="finalizado" ${r.estado==='finalizado'?'selected':''}>${t('repFinalizadas')}</option>
-      </select>
-    </div>
-    <div class="form-group"><label class="form-label">Vehículo</label>
-      ${searchableSelect('f-vehiculo','Buscar por patente o marca...')}
-    </div>
-    <div class="form-group"><label class="form-label">Cliente</label>
-      ${searchableSelect('f-cliente','Buscar cliente por nombre...')}
-    </div>
-    <div class="form-group"><label class="form-label">${t("lblNotas")}</label><textarea class="form-input" id="f-notas" rows="2">${h(r.notas||'')}</textarea></div>
-    <button class="btn-primary" onclick="guardarReparacion('${id}')">${t('actualizar')}</button>
+    <div class="form-group"><label class="form-label">${t("lblFecha")}</label>${renderFechaInput('f-fecha', r.fecha)}</div>
+    <div class="form-group"><label class="form-label">${t("lblEstado")}</label>${estadoSelect}</div>
+    <div class="form-group"><label class="form-label">Vehículo</label>${vehiculosSelect}</div>
+    <div class="form-group"><label class="form-label">Cliente</label>${clientesSelect}</div>
+    <div class="form-group"><label class="form-label">${t("lblNotas")}</label>${renderNotasTextarea('f-notas', r.notas)}</div>
+    <button class="btn-primary" onclick="guardarReparacionConSafeCall('${id}')">${t('actualizar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
-    
-  ssRegister('f-vehiculo', async (q) => {
-    const { data } = await sb.from('vehiculos').select('id,patente,marca,modelo').eq('taller_id',tid()).or('patente.ilike.%'+q+'%,marca.ilike.%'+q+'%').limit(8);
-    return (data||[]).map(v => ({ id:v.id, label:v.patente+' — '+v.marca+' '+(v.modelo||'') }));
-  });
-  ssRegister('f-cliente', async (q) => {
-    const { data } = await sb.from('clientes').select('id,nombre,telefono').eq('taller_id',tid()).ilike('nombre','%'+q+'%').limit(8);
-    return (data||[]).map(c => ({ id:c.id, label:c.nombre+(c.telefono?' — '+c.telefono:'') }));
-  });
-  if (r.vehiculo_id && vehs) {
-    const v = vehs.find(v=>v.id===r.vehiculo_id);
-    if (v) ssSetValue('f-vehiculo', v.id, v.patente+' — '+v.marca);
-  }
-  if (r.cliente_id && cls) {
-    const c = cls.find(c=>c.id===r.cliente_id);
-    if (c) ssSetValue('f-cliente', c.id, c.nombre);
-  }
 }
 
 async function eliminarReparacion(id) {
   confirmar('Esta acción eliminará el trabajo permanentemente.', async () => {
-    await offlineDelete('reparaciones', 'id', id);
-    clearCache('reparaciones');
-    toast('Trabajo eliminado');
-    navigate('reparaciones');
+    await safeCall(async () => {
+      await offlineDelete('reparaciones', 'id', id);
+      clearCache('reparaciones');
+      toast('Trabajo eliminado');
+      navigate('reparaciones');
+    }, null, 'No se pudo eliminar el trabajo');
   });
 }
 
@@ -699,20 +651,21 @@ function modalActualizarCosto(id, costoActual, repuestosActual) {
 }
 
 async function guardarActualizarCosto(id) {
-  if (guardando()) return;
-  const costo = parseFloat(document.getElementById('f-upd-costo').value) || 0;
-  const rep = parseFloat(document.getElementById('f-upd-rep').value) || 0;
-  const notasExtra = document.getElementById('f-upd-notas').value.trim();
-  const updates = { costo, costo_repuestos: rep };
-  if (notasExtra) {
-    const { data: r } = await sb.from('reparaciones').select('notas').eq('id',id).single();
-    updates.notas = ((r?.notas||'') + '\n' + notasExtra).trim();
-  }
-  await sb.from('reparaciones').update(updates).eq('id', id);
-  clearCache('reparaciones');
-  toast('Costos actualizados','success');
-  closeModal();
-  detalleReparacion(id);
+  await safeCall(async () => {
+    const costo = parseFloat(document.getElementById('f-upd-costo').value) || 0;
+    const rep = parseFloat(document.getElementById('f-upd-rep').value) || 0;
+    const notasExtra = document.getElementById('f-upd-notas').value.trim();
+    const updates = { costo, costo_repuestos: rep };
+    if (notasExtra) {
+      const { data: r } = await sb.from('reparaciones').select('notas').eq('id',id).single();
+      updates.notas = ((r?.notas||'') + '\n' + notasExtra).trim();
+    }
+    await sb.from('reparaciones').update(updates).eq('id', id);
+    clearCache('reparaciones');
+    toast('Costos actualizados','success');
+    closeModal();
+    detalleReparacion(id);
+  }, null, 'No se pudo actualizar los costos');
 }
 
 function aprobarPresupuestoCliente(repId, decision) {
@@ -720,13 +673,11 @@ function aprobarPresupuestoCliente(repId, decision) {
     ? '¿Confirmás que aprobás este presupuesto?' 
     : '¿Confirmás que rechazás este presupuesto?';
   if (!confirm(confirmMsg)) return;
-  offlineUpdate('reparaciones', { 
-    aprobacion_cliente: decision, 
-    fecha_aprobacion: new Date().toISOString() 
-  }, 'id', repId).then(() => {
+  safeCall(async () => {
+    await offlineUpdate('reparaciones', { aprobacion_cliente: decision, fecha_aprobacion: new Date().toISOString() }, 'id', repId);
     toast(decision === 'aprobado' ? 'Presupuesto aprobado' : 'Presupuesto rechazado', decision === 'aprobado' ? 'success' : 'error');
     detalleReparacion(repId);
-  });
+  }, null, 'No se pudo procesar la aprobación');
 }
 
 function enviarAprobacionWhatsApp(repId) {
@@ -780,8 +731,12 @@ async function guardarChecklist(repId) {
   const obs = document.getElementById('f-obs-recepcion')?.value;
   if (km) checklist['_km'] = km;
   if (obs) checklist['_observaciones'] = obs;
-  await offlineUpdate('reparaciones', { checklist_recepcion: checklist }, 'id', repId);
-  toast('Checklist guardado','success'); closeModal(); detalleReparacion(repId);
+  await safeCall(async () => {
+    await offlineUpdate('reparaciones', { checklist_recepcion: checklist }, 'id', repId);
+    toast('Checklist guardado','success'); 
+    closeModal(); 
+    detalleReparacion(repId);
+  }, null, 'No se pudo guardar el checklist');
 }
 
 // ─── FOTOS POR ETAPA ─────────────────────────────────────────────────────────
@@ -812,23 +767,27 @@ async function subirFotosEtapa(repId, etapa) {
   const input = document.getElementById('f-fotos-etapa');
   if (!input.files.length) { toast('Seleccioná al menos una foto','error'); return; }
   toast('Subiendo fotos...','info');
-  const campo = etapa === 'recepcion' ? 'fotos_recepcion' : etapa === 'proceso' ? 'fotos_proceso' : 'fotos_entrega';
-  const { data:r } = await sb.from('reparaciones').select(campo).eq('id',repId).single();
-  const fotosExistentes = r?.[campo] || [];
-  const nuevasFotos = [];
+  await safeCall(async () => {
+    const campo = etapa === 'recepcion' ? 'fotos_recepcion' : etapa === 'proceso' ? 'fotos_proceso' : 'fotos_entrega';
+    const { data:r } = await sb.from('reparaciones').select(campo).eq('id',repId).single();
+    const fotosExistentes = r?.[campo] || [];
+    const nuevasFotos = [];
 
-  for (const file of input.files) {
-    const ext = file.name.split('.').pop();
-    const path = `${etapa}/${repId}/${Date.now()}_${Math.random().toString(36).substr(2,9)}.${ext}`;
-    const { error } = await sb.storage.from('fotos').upload(path, file);
-    if (!error) {
-      const { data } = sb.storage.from('fotos').getPublicUrl(path);
-      nuevasFotos.push(data.publicUrl);
+    for (const file of input.files) {
+      const ext = file.name.split('.').pop();
+      const path = `${etapa}/${repId}/${Date.now()}_${Math.random().toString(36).substr(2,9)}.${ext}`;
+      const { error } = await sb.storage.from('fotos').upload(path, file);
+      if (!error) {
+        const { data } = sb.storage.from('fotos').getPublicUrl(path);
+        nuevasFotos.push(data.publicUrl);
+      }
     }
-  }
-  const todasFotos = [...fotosExistentes, ...nuevasFotos];
-  await offlineUpdate('reparaciones', { [campo]: todasFotos }, 'id', repId);
-  toast(`${nuevasFotos.length} foto(s) subida(s)`,'success'); closeModal(); detalleReparacion(repId);
+    const todasFotos = [...fotosExistentes, ...nuevasFotos];
+    await offlineUpdate('reparaciones', { [campo]: todasFotos }, 'id', repId);
+    toast(`${nuevasFotos.length} foto(s) subida(s)`,'success'); 
+    closeModal(); 
+    detalleReparacion(repId);
+  }, null, 'Error al subir las fotos');
 }
 
 // ─── FICHA DE RECEPCIÓN ─────────────────────────────────────────────────────
@@ -870,17 +829,19 @@ async function modalFichaRecepcion(repId) {
 }
 
 async function confirmarIngreso(repId) {
-  const accesorios = [...document.querySelectorAll('.fr-acc:checked')].map(c=>c.value);
-  const estadoInterior = {};
-  document.querySelectorAll('.fr-estado-int').forEach(s=>{estadoInterior[s.getAttribute('data-parte')]=s.value;});
-  const ficha = {
-    kilometraje:document.getElementById('fr-km').value,combustible:document.getElementById('fr-comb').value,
-    fecha_entrega_aprox:document.getElementById('fr-entrega').value,accesorios,estado_interior:estadoInterior,
-    danos:document.getElementById('fr-danos').value,observaciones:document.getElementById('fr-obs').value,
-    fecha_ingreso:new Date().toISOString()
-  };
-  await sb.from('reparaciones').update({ ficha_recepcion:ficha, estado:'en_progreso' }).eq('id',repId);
-  clearCache('reparaciones');toast('✓ Vehículo ingresado al taller','success');closeModal();detalleReparacion(repId);
+  await safeCall(async () => {
+    const accesorios = [...document.querySelectorAll('.fr-acc:checked')].map(c=>c.value);
+    const estadoInterior = {};
+    document.querySelectorAll('.fr-estado-int').forEach(s=>{estadoInterior[s.getAttribute('data-parte')]=s.value;});
+    const ficha = {
+      kilometraje:document.getElementById('fr-km').value,combustible:document.getElementById('fr-comb').value,
+      fecha_entrega_aprox:document.getElementById('fr-entrega').value,accesorios,estado_interior:estadoInterior,
+      danos:document.getElementById('fr-danos').value,observaciones:document.getElementById('fr-obs').value,
+      fecha_ingreso:new Date().toISOString()
+    };
+    await sb.from('reparaciones').update({ ficha_recepcion:ficha, estado:'en_progreso' }).eq('id',repId);
+    clearCache('reparaciones');toast('✓ Vehículo ingresado al taller','success');closeModal();detalleReparacion(repId);
+  }, null, 'Error al confirmar ingreso');
 }
 
 function verFichaRecepcion(repId) {
@@ -937,6 +898,8 @@ async function generarCartaConformidad(repId) {
 }
 
 async function marcarEntregado(repId) {
-  await sb.from('reparaciones').update({ estado:'finalizado', fecha_entrega:new Date().toISOString() }).eq('id',repId);
-  clearCache('reparaciones');toast('✓ Vehículo entregado','success');closeModal();navigate('reparaciones');
+  await safeCall(async () => {
+    await sb.from('reparaciones').update({ estado:'finalizado', fecha_entrega:new Date().toISOString() }).eq('id',repId);
+    clearCache('reparaciones');toast('✓ Vehículo entregado','success');closeModal();navigate('reparaciones');
+  }, null, 'Error al marcar entregado');
 }
