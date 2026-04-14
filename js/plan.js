@@ -90,6 +90,3 @@ async function elegirPlan(planId) {
     <div style="font-size:.72rem;color:var(--text2);text-align:center;margin-bottom:1rem">Tu plan se activará en menos de 24 horas</div>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
 }
-
-// Las funciones de Super Admin (superAdminPanel, modalGestionarTaller, etc.) se movieron a auth.js para evitar duplicación de _isSuperAdmin.
-// Este archivo solo contiene lo relacionado al plan de suscripción del usuario.
