@@ -1,4 +1,4 @@
-// ─── MEJORA #7: GESTIÓN DE SUELDOS ──────────────────────────────────────────
+  // ─── MEJORA #7: GESTIÓN DE SUELDOS ──────────────────────────────────────────
 
 async function sueldos() {
   const { data: periodos } = await sb.from('periodos_sueldo').select('*').eq('taller_id', tid()).order('fecha_inicio', {ascending:false});
@@ -29,11 +29,17 @@ async function modalNuevoPeriodo() {
   openModal(`
     <div class="modal-title">Nuevo Período de Sueldo</div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Fecha inicio</label><input class="form-input" id="f-periodo-inicio" type="date" value="${primerDia}"></div>
-      <div class="form-group"><label class="form-label">Fecha fin</label><input class="form-input" id="f-periodo-fin" type="date" value="${ultimoDia}"></div>
+      <div class="form-group"><label class="form-label">Fecha inicio</label>${renderFechaInput('f-periodo-inicio', primerDia)}</div>
+      <div class="form-group"><label class="form-label">Fecha fin</label>${renderFechaInput('f-periodo-fin', ultimoDia)}</div>
     </div>
-    <button class="btn-primary" onclick="guardarPeriodo()">Crear Período</button>
+    <button class="btn-primary" onclick="guardarPeriodoConSafeCall()">Crear Período</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
+}
+
+async function guardarPeriodoConSafeCall() {
+  await safeCall(async () => {
+    await guardarPeriodo();
+  }, null, 'No se pudo crear el período');
 }
 
 async function guardarPeriodo() {
@@ -42,7 +48,9 @@ async function guardarPeriodo() {
   if (!inicio || !fin) { toast('Las fechas son obligatorias','error'); return; }
   const { error } = await sb.from('periodos_sueldo').insert({ fecha_inicio:inicio, fecha_fin:fin, taller_id:tid() });
   if (error) { toast('Error: '+error.message,'error'); return; }
-  toast('Período creado','success'); closeModal(); sueldos();
+  toast('Período creado','success');
+  closeModal(); 
+  sueldos();
 }
 
 async function detallePeriodo(periodoId) {
@@ -65,7 +73,7 @@ async function detallePeriodo(periodoId) {
       <div class="stat-card"><div class="stat-value" style="font-size:1.2rem">₲${gs(totalLiquidado)}</div><div class="stat-label">TOTAL</div></div>
       <div class="stat-card"><div class="stat-value" style="font-size:1.2rem;color:var(--success)">₲${gs(totalPagado)}</div><div class="stat-label">PAGADO</div></div>
     </div>
-    ${periodo.estado==='abierto'?`<button class="btn-primary" style="margin-bottom:1rem" onclick="generarLiquidaciones('${periodoId}')">⚡ Generar liquidaciones</button>`:''}
+    ${periodo.estado==='abierto'?`<button class="btn-primary" style="margin-bottom:1rem" onclick="generarLiquidacionesConSafeCall('${periodoId}')">⚡ Generar liquidaciones</button>`:''}
     ${(liquidaciones||[]).length === 0 ? '<div class="empty"><p>Sin liquidaciones. Tocá "Generar liquidaciones" para crear.</p></div>' :
       (liquidaciones||[]).map(l => `
       <div class="card" style="cursor:default">
@@ -77,11 +85,17 @@ async function detallePeriodo(periodoId) {
           </div>
           <div style="text-align:right">
             <div style="font-family:var(--font-head);font-size:1rem;color:${l.estado==='pagado'?'var(--success)':'var(--accent)'}">₲${gs(l.total_liquidado)}</div>
-            ${l.estado!=='pagado'&&periodo.estado==='abierto'?`<button onclick="registrarPagoSueldo('${l.id}')" style="font-size:.65rem;background:var(--success);color:#000;border:none;border-radius:6px;padding:2px 8px;cursor:pointer;margin-top:4px">Pagar</button>`:`<span style="font-size:.65rem;color:var(--success)">✓ Pagado</span>`}
+            ${l.estado!=='pagado'&&periodo.estado==='abierto'?`<button onclick="registrarPagoSueldoConSafeCall('${l.id}')" style="font-size:.65rem;background:var(--success);color:#000;border:none;border-radius:6px;padding:2px 8px;cursor:pointer;margin-top:4px">Pagar</button>`:`<span style="font-size:.65rem;color:var(--success)">✓ Pagado</span>`}
           </div>
         </div>
       </div>`).join('')}
-    ${periodo.estado==='abierto'?`<button class="btn-danger" style="margin-top:1rem" onclick="cerrarPeriodo('${periodoId}')">🔒 Cerrar período</button>`:''}`;
+    ${periodo.estado==='abierto'?`<button class="btn-danger" style="margin-top:1rem" onclick="cerrarPeriodoConSafeCall('${periodoId}')">🔒 Cerrar período</button>`:''}`;
+}
+
+async function generarLiquidacionesConSafeCall(periodoId) {
+  await safeCall(async () => {
+    await generarLiquidaciones(periodoId);
+  }, null, 'No se pudieron generar las liquidaciones');
 }
 
 async function generarLiquidaciones(periodoId) {
@@ -106,58 +120,56 @@ async function generarLiquidaciones(periodoId) {
   detallePeriodo(periodoId);
 }
 
-async function registrarPagoSueldo(liquidacionId) {
+async function registrarPagoSueldoConSafeCall(liquidacionId) {
   confirmar('¿Marcar esta liquidación como pagada?', async () => {
-    // Obtener datos de la liquidación (monto, empleado, período)
-    const { data: liq, error: liqErr } = await sb.from('liquidaciones')
-      .select('*, empleados(nombre), periodos_sueldo(fecha_inicio, fecha_fin)')
-      .eq('id', liquidacionId)
-      .single();
-    if (liqErr || !liq) { toast('Error al obtener liquidación','error'); return; }
+    await safeCall(async () => {
+      await registrarPagoSueldo(liquidacionId);
+    }, null, 'No se pudo registrar el pago');
+  });
+}
 
-    // Actualizar estado y fecha de pago
-    const fechaPago = new Date().toISOString().split('T')[0];
-    await sb.from('liquidaciones').update({ estado:'pagado', fecha_pago: fechaPago }).eq('id', liquidacionId);
+async function registrarPagoSueldo(liquidacionId) {
+  const { data: liq, error: liqErr } = await sb.from('liquidaciones')
+    .select('*, empleados(nombre), periodos_sueldo(fecha_inicio, fecha_fin)')
+    .eq('id', liquidacionId).single();
+  if (liqErr || !liq) { toast('Error al obtener liquidación','error'); return; }
 
-    // Crear movimiento financiero (egreso)
-    const { data: cats } = await sb.from('categorias_financieras')
-      .select('id')
-      .eq('taller_id', tid())
-      .eq('nombre', 'Sueldos')
-      .limit(1);
-    let catId = cats?.[0]?.id;
-    if (!catId) {
-      // Crear categoría 'Sueldos' si no existe
-      const { data: newCat, error: catErr } = await sb.from('categorias_financieras')
-        .insert({ taller_id: tid(), nombre: 'Sueldos', tipo: 'egreso', es_fija: true })
-        .select().single();
-      if (!catErr && newCat) catId = newCat.id;
-    }
-    if (catId) {
-      const descripcion = `Pago de sueldo a ${liq.empleados?.nombre || 'empleado'} (período ${formatFecha(liq.periodos_sueldo?.fecha_inicio)} - ${formatFecha(liq.periodos_sueldo?.fecha_fin)})`;
-      await sb.from('movimientos_financieros').insert({
-        taller_id: tid(),
-        tipo: 'egreso',
-        categoria_id: catId,
-        monto: liq.total_liquidado,
-        descripcion: descripcion,
-        fecha: fechaPago,
-        referencia_id: liquidacionId
-      });
-    }
+  const fechaPago = new Date().toISOString().split('T')[0];
+  await sb.from('liquidaciones').update({ estado:'pagado', fecha_pago: fechaPago }).eq('id', liquidacionId);
 
-    toast('✓ Sueldo marcado como pagado y registrado en Finanzas', 'success');
-    // Refrescar vista
-    const { data: liq2 } = await sb.from('liquidaciones').select('periodo_id').eq('id', liquidacionId).single();
-    if (liq2) detallePeriodo(liq2.periodo_id);
+  const { data: cats } = await sb.from('categorias_financieras')
+    .select('id').eq('taller_id', tid()).eq('nombre', 'Sueldos').limit(1);
+  let catId = cats?.[0]?.id;
+  if (!catId) {
+    const { data: newCat } = await sb.from('categorias_financieras')
+      .insert({ taller_id: tid(), nombre: 'Sueldos', tipo: 'egreso', es_fija: true }).select().single();
+    if (newCat) catId = newCat.id;
+  }
+  if (catId) {
+    const descripcion = `Pago de sueldo a ${liq.empleados?.nombre || 'empleado'} (período ${formatFecha(liq.periodos_sueldo?.fecha_inicio)} - ${formatFecha(liq.periodos_sueldo?.fecha_fin)})`;
+    await sb.from('movimientos_financieros').insert({
+      taller_id: tid(), tipo: 'egreso', categoria_id: catId, monto: liq.total_liquidado,
+      descripcion: descripcion, fecha: fechaPago, referencia_id: liquidacionId, referencia_tabla: 'liquidaciones'
+    });
+  }
+
+  clearCache('finanzas');
+  toast('✓ Sueldo marcado como pagado y registrado en Finanzas', 'success');
+  detallePeriodo(liq.periodo_id);
+}
+
+async function cerrarPeriodoConSafeCall(periodoId) {
+  confirmar('¿Cerrar este período? No se podrán hacer más cambios.', async () => {
+    await safeCall(async () => {
+      await cerrarPeriodo(periodoId);
+    }, null, 'No se pudo cerrar el período');
   });
 }
 
 async function cerrarPeriodo(periodoId) {
-  confirmar('¿Cerrar este período? No se podrán hacer más cambios.', async () => {
-    await sb.from('periodos_sueldo').update({ estado:'cerrado' }).eq('id', periodoId);
-    toast('Período cerrado','success'); detallePeriodo(periodoId);
-  });
+  await sb.from('periodos_sueldo').update({ estado:'cerrado' }).eq('id', periodoId);
+  toast('Período cerrado','success');
+  detallePeriodo(periodoId);
 }
 
 function verLiquidaciones(empleadoId) {
