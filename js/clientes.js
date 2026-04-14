@@ -48,7 +48,6 @@ async function detalleCliente(id) {
   const totalCrédito = (creditos||[]).reduce((s,f) => s+parseFloat(f.monto||0),0);
   const isAdmin = currentPerfil?.rol === 'admin';
   const canEdit = ['admin','empleado'].includes(currentPerfil?.rol);
-  // Filtrar mantenimientos de vehículos de este cliente
   const vehIds = (veh||[]).map(v=>v.id);
   const mantsCli = (mants||[]).filter(m => vehIds.includes(m.vehiculo_id));
 
@@ -75,6 +74,7 @@ async function detalleCliente(id) {
       ${isAdmin ? `<button class="btn-danger" style="margin:0" onclick="eliminarCliente('${id}')">${t('eliminarBtn')}</button>` : ''}
       ${c.telefono ? `<button onclick="window.open('https://wa.me/595${c.telefono.replace(/\D/g,'')}')" style="flex:1;background:rgba(37,211,102,.15);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:10px;padding:.5rem;font-family:var(--font-head);font-size:.85rem;cursor:pointer">💬 WhatsApp</button>` : ''}
     </div>` : c.telefono ? `<button onclick="window.open('https://wa.me/595${c.telefono.replace(/\D/g,'')}')" style="width:100%;background:rgba(37,211,102,.15);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:10px;padding:.6rem;font-family:var(--font-head);font-size:.9rem;cursor:pointer;margin-bottom:1rem">💬 WhatsApp</button>` : ''}
+    
     <div class="sub-section">
       <div class="sub-section-title">${t('cliVehiculos2')}</div>
       ${(veh||[]).length===0 ? '<p style="color:var(--text2);font-size:.85rem">Sin vehículos</p>' :
@@ -99,14 +99,27 @@ function modalNuevoCliente() {
 }
 
 async function guardarCliente(id=null) {
-  if (guardando()) return;
-  const nombre = document.getElementById('f-nombre').value.trim();
-  if (!nombre) { toast('El nombre es obligatorio','error'); return; }
-  const data = { nombre, ruc:document.getElementById('f-ruc')?.value||null, telefono:document.getElementById('f-tel').value, email:document.getElementById('f-email').value, taller_id:tid() };
-  const { error } = id ? await offlineUpdate('clientes', data, 'id', id) : await offlineInsert('clientes', data);
-  if (error) { toast('Error: '+error.message,'error'); return; }
-  clearCache('clientes');toast(id?'Cliente actualizado':'Cliente guardado','success');
-  closeModal(); clientes();
+  await safeCall(async () => {
+    const nombre = document.getElementById('f-nombre').value.trim();
+    if (!validateRequired(nombre, 'Nombre')) return;
+    
+    const data = {
+      nombre,
+      ruc: document.getElementById('f-ruc')?.value||null,
+      telefono: document.getElementById('f-tel').value,
+      email: document.getElementById('f-email').value,
+      taller_id: tid()
+    };
+    
+    const { error } = id ? await offlineUpdate('clientes', data, 'id', id) : await offlineInsert('clientes', data);
+    if (error) { toast('Error: '+error.message,'error'); return; }
+    
+    clearCache('clientes');
+    invalidateComponentCache();
+    toast(id ? 'Cliente actualizado' : 'Cliente guardado', 'success');
+    closeModal(); 
+    clientes();
+  }, 'btn-primary', 'No se pudo guardar el cliente');
 }
 
 async function modalEditarCliente(id) {
@@ -122,9 +135,28 @@ async function modalEditarCliente(id) {
 }
 
 async function eliminarCliente(id) {
-  confirmar('Esta acción eliminará el cliente permanentemente.', async () => {
-    await offlineDelete('clientes', 'id', id);
-    clearCache('clientes');toast('Cliente eliminado'); navigate('clientes');
+  // Verificar dependencias
+  const [{ count: vehCount }, { count: repCount }] = await Promise.all([
+    sb.from('vehiculos').select('*', {count:'exact', head:true}).eq('cliente_id', id),
+    sb.from('reparaciones').select('*', {count:'exact', head:true}).eq('cliente_id', id)
+  ]);
+  
+  let mensaje = 'Esta acción eliminará el cliente permanentemente.';
+  if (vehCount > 0) mensaje += `\n\n⚠️ ATENCIÓN: Se eliminarán ${vehCount} vehículo(s) asociado(s).`;
+  if (repCount > 0) mensaje += `\n\n⚠️ También se eliminarán ${repCount} trabajo(s) del historial.`;
+  
+  confirmar(mensaje, async () => {
+    await safeCall(async () => {
+      // Eliminar vehículos asociados (opcional, según tu lógica de negocio)
+      if (vehCount > 0) {
+        await sb.from('vehiculos').delete().eq('cliente_id', id);
+      }
+      await offlineDelete('clientes', 'id', id);
+      clearCache('clientes');
+      clearCache('vehiculos');
+      invalidateComponentCache();
+      toast('Cliente eliminado');
+      navigate('clientes');
+    }, null, 'No se pudo eliminar el cliente');
   });
 }
-
