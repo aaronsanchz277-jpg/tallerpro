@@ -113,9 +113,7 @@ async function guardarGasto(id) {
   }
   
   // ─── INTEGRACIÓN CON FINANZAS ─────────────────────────────────────────────
-  // Registrar automáticamente el egreso en movimientos_financieros
   try {
-    // Buscar categoría financiera correspondiente o crear "Gastos generales"
     let catFinanciera = categoria || 'Gastos generales';
     const { data: cats } = await sb.from('categorias_financieras')
       .select('id')
@@ -127,7 +125,6 @@ async function guardarGasto(id) {
     if (cats?.length) {
       categoriaId = cats[0].id;
     } else {
-      // Crear la categoría si no existe
       const { data: nuevaCat } = await sb.from('categorias_financieras')
         .insert({ taller_id: tid(), nombre: catFinanciera, tipo: 'egreso', es_fija: false })
         .select('id')
@@ -148,7 +145,6 @@ async function guardarGasto(id) {
       };
       
       if (id) {
-        // Si es edición, actualizar o insertar
         const { data: existente } = await sb.from('movimientos_financieros')
           .select('id')
           .eq('referencia_id', id)
@@ -166,7 +162,6 @@ async function guardarGasto(id) {
     }
   } catch (e) {
     console.warn('Error al registrar en finanzas:', e);
-    // No bloquear el flujo principal
   }
   
   clearCache('gastos');
@@ -179,7 +174,6 @@ async function guardarGasto(id) {
 
 async function eliminarGasto(id) {
   confirmar('¿Eliminar este gasto? También se eliminará el registro financiero asociado.', async () => {
-    // Eliminar movimiento financiero asociado
     await sb.from('movimientos_financieros')
       .delete()
       .eq('referencia_id', id)
