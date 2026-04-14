@@ -10,7 +10,7 @@ async function creditos({ filtro='pendiente' }={}) {
   document.getElementById('main-content').innerHTML = `
     <div class="section-header">
       <div class="section-title">${t('credTitulo')}</div>
-      <button class="btn-add" onclick="modalNuevoCrédito()">+ Nuevo</button>
+      <button class="btn-add" onclick="modalNuevoCredito()">+ Nuevo</button>
     </div>
     ${filtro==='pendiente'?`<div style="background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center"><span style="color:var(--text2);font-size:.8rem">${t('credTotalPend')}</span><span style="font-family:var(--font-head);font-size:1.4rem;color:var(--danger)">₲${gs(total)}</span></div>`:''}
     <div class="tabs">
@@ -29,41 +29,81 @@ async function creditos({ filtro='pendiente' }={}) {
           </div>
           <div style="text-align:right;flex-shrink:0">
             <div style="font-family:var(--font-head);font-size:1.1rem;color:${f.pagado?'var(--success)':'var(--danger)'}">₲${gs(f.monto)}</div>
-            ${!f.pagado?`<button onclick="marcarPagado('${f.id}')" style="font-size:.7rem;background:rgba(0,255,136,.15);color:var(--success);border:1px solid rgba(0,255,136,.3);border-radius:6px;padding:2px 8px;cursor:pointer;margin-top:4px">${t('credPagar')}</button>`:`<span style="font-size:.7rem;color:var(--success)">${t('credPagadoLabel')}</span>`}
+            ${!f.pagado?`<button onclick="marcarPagadoConSafeCall('${f.id}')" style="font-size:.7rem;background:rgba(0,255,136,.15);color:var(--success);border:1px solid rgba(0,255,136,.3);border-radius:6px;padding:2px 8px;cursor:pointer;margin-top:4px">${t('credPagar')}</button>`:`<span style="font-size:.7rem;color:var(--success)">${t('credPagadoLabel')}</span>`}
           </div>
         </div>
       </div>`).join('')}`;
 }
 
-async function marcarPagado(id) {
-  await offlineUpdate('fiados', { pagado:true }, 'id', id);
-  toast('Marcado como pagado','success'); creditos();
+async function marcarPagadoConSafeCall(id) {
+  await safeCall(async () => {
+    await marcarPagado(id);
+  }, null, 'No se pudo marcar como pagado');
 }
 
-async function modalNuevoCrédito() {
-  const { data:cls } = await sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre');
+async function marcarPagado(id) {
+  await offlineUpdate('fiados', { pagado: true }, 'id', id);
+  
+  // Registrar ingreso en finanzas
+  const { data: credito } = await sb.from('fiados').select('monto, cliente_id, descripcion').eq('id', id).single();
+  if (credito) {
+    const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id', tid()).eq('nombre', 'Otros ingresos').limit(1);
+    if (cats?.length) {
+      await sb.from('movimientos_financieros').insert({
+        taller_id: tid(),
+        tipo: 'ingreso',
+        categoria_id: cats[0].id,
+        monto: credito.monto,
+        descripcion: 'Cobro de crédito: ' + (credito.descripcion || ''),
+        fecha: new Date().toISOString().split('T')[0],
+        referencia_id: id,
+        referencia_tabla: 'fiados'
+      });
+    }
+  }
+  
+  clearCache('creditos');
+  clearCache('finanzas');
+  toast('Marcado como pagado','success');
+  creditos();
+}
+
+async function modalNuevoCredito() {
+  const clienteSelect = await renderClienteSelect('f-cliente', null, false);
   openModal(`
     <div class="modal-title">${t("modNuevoCredito")}</div>
-    <div class="form-group"><label class="form-label">${t("lblCliente")} *</label>
-      <select class="form-input" id="f-cliente">
-        <option value="">Seleccionar cliente</option>
-        ${(cls||[]).map(c => `<option value="${c.id}">${h(c.nombre)}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group"><label class="form-label">${t("lblMonto")}</label><input class="form-input" id="f-monto" type="number" placeholder="0" min="0"></div>
+    <div class="form-group"><label class="form-label">${t("lblCliente")} *</label>${clienteSelect}</div>
+    <div class="form-group"><label class="form-label">${t("lblMonto")}</label>${renderMontoInput('f-monto', '', '0')}</div>
     <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="f-desc" placeholder="Cambio de aceite pendiente"></div>
-    <div class="form-group"><label class="form-label">${t("lblFecha")}</label><input class="form-input" id="f-fecha" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
-    <button class="btn-primary" onclick="guardarCrédito()">${t('guardar')}</button>
+    <div class="form-group"><label class="form-label">${t("lblFecha")}</label>${renderFechaInput('f-fecha')}</div>
+    <button class="btn-primary" onclick="guardarCreditoConSafeCall()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
 }
 
-async function guardarCrédito() {
-  const cid = document.getElementById('f-cliente').value;
-  const monto = parseFloat(document.getElementById('f-monto').value);
-  if (!cid) { toast('Seleccioná un cliente','error'); return; }
-  if (!monto||monto<=0) { toast('El monto debe ser mayor a 0','error'); return; }
-  const { error } = await offlineInsert('fiados', { cliente_id:cid, monto, descripcion:document.getElementById('f-desc').value, fecha:document.getElementById('f-fecha').value, taller_id:tid() });
-  if (error) { toast('Error','error'); return; }
-  toast('Crédito registrado','success'); closeModal(); creditos();
+async function guardarCreditoConSafeCall() {
+  await safeCall(async () => {
+    await guardarCredito();
+  }, null, 'No se pudo guardar el crédito');
 }
 
+async function guardarCredito() {
+  const cid = document.getElementById('f-cliente').value;
+  if (!cid) { toast('Seleccioná un cliente','error'); return; }
+  
+  const monto = parseFloat(document.getElementById('f-monto').value);
+  if (!validatePositiveNumber(monto, 'Monto')) return;
+  
+  const { error } = await offlineInsert('fiados', {
+    cliente_id: cid,
+    monto,
+    descripcion: document.getElementById('f-desc').value,
+    fecha: document.getElementById('f-fecha').value,
+    taller_id: tid()
+  });
+  if (error) { toast('Error','error'); return; }
+  
+  clearCache('creditos');
+  toast('Crédito registrado','success');
+  closeModal(); 
+  creditos();
+}
