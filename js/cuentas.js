@@ -56,20 +56,27 @@ function modalNuevaCuenta() {
     <div class="modal-title">Nueva cuenta a pagar</div>
     <div class="form-group"><label class="form-label">Proveedor *</label><input class="form-input" id="f-proveedor" placeholder="Distribuidora X, Repuestera Y..."></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Monto ₲ *</label><input class="form-input" id="f-monto" type="number" min="0" placeholder="500000"></div>
-      <div class="form-group"><label class="form-label">Fecha vencimiento</label><input class="form-input" id="f-vence" type="date"></div>
+      <div class="form-group"><label class="form-label">Monto ₲ *</label>${renderMontoInput('f-monto', '', '500000')}</div>
+      <div class="form-group"><label class="form-label">Fecha vencimiento</label>${renderFechaInput('f-vence')}</div>
     </div>
     <div class="form-group"><label class="form-label">Concepto / Notas</label><input class="form-input" id="f-notas" placeholder="Factura #123, repuestos..."></div>
-    <button class="btn-primary" onclick="guardarCuenta()">Guardar</button>
+    <button class="btn-primary" onclick="guardarCuentaConSafeCall()">Guardar</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
+async function guardarCuentaConSafeCall() {
+  await safeCall(async () => {
+    await guardarCuenta();
+  }, null, 'No se pudo guardar la cuenta');
+}
+
 async function guardarCuenta(id=null) {
-  if (guardando()) return;
   const proveedor = document.getElementById('f-proveedor').value.trim();
-  if (!proveedor) { toast('El proveedor es obligatorio','error'); return; }
+  if (!validateRequired(proveedor, 'Proveedor')) return;
+  
   const monto = parseFloat(document.getElementById('f-monto').value);
-  if (!monto || monto <= 0) { toast('El monto debe ser mayor a 0','error'); return; }
+  if (!validatePositiveNumber(monto, 'Monto')) return;
+  
   const data = {
     proveedor,
     monto,
@@ -78,13 +85,17 @@ async function guardarCuenta(id=null) {
     pagada: false,
     taller_id: tid()
   };
+  
   const { error } = id ?
     await sb.from('cuentas_pagar').update(data).eq('id',id) :
     await sb.from('cuentas_pagar').insert(data);
+    
   if (error) { toast('Error: '+error.message,'error'); return; }
+  
   clearCache('cuentas');
-  toast(id?'Cuenta actualizada':'Cuenta registrada','success');
-  closeModal(); cuentasPagar();
+  toast(id ? 'Cuenta actualizada' : 'Cuenta registrada','success');
+  closeModal(); 
+  cuentasPagar();
 }
 
 async function detalleCuenta(id) {
@@ -106,21 +117,38 @@ async function detalleCuenta(id) {
       <div class="info-item"><div class="label">Estado</div><div class="value"><span class="card-badge ${c.pagada?'badge-green':vencida?'badge-red':'badge-yellow'}">${c.pagada?'Pagada':vencida?'Vencida':'Pendiente'}</span></div></div>
     </div>
     <div style="display:flex;gap:.5rem;margin-top:1rem">
-      ${!c.pagada?`<button onclick="marcarCuentaPagada('${id}')" class="btn-primary" style="flex:1;margin:0">✓ Marcar como pagada</button>`:''}
+      ${!c.pagada?`<button onclick="marcarCuentaPagadaConSafeCall('${id}')" class="btn-primary" style="flex:1;margin:0">✓ Marcar como pagada</button>`:''}
       <button onclick="modalEditarCuenta('${id}')" class="btn-secondary" style="margin:0">Editar</button>
-      <button onclick="eliminarCuenta('${id}')" class="btn-danger" style="margin:0">✕</button>
+      <button onclick="eliminarCuentaConSafeCall('${id}')" class="btn-danger" style="margin:0">✕</button>
     </div>`;
+}
+
+async function marcarCuentaPagadaConSafeCall(id) {
+  await safeCall(async () => {
+    await marcarCuentaPagada(id);
+  }, null, 'No se pudo marcar como pagada');
 }
 
 async function marcarCuentaPagada(id) {
   const { data:c } = await sb.from('cuentas_pagar').select('proveedor,monto').eq('id',id).single();
   await sb.from('cuentas_pagar').update({ pagada:true, fecha_pago:new Date().toISOString().split('T')[0] }).eq('id',id);
-  // Auto-generar egreso en finanzas
+  
   const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id',tid()).eq('nombre','Repuestos').limit(1);
   if (cats?.length && c) {
-    await sb.from('movimientos_financieros').insert({ taller_id:tid(), tipo:'egreso', categoria_id:cats[0].id, monto:c.monto, descripcion:'Pago proveedor: '+c.proveedor, fecha:new Date().toISOString().split('T')[0] });
+    await sb.from('movimientos_financieros').insert({
+      taller_id: tid(),
+      tipo: 'egreso',
+      categoria_id: cats[0].id,
+      monto: c.monto,
+      descripcion: 'Pago proveedor: ' + c.proveedor,
+      fecha: new Date().toISOString().split('T')[0],
+      referencia_id: id,
+      referencia_tabla: 'cuentas_pagar'
+    });
   }
-  clearCache('cuentas'); clearCache('finanzas');
+  
+  clearCache('cuentas');
+  clearCache('finanzas');
   toast('Cuenta pagada — egreso registrado en Finanzas','success');
   detalleCuenta(id);
 }
@@ -131,20 +159,21 @@ async function modalEditarCuenta(id) {
     <div class="modal-title">Editar cuenta</div>
     <div class="form-group"><label class="form-label">Proveedor *</label><input class="form-input" id="f-proveedor" value="${h(c.proveedor||'')}"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Monto ₲</label><input class="form-input" id="f-monto" type="number" min="0" value="${c.monto||0}"></div>
-      <div class="form-group"><label class="form-label">Fecha vencimiento</label><input class="form-input" id="f-vence" type="date" value="${c.fecha_vencimiento||''}"></div>
+      <div class="form-group"><label class="form-label">Monto ₲</label>${renderMontoInput('f-monto', c.monto||0)}</div>
+      <div class="form-group"><label class="form-label">Fecha vencimiento</label>${renderFechaInput('f-vence', c.fecha_vencimiento)}</div>
     </div>
     <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="f-notas" value="${h(c.notas||'')}"></div>
-    <button class="btn-primary" onclick="guardarCuenta('${id}')">Actualizar</button>
+    <button class="btn-primary" onclick="guardarCuentaConSafeCall('${id}')">Actualizar</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
-async function eliminarCuenta(id) {
+async function eliminarCuentaConSafeCall(id) {
   confirmar('¿Eliminar esta cuenta?', async () => {
-    await sb.from('cuentas_pagar').delete().eq('id',id);
-    clearCache('cuentas');
-    toast('Cuenta eliminada'); cuentasPagar();
+    await safeCall(async () => {
+      await sb.from('cuentas_pagar').delete().eq('id',id);
+      clearCache('cuentas');
+      toast('Cuenta eliminada');
+      cuentasPagar();
+    }, null, 'No se pudo eliminar la cuenta');
   });
 }
-
-
