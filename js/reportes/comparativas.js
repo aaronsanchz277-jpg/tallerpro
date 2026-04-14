@@ -37,20 +37,8 @@ async function reporteComparativas() {
     const ingVentas = (ventas || []).reduce((s, v) => s + parseFloat(v.total || 0), 0);
     return ingReps + ingVentas;
   }
-
-  function calcGanancia(reps) {
-    return (reps || []).reduce((s, r) => s + parseFloat(r.costo || 0) - parseFloat(r.costo_repuestos || 0), 0);
-  }
-
-  function calcGastos(gastos) {
-    return (gastos || []).reduce((s, g) => s + parseFloat(g.monto || 0), 0);
-  }
-
-  function variacion(actual, anterior) {
-    if (anterior === 0) return actual > 0 ? '+100%' : '0%';
-    const varPct = ((actual - anterior) / anterior) * 100;
-    return (varPct > 0 ? '+' : '') + varPct.toFixed(1) + '%';
-  }
+  function calcGanancia(reps) { return (reps || []).reduce((s, r) => s + parseFloat(r.costo || 0) - parseFloat(r.costo_repuestos || 0), 0); }
+  function calcGastos(gastos) { return (gastos || []).reduce((s, g) => s + parseFloat(g.monto || 0), 0); }
 
   const ingresosMesActual = calcIngresos(repsActual, ventasActual);
   const ingresosMesAnterior = calcIngresos(repsAnterior, ventasAnterior);
@@ -72,7 +60,6 @@ async function reporteComparativas() {
         <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text)">📈 Comparativas</div>
         <button class="btn-add" onclick="exportarReportePDF('Comparativas', 'comparativas-content')" style="font-size:.8rem;padding:.4rem .8rem">📥 PDF</button>
       </div>
-      
       <div id="comparativas-content">
         <div style="font-family:var(--font-head);font-size:.9rem;color:var(--accent);margin-bottom:.5rem">📅 ESTE MES vs. MES ANTERIOR</div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
@@ -82,7 +69,6 @@ async function reporteComparativas() {
           <div style="height:1px;background:var(--border);margin:.5rem 0"></div>
           ${renderFilaComparativa('Ganancia neta', gananciaMesActual - gastosMesActual, gananciaMesAnterior - gastosMesAnterior)}
         </div>
-
         <div style="font-family:var(--font-head);font-size:.9rem;color:var(--accent);margin:1rem 0 .5rem">📆 ESTE AÑO vs. AÑO ANTERIOR</div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
           ${renderFilaComparativa('Ingresos', ingresosAnioActual, ingresosAnioAnterior)}
@@ -91,7 +77,6 @@ async function reporteComparativas() {
           <div style="height:1px;background:var(--border);margin:.5rem 0"></div>
           ${renderFilaComparativa('Ganancia neta', gananciaAnioActual - gastosAnioActual, gananciaAnioAnterior - gastosAnioAnterior)}
         </div>
-
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
           <div style="background:var(--surface2);border-radius:10px;padding:.6rem;text-align:center">
             <div style="font-size:.65rem;color:var(--text2)">Ticket promedio (mes)</div>
@@ -110,7 +95,6 @@ function renderFilaComparativa(label, actual, anterior, esGasto = false) {
   const varPct = anterior === 0 ? (actual > 0 ? '+100%' : '0%') : ((actual - anterior) / anterior * 100).toFixed(1) + '%';
   const flecha = actual > anterior ? '↑' : actual < anterior ? '↓' : '→';
   const color = esGasto ? (actual < anterior ? 'var(--success)' : actual > anterior ? 'var(--danger)' : 'var(--text2)') : (actual > anterior ? 'var(--success)' : actual < anterior ? 'var(--danger)' : 'var(--text2)');
-  
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
       <span style="font-size:.85rem">${label}</span>
@@ -119,6 +103,6 @@ function renderFilaComparativa(label, actual, anterior, esGasto = false) {
         <span style="font-size:.75rem;color:${color}">${flecha} ${varPct.startsWith('+') ? varPct : (varPct.startsWith('-') ? varPct : '')}</span>
         <span style="font-size:.7rem;color:var(--text2)">vs ${formatearMoneda(anterior)}</span>
       </div>
-    </div>
-  `;
+    </div>`;
+}
 }
