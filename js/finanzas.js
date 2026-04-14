@@ -6,7 +6,6 @@ const CATEGORIAS_FIJAS = {
 };
 
 async function finanzas_initCategorias() {
-  // Crear categorías fijas si no existen para este taller
   const { data: existing } = await sb.from('categorias_financieras').select('nombre').eq('taller_id', tid()).eq('es_fija', true);
   const existNames = (existing||[]).map(c => c.nombre);
   const toInsert = [];
@@ -89,8 +88,8 @@ async function finanzas_modalNuevo(tipo) {
     <input type="hidden" id="f-fin-tipo" value="${tipo}">
     <div class="form-group"><label class="form-label">Concepto *</label><input class="form-input" id="f-fin-concepto" placeholder="${tipo === 'ingreso' ? 'Pago reparación motor' : 'Compra de filtros'}"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Monto (₲) *</label><input class="form-input" id="f-fin-monto" type="number" min="1" placeholder="0"></div>
-      <div class="form-group"><label class="form-label">Fecha</label><input class="form-input" id="f-fin-fecha" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="form-group"><label class="form-label">Monto (₲) *</label>${renderMontoInput('f-fin-monto', '', '0')}</div>
+      <div class="form-group"><label class="form-label">Fecha</label>${renderFechaInput('f-fin-fecha')}</div>
     </div>
     <div class="form-group"><label class="form-label">Categoría</label>
       <select class="form-input" id="f-fin-cat">
@@ -98,30 +97,44 @@ async function finanzas_modalNuevo(tipo) {
         ${(cats||[]).map(c => `<option value="${c.id}">${h(c.nombre)}</option>`).join('')}
       </select>
     </div>
-    <div class="form-group"><label class="form-label">Notas</label><textarea class="form-input" id="f-fin-notas" rows="2"></textarea></div>
-    <button class="btn-primary" onclick="finanzas_guardar()">Guardar</button>
+    <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas')}</div>
+    <button class="btn-primary" onclick="finanzas_guardarConSafeCall()">Guardar</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
+async function finanzas_guardarConSafeCall() {
+  await safeCall(async () => {
+    await finanzas_guardar();
+  }, null, 'No se pudo guardar el movimiento');
+}
+
 async function finanzas_guardar(id=null) {
-  if (guardando()) return;
   const concepto = document.getElementById('f-fin-concepto').value.trim();
+  if (!validateRequired(concepto, 'Concepto')) return;
+  
   const monto = parseFloat(document.getElementById('f-fin-monto').value);
-  if (!concepto) { toast('El concepto es obligatorio','error'); return; }
-  if (!monto || monto <= 0) { toast('El monto debe ser mayor a 0','error'); return; }
+  if (!validatePositiveNumber(monto, 'Monto')) return;
+  
   const data = {
     tipo: document.getElementById('f-fin-tipo').value,
-    concepto, monto,
+    concepto,
+    monto,
     fecha: document.getElementById('f-fin-fecha').value,
     categoria_id: document.getElementById('f-fin-cat').value || null,
     notas: document.getElementById('f-fin-notas').value,
     taller_id: tid()
   };
+  
   const { error } = id
     ? await sb.from('movimientos_financieros').update(data).eq('id', id)
     : await sb.from('movimientos_financieros').insert(data);
+    
   if (error) { toast('Error: ' + error.message, 'error'); return; }
-  toast('Movimiento guardado', 'success'); closeModal(); finanzas();
+  
+  toast('Movimiento guardado', 'success');
+  clearCache('finanzas');
+  closeModal(); 
+  finanzas();
 }
 
 async function finanzas_modalEditar(id) {
@@ -133,8 +146,8 @@ async function finanzas_modalEditar(id) {
     <input type="hidden" id="f-fin-tipo" value="${m.tipo}">
     <div class="form-group"><label class="form-label">Concepto *</label><input class="form-input" id="f-fin-concepto" value="${h(m.concepto)}"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Monto (₲) *</label><input class="form-input" id="f-fin-monto" type="number" value="${m.monto}"></div>
-      <div class="form-group"><label class="form-label">Fecha</label><input class="form-input" id="f-fin-fecha" type="date" value="${m.fecha}"></div>
+      <div class="form-group"><label class="form-label">Monto (₲) *</label>${renderMontoInput('f-fin-monto', m.monto)}</div>
+      <div class="form-group"><label class="form-label">Fecha</label>${renderFechaInput('f-fin-fecha', m.fecha)}</div>
     </div>
     <div class="form-group"><label class="form-label">Categoría</label>
       <select class="form-input" id="f-fin-cat">
@@ -142,16 +155,21 @@ async function finanzas_modalEditar(id) {
         ${(cats||[]).map(c => `<option value="${c.id}" ${c.id===m.categoria_id?'selected':''}>${h(c.nombre)}</option>`).join('')}
       </select>
     </div>
-    <div class="form-group"><label class="form-label">Notas</label><textarea class="form-input" id="f-fin-notas" rows="2">${h(m.notas||'')}</textarea></div>
-    <button class="btn-primary" onclick="finanzas_guardar('${id}')">Actualizar</button>
-    ${currentPerfil?.rol === 'admin' ? `<button class="btn-danger" onclick="finanzas_eliminar('${id}')">Eliminar</button>` : ''}
+    <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas', m.notas)}</div>
+    <button class="btn-primary" onclick="finanzas_guardarConSafeCall('${id}')">Actualizar</button>
+    ${currentPerfil?.rol === 'admin' ? `<button class="btn-danger" onclick="finanzas_eliminarConSafeCall('${id}')">Eliminar</button>` : ''}
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
-async function finanzas_eliminar(id) {
+async function finanzas_eliminarConSafeCall(id) {
   confirmar('¿Eliminar este movimiento?', async () => {
-    await sb.from('movimientos_financieros').delete().eq('id', id);
-    toast('Eliminado', 'success'); closeModal(); finanzas();
+    await safeCall(async () => {
+      await sb.from('movimientos_financieros').delete().eq('id', id);
+      toast('Eliminado', 'success');
+      clearCache('finanzas');
+      closeModal(); 
+      finanzas();
+    }, null, 'No se pudo eliminar el movimiento');
   });
 }
 
@@ -166,7 +184,7 @@ async function finanzas_modalCategorias() {
             <span style="font-size:.85rem">${h(c.nombre)}</span>
             <span style="font-size:.65rem;color:var(--text2);margin-left:.3rem">(${c.tipo})</span>
           </div>
-          ${!c.es_fija ? `<button onclick="finanzas_eliminarCat('${c.id}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.75rem">✕</button>` : '<span style="font-size:.6rem;color:var(--text2)">fija</span>'}
+          ${!c.es_fija ? `<button onclick="finanzas_eliminarCatConSafeCall('${c.id}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.75rem">✕</button>` : '<span style="font-size:.6rem;color:var(--text2)">fija</span>'}
         </div>`).join('')}
     </div>
     <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);margin-bottom:.5rem">AGREGAR NUEVA</div>
@@ -178,23 +196,40 @@ async function finanzas_modalCategorias() {
         <option value="ambos">Ambos</option>
       </select>
     </div>
-    <button class="btn-primary" onclick="finanzas_guardarCat()">Agregar</button>
+    <button class="btn-primary" onclick="finanzas_guardarCatConSafeCall()">Agregar</button>
     <button class="btn-secondary" onclick="closeModal()">Cerrar</button>`);
+}
+
+async function finanzas_guardarCatConSafeCall() {
+  await safeCall(async () => {
+    await finanzas_guardarCat();
+  }, null, 'No se pudo agregar la categoría');
 }
 
 async function finanzas_guardarCat() {
   const nombre = document.getElementById('f-cat-nombre').value.trim();
-  if (!nombre) { toast('El nombre es obligatorio','error'); return; }
+  if (!validateRequired(nombre, 'Nombre')) return;
+  
   const { error } = await sb.from('categorias_financieras').insert({
-    taller_id: tid(), nombre, tipo: document.getElementById('f-cat-tipo').value, es_fija: false
+    taller_id: tid(),
+    nombre,
+    tipo: document.getElementById('f-cat-tipo').value,
+    es_fija: false
   });
   if (error) { toast('Error: ' + error.message, 'error'); return; }
-  toast('Categoría agregada', 'success'); finanzas_modalCategorias();
+  
+  toast('Categoría agregada', 'success');
+  finanzas_modalCategorias();
+}
+
+async function finanzas_eliminarCatConSafeCall(id) {
+  await safeCall(async () => {
+    await finanzas_eliminarCat(id);
+  }, null, 'No se pudo eliminar la categoría');
 }
 
 async function finanzas_eliminarCat(id) {
   await sb.from('categorias_financieras').delete().eq('id', id);
-  toast('Categoría eliminada', 'success'); finanzas_modalCategorias();
+  toast('Categoría eliminada', 'success');
+  finanzas_modalCategorias();
 }
-
-
