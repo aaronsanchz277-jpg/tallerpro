@@ -1,14 +1,11 @@
-// ─── PROYECCIÓN DE FLUJO DE CAJA ─────────────────────────────────────────────
+  // ─── PROYECCIÓN DE FLUJO DE CAJA ─────────────────────────────────────────────
 async function reporteFlujoCaja() {
   const hoy = new Date().toISOString().split('T')[0];
   const prox30dias = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
   
   const [{ data: cuentasCobrar }, { data: cuentasPagar }, { data: saldoInicial }] = await Promise.all([
-    // Cuentas por cobrar (créditos/fiados pendientes + reparaciones con saldo)
     sb.from('fiados').select('monto, clientes(nombre)').eq('taller_id', tid()).eq('pagado', false),
-    // Cuentas por pagar pendientes
     sb.from('cuentas_pagar').select('proveedor, monto, fecha_vencimiento').eq('taller_id', tid()).eq('pagada', false).lte('fecha_vencimiento', prox30dias),
-    // Saldo actual (último balance)
     sb.rpc('get_balance', { p_taller_id: tid(), p_fecha_inicio: '2000-01-01', p_fecha_fin: hoy })
   ]);
 
@@ -17,7 +14,6 @@ async function reporteFlujoCaja() {
   const saldoActual = saldoInicial?.data?.balance_neto || 0;
   const proyeccion = saldoActual + totalCobrar - totalPagar;
 
-  // Agrupar cuentas por pagar por vencimiento
   const vencimientos = {};
   (cuentasPagar || []).forEach(c => {
     const fecha = c.fecha_vencimiento || 'Sin fecha';
@@ -33,13 +29,11 @@ async function reporteFlujoCaja() {
       </div>
       
       <div id="flujo-content">
-        <!-- Saldo actual -->
         <div style="background:var(--surface);border:2px solid ${saldoActual >= 0 ? 'var(--success)' : 'var(--danger)'};border-radius:12px;padding:1rem;margin-bottom:1rem;text-align:center">
           <div style="font-size:.7rem;color:var(--text2);letter-spacing:1px">SALDO ACTUAL EN CAJA</div>
           <div style="font-family:var(--font-head);font-size:2rem;color:${saldoActual >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatearMoneda(saldoActual)}</div>
         </div>
 
-        <!-- Proyección -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
           <div style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:12px;padding:.75rem">
             <div style="font-size:.6rem;color:var(--success)">POR COBRAR</div>
@@ -53,13 +47,11 @@ async function reporteFlujoCaja() {
           </div>
         </div>
 
-        <!-- Proyección final -->
         <div style="background:${proyeccion >= 0 ? 'rgba(0,255,136,.06)' : 'rgba(255,68,68,.06)'};border:1px solid ${proyeccion >= 0 ? 'rgba(0,255,136,.3)' : 'rgba(255,68,68,.3)'};border-radius:12px;padding:.75rem;margin-bottom:1rem;text-align:center">
           <div style="font-size:.65rem;color:${proyeccion >= 0 ? 'var(--success)' : 'var(--danger)'}">PROYECCIÓN A 30 DÍAS</div>
           <div style="font-family:var(--font-head);font-size:1.5rem;color:${proyeccion >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatearMoneda(proyeccion)}</div>
         </div>
 
-        <!-- Desglose de cuentas por pagar -->
         <div style="font-family:var(--font-head);font-size:.9rem;color:var(--text2);margin:1rem 0 .5rem">📅 VENCIMIENTOS PRÓXIMOS</div>
         ${Object.keys(vencimientos).length === 0 ? '<p style="color:var(--text2);font-size:.85rem">No hay cuentas por pagar próximas</p>' :
           Object.entries(vencimientos).sort(([a], [b]) => a.localeCompare(b)).map(([fecha, cuentas]) => `
@@ -74,7 +66,6 @@ async function reporteFlujoCaja() {
             </div>
           `).join('')}
 
-        <!-- Créditos por cobrar -->
         <div style="font-family:var(--font-head);font-size:.9rem;color:var(--text2);margin:1rem 0 .5rem">💰 CRÉDITOS POR COBRAR</div>
         ${(cuentasCobrar || []).length === 0 ? '<p style="color:var(--text2);font-size:.85rem">No hay créditos pendientes</p>' :
           cuentasCobrar.map(c => `
