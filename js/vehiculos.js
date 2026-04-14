@@ -1,4 +1,5 @@
 // ─── VEHICULOS ───────────────────────────────────────────────────────────────
+
 async function vehiculos({ search='', offset=0 }={}) {
   const cacheKey = `vehiculos_${search}_${offset}`;
   const { data, count } = await cachedQuery(cacheKey, () => {
@@ -77,7 +78,8 @@ async function detalleVehiculo(id) {
 }
 
 async function modalNuevoVehiculo() {
-  const { data:cls } = await sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre');
+  const clienteSelect = await renderClienteSelect('f-cliente', null, true);
+  
   openModal(`
     <div class="modal-title">${t("modNuevoVehiculo")}</div>
     <div class="form-group"><label class="form-label">Patente *</label><input class="form-input" id="f-patente" placeholder="ABC 123" style="text-transform:uppercase"></div>
@@ -89,20 +91,21 @@ async function modalNuevoVehiculo() {
       <div class="form-group"><label class="form-label">${t("lblAnio")}</label><input class="form-input" id="f-anio" type="number" placeholder="2020"></div>
       <div class="form-group"><label class="form-label">${t("lblColor")}</label><input class="form-input" id="f-color" placeholder="Blanco"></div>
     </div>
-    <div class="form-group"><label class="form-label">${t("lblPropietario")}</label>
-      <select class="form-input" id="f-cliente">
-        <option value="">${t("vehSinProp")}</option>
-        ${(cls||[]).map(c => `<option value="${c.id}">${h(c.nombre)}</option>`).join('')}
-      </select>
-    </div>
+    <div class="form-group"><label class="form-label">${t("lblPropietario")}</label>${clienteSelect}</div>
     <div class="form-group">
       <label class="form-label">${t("lblFotoVeh")}</label>
       <input type="file" id="f-foto-file" accept="image/*" capture="environment" class="form-input" style="padding:.4rem" onchange="previewFoto(this,'f-foto-b64','foto-prev')">
       <div id="foto-prev" style="margin-top:.5rem"></div>
       <input type="hidden" id="f-foto-b64">
     </div>
-    <button class="btn-primary" onclick="guardarVehiculo()">${t('guardar')}</button>
+    <button class="btn-primary" onclick="guardarVehiculoConSafeCall()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function guardarVehiculoConSafeCall() {
+  await safeCall(async () => {
+    await guardarVehiculo();
+  }, null, 'No se pudo guardar el vehículo');
 }
 
 async function uploadFoto(vehiculoId) {
@@ -119,9 +122,9 @@ async function uploadFoto(vehiculoId) {
 }
 
 async function guardarVehiculo(id=null) {
-  if (guardando()) return;
   const patente = document.getElementById('f-patente').value.trim().toUpperCase();
-  if (!patente) { toast('La patente es obligatoria','error'); return; }
+  if (!validateRequired(patente, 'Patente')) return;
+  
   const cid = document.getElementById('f-cliente').value;
 
   const { data: existente } = await sb.from('vehiculos').select('id').eq('taller_id',tid()).eq('patente',patente).maybeSingle();
@@ -135,18 +138,31 @@ async function guardarVehiculo(id=null) {
     if (url) fotoUrl = url;
   }
 
-  const data = { patente, marca:document.getElementById('f-marca').value, modelo:document.getElementById('f-modelo').value, anio:parseInt(document.getElementById('f-anio').value)||null, color:document.getElementById('f-color')?.value||null, cliente_id:cid||null, taller_id:tid(), foto_url:fotoUrl||null };
+  const data = {
+    patente,
+    marca: document.getElementById('f-marca').value,
+    modelo: document.getElementById('f-modelo').value,
+    anio: parseInt(document.getElementById('f-anio').value)||null,
+    color: document.getElementById('f-color')?.value||null,
+    cliente_id: cid||null,
+    taller_id: tid(),
+    foto_url: fotoUrl||null
+  };
   if (!id) data.id = vehiculoId;
+  
   const { error } = id ? await offlineUpdate('vehiculos', data, 'id', id) : await offlineInsert('vehiculos', data);
   if (error) { toast('Error: '+error.message,'error'); return; }
-  toast('Vehículo guardado','success'); closeModal(); vehiculos();
+  
+  toast('Vehículo guardado','success');
+  invalidateComponentCache();
+  closeModal(); 
+  vehiculos();
 }
 
 async function modalEditarVehiculo(id) {
-  const [{ data:v }, { data:cls }] = await Promise.all([
-    sb.from('vehiculos').select('*').eq('id',id).single(),
-    sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre')
-  ]);
+  const [{ data:v }] = await Promise.all([sb.from('vehiculos').select('*').eq('id',id).single()]);
+  const clienteSelect = await renderClienteSelect('f-cliente', v.cliente_id, true);
+  
   openModal(`
     <div class="modal-title">${t("modEditarVehiculo")}</div>
     <div class="form-group"><label class="form-label">Patente *</label><input class="form-input" id="f-patente" value="${h(v.patente||'')}" style="text-transform:uppercase"></div>
@@ -158,32 +174,37 @@ async function modalEditarVehiculo(id) {
       <div class="form-group"><label class="form-label">${t("lblAnio")}</label><input class="form-input" id="f-anio" type="number" value="${h(v.anio||'')}"></div>
       <div class="form-group"><label class="form-label">${t("lblColor")}</label><input class="form-input" id="f-color" value="${h(v.color||'')}"></div>
     </div>
-    <div class="form-group"><label class="form-label">${t("lblPropietario")}</label>
-      <select class="form-input" id="f-cliente">
-        <option value="">${t("vehSinProp")}</option>
-        ${(cls||[]).map(c => `<option value="${c.id}" ${c.id===v.cliente_id?'selected':''}>${h(c.nombre)}</option>`).join('')}
-      </select>
-    </div>
+    <div class="form-group"><label class="form-label">${t("lblPropietario")}</label>${clienteSelect}</div>
     <div class="form-group">
       <label class="form-label">${t("lblNuevaFoto")}</label>
       <input type="file" id="f-foto-file" accept="image/*" capture="environment" class="form-input" style="padding:.4rem" onchange="previewFoto(this,'f-foto-b64','foto-prev')">
       <div id="foto-prev">${v.foto_url?`<img src="${safeFotoUrl(v.foto_url)}" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-top:.5rem">`:''}</div>
       <input type="hidden" id="f-foto-b64" value="${h(v.foto_url||'')}">
     </div>
-    <button class="btn-primary" onclick="guardarVehiculo('${id}')">${t('actualizar')}</button>
+    <button class="btn-primary" onclick="guardarVehiculoConSafeCall('${id}')">${t('actualizar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
 }
 
 async function eliminarVehiculo(id) {
-  confirmar('Esta acción eliminará el vehículo permanentemente.', async () => {
-    try {
-      const { data: veh } = await sb.from('vehiculos').select('foto_url').eq('id',id).single();
-      if (veh?.foto_url && veh.foto_url.includes('/storage/')) {
-        const path = veh.foto_url.split('/vehiculos/').pop();
-        if (path) await sb.storage.from('vehiculos').remove([path]);
-      }
-    } catch(e) { }
-    await offlineDelete('vehiculos', 'id', id);
-    clearCache('vehiculos');toast('Vehículo eliminado'); navigate('vehiculos');
+  const { count: repCount } = await sb.from('reparaciones').select('*', {count:'exact', head:true}).eq('vehiculo_id', id);
+  let mensaje = 'Esta acción eliminará el vehículo permanentemente.';
+  if (repCount > 0) mensaje += `\n\n⚠️ ATENCIÓN: Se eliminarán ${repCount} trabajo(s) del historial.`;
+  
+  confirmar(mensaje, async () => {
+    await safeCall(async () => {
+      try {
+        const { data: veh } = await sb.from('vehiculos').select('foto_url').eq('id',id).single();
+        if (veh?.foto_url && veh.foto_url.includes('/storage/')) {
+          const path = veh.foto_url.split('/vehiculos/').pop();
+          if (path) await sb.storage.from('vehiculos').remove([path]);
+        }
+      } catch(e) { }
+      
+      await offlineDelete('vehiculos', 'id', id);
+      clearCache('vehiculos');
+      invalidateComponentCache();
+      toast('Vehículo eliminado');
+      navigate('vehiculos');
+    }, null, 'No se pudo eliminar el vehículo');
   });
 }
