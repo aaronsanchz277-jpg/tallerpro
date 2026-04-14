@@ -105,4 +105,3 @@ function renderFilaComparativa(label, actual, anterior, esGasto = false) {
       </div>
     </div>`;
 }
-}
