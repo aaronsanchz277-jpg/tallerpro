@@ -1,4 +1,4 @@
-//// ─── REPARACIONES ────────────────────────────────────────────────────────────
+// ─── REPARACIONES ────────────────────────────────────────────────────────────
 const TIPOS_TRABAJO = [
   'Mecánica general', 'Cambio de aceite / Service', 'Frenos',
   'Suspensión / Tren delantero', 'Electricidad', 'Chapa y pintura',
@@ -739,8 +739,6 @@ function enviarAprobacionWhatsApp(repId) {
   });
 }
 
-// Las funciones de fotos, checklist, ficha recepción y carta conformidad se mantienen igual que en el archivo original.
-// (No se modifican para esta integración)
 // ─── CHECKLIST DE RECEPCIÓN ─────────────────────────────────────────────────
 async function modalChecklistRecepcion(repId) {
   const { data:r } = await sb.from('reparaciones').select('checklist_recepcion').eq('id',repId).single();
