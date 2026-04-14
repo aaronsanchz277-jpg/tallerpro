@@ -1,5 +1,5 @@
-// ─── VENTAS (Unificado: POS + QuickService) ─────────────────────────────────
-// Reemplaza a quickservice.js y ventas.js
+// ─── VENTAS (Unificado: POS + Servicio Rápido) ──────────────────────────────
+// Reemplaza a quickservice.js y ventas.js. Integra automáticamente con Finanzas e Inventario.
 
 async function ventas({ filtro='todos', offset=0 }={}) {
   const cacheKey = `ventas_${filtro}_${offset}`;
@@ -120,7 +120,7 @@ async function modalNuevaVenta() {
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
-// Modal servicio rápido (similar pero con vehículo y descripción)
+// Modal servicio rápido
 async function modalNuevoServicioRapido() {
   const [{ data:cls }, { data:vehs }, { data:inv }] = await Promise.all([
     sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre'),
@@ -244,7 +244,7 @@ async function guardarVenta(esServicioRapido = false) {
   
   // Descontar stock de productos
   for (const item of window._ventaItems) {
-    if (item.id) {
+    if (item.id && item.tipo !== 'servicio') {
       const inv = window._ventaInv.find(p => p.id === item.id);
       if (inv) {
         await sb.from('inventario').update({ 
@@ -277,24 +277,51 @@ async function guardarVenta(esServicioRapido = false) {
   const { data: saved, error } = await offlineInsert('ventas', data);
   if (error) { toast('Error: '+error.message, 'error'); return; }
   
-  // Registrar ingreso en finanzas automáticamente
+  const ventaId = saved?.[0]?.id;
+  
+  // ─── INTEGRACIÓN CON FINANZAS ─────────────────────────────────────────────
   if (totalFinal > 0) {
-    const { data: cats } = await sb.from('categorias_financieras').select('id')
-      .eq('taller_id', tid()).eq('nombre', 'Servicios').limit(1);
-    if (cats?.length) {
-      await sb.from('movimientos_financieros').insert({
-        taller_id: tid(),
-        tipo: 'ingreso',
-        categoria_id: cats[0].id,
-        monto: totalFinal,
-        descripcion: `Venta ${esServicioRapido ? 'servicio rápido' : 'POS'}` + (data.descripcion ? ': '+data.descripcion : ''),
-        fecha: new Date().toISOString().split('T')[0],
-        referencia_id: saved?.[0]?.id
-      });
+    try {
+      // Buscar o crear categoría "Ventas" o "Servicios"
+      const catNombre = esServicioRapido ? 'Servicios' : 'Ventas';
+      let categoriaId;
+      const { data: cats } = await sb.from('categorias_financieras')
+        .select('id')
+        .eq('taller_id', tid())
+        .eq('nombre', catNombre)
+        .limit(1);
+      
+      if (cats?.length) {
+        categoriaId = cats[0].id;
+      } else {
+        const { data: nuevaCat } = await sb.from('categorias_financieras')
+          .insert({ taller_id: tid(), nombre: catNombre, tipo: 'ingreso', es_fija: true })
+          .select('id')
+          .single();
+        categoriaId = nuevaCat?.id;
+      }
+      
+      if (categoriaId) {
+        await sb.from('movimientos_financieros').insert({
+          taller_id: tid(),
+          tipo: 'ingreso',
+          categoria_id: categoriaId,
+          monto: totalFinal,
+          descripcion: `${esServicioRapido ? 'Servicio rápido' : 'Venta'}: ${data.descripcion || 'Venta mostrador'}`,
+          fecha: fechaHoy(),
+          referencia_id: ventaId,
+          referencia_tabla: 'ventas'
+        });
+      }
+    } catch (e) {
+      console.warn('Error registrando ingreso en finanzas:', e);
     }
   }
   
-  clearCache('ventas'); clearCache('inventario'); clearCache('finanzas');
+  clearCache('ventas'); 
+  clearCache('inventario'); 
+  clearCache('finanzas');
+  clearCache('dash_ingresos');
   toast('✓ ¡Venta exitosa!', 'success');
   closeModal();
   ventas();
@@ -310,9 +337,16 @@ async function facturarVenta(id) {
 }
 
 async function eliminarVenta(id) {
-  confirmar('¿Eliminar esta venta?', async () => {
+  confirmar('¿Eliminar esta venta? También se eliminará el registro financiero asociado.', async () => {
+    // Eliminar movimiento financiero asociado
+    await sb.from('movimientos_financieros')
+      .delete()
+      .eq('referencia_id', id)
+      .eq('referencia_tabla', 'ventas');
+    
     await offlineDelete('ventas', 'id', id);
     clearCache('ventas');
+    clearCache('finanzas');
     toast('Venta eliminada');
     navigate('ventas');
   });
