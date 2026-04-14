@@ -1,5 +1,6 @@
-// ─── VENTAS (Unificado: POS + Servicio Rápido) ──────────────────────────────
-// Reemplaza a quickservice.js y ventas.js. Integra automáticamente con Finanzas e Inventario.
+// ─── VENTAS (Unificado: POS + QuickService) ─────────────────────────────────
+// Reemplaza a quickservice.js y ventas.js
+// Integrado con Finanzas automáticamente
 
 async function ventas({ filtro='todos', offset=0 }={}) {
   const cacheKey = `ventas_${filtro}_${offset}`;
@@ -244,7 +245,7 @@ async function guardarVenta(esServicioRapido = false) {
   
   // Descontar stock de productos
   for (const item of window._ventaItems) {
-    if (item.id && item.tipo !== 'servicio') {
+    if (item.id) {
       const inv = window._ventaInv.find(p => p.id === item.id);
       if (inv) {
         await sb.from('inventario').update({ 
@@ -277,25 +278,21 @@ async function guardarVenta(esServicioRapido = false) {
   const { data: saved, error } = await offlineInsert('ventas', data);
   if (error) { toast('Error: '+error.message, 'error'); return; }
   
-  const ventaId = saved?.[0]?.id;
-  
   // ─── INTEGRACIÓN CON FINANZAS ─────────────────────────────────────────────
   if (totalFinal > 0) {
     try {
-      // Buscar o crear categoría "Ventas" o "Servicios"
-      const catNombre = esServicioRapido ? 'Servicios' : 'Ventas';
       let categoriaId;
       const { data: cats } = await sb.from('categorias_financieras')
         .select('id')
         .eq('taller_id', tid())
-        .eq('nombre', catNombre)
+        .eq('nombre', 'Servicios')
         .limit(1);
       
       if (cats?.length) {
         categoriaId = cats[0].id;
       } else {
         const { data: nuevaCat } = await sb.from('categorias_financieras')
-          .insert({ taller_id: tid(), nombre: catNombre, tipo: 'ingreso', es_fija: true })
+          .insert({ taller_id: tid(), nombre: 'Servicios', tipo: 'ingreso', es_fija: true })
           .select('id')
           .single();
         categoriaId = nuevaCat?.id;
@@ -307,9 +304,9 @@ async function guardarVenta(esServicioRapido = false) {
           tipo: 'ingreso',
           categoria_id: categoriaId,
           monto: totalFinal,
-          descripcion: `${esServicioRapido ? 'Servicio rápido' : 'Venta'}: ${data.descripcion || 'Venta mostrador'}`,
-          fecha: fechaHoy(),
-          referencia_id: ventaId,
+          descripcion: `Venta ${esServicioRapido ? 'servicio rápido' : 'POS'}` + (data.descripcion ? ': '+data.descripcion : ''),
+          fecha: new Date().toISOString().split('T')[0],
+          referencia_id: saved?.[0]?.id,
           referencia_tabla: 'ventas'
         });
       }
@@ -318,10 +315,9 @@ async function guardarVenta(esServicioRapido = false) {
     }
   }
   
-  clearCache('ventas'); 
-  clearCache('inventario'); 
+  clearCache('ventas');
+  clearCache('inventario');
   clearCache('finanzas');
-  clearCache('dash_ingresos');
   toast('✓ ¡Venta exitosa!', 'success');
   closeModal();
   ventas();
@@ -338,7 +334,6 @@ async function facturarVenta(id) {
 
 async function eliminarVenta(id) {
   confirmar('¿Eliminar esta venta? También se eliminará el registro financiero asociado.', async () => {
-    // Eliminar movimiento financiero asociado
     await sb.from('movimientos_financieros')
       .delete()
       .eq('referencia_id', id)
