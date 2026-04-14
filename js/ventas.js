@@ -1,5 +1,4 @@
 // ─── VENTAS (Unificado: POS + QuickService) ─────────────────────────────────
-// Reemplaza a quickservice.js y ventas.js
 // Integrado con Finanzas automáticamente
 
 async function ventas({ filtro='todos', offset=0 }={}) {
@@ -95,11 +94,11 @@ async function modalNuevaVenta() {
   window._ventaItems = [];
   window._ventaInv = inv || [];
   
+  const clienteSelect = await renderClienteSelect('venta-cli', null, true);
+  
   openModal(`
     <div class="modal-title">🛒 NUEVA VENTA</div>
-    <div class="form-group"><label class="form-label">Cliente (opcional)</label>
-      <select class="form-input" id="venta-cli"><option value="">Venta sin cliente</option>${(cls||[]).map(c=>`<option value="${c.id}">${h(c.nombre)}</option>`).join('')}</select>
-    </div>
+    <div class="form-group"><label class="form-label">Cliente (opcional)</label>${clienteSelect}</div>
     <div class="form-group"><label class="form-label">Método de pago</label>
       <select class="form-input" id="venta-metodo">
         <option value="efectivo">Efectivo</option><option value="tarjeta">Tarjeta</option><option value="transferencia">Transferencia</option>
@@ -117,7 +116,7 @@ async function modalNuevaVenta() {
       <div class="form-group"><label class="form-label">TOTAL</label><div id="venta-total" style="font-family:var(--font-head);font-size:1.5rem;color:var(--accent);padding-top:.3rem">₲0</div></div>
     </div>
     <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="venta-notas" placeholder="Opcional"></div>
-    <button class="btn-primary" style="background:var(--success)" onclick="guardarVenta()">✓ CONFIRMAR VENTA</button>
+    <button class="btn-primary" style="background:var(--success)" onclick="guardarVentaConSafeCall()">✓ CONFIRMAR VENTA</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
@@ -131,18 +130,14 @@ async function modalNuevoServicioRapido() {
   window._ventaItems = [];
   window._ventaInv = inv || [];
   
+  const clienteSelect = await renderClienteSelect('qs-cli', null, true);
+  const vehiculoSelect = await renderVehiculoSelect('qs-veh', null, null, true);
+  
   openModal(`
     <div class="modal-title" style="color:var(--success)">⚡ SERVICIO RÁPIDO</div>
     <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="qs-desc" placeholder="Cambio de aceite + filtro"></div>
-    <div class="form-group"><label class="form-label">Vehículo</label>
-      <select class="form-input" id="qs-veh" onchange="qsAutoCliente()">
-        <option value="">Seleccionar</option>
-        ${(vehs||[]).map(v=>`<option value="${v.id}" data-cli="${v.cliente_id||''}">${h(v.patente)} — ${h(v.marca)} ${h(v.modelo||'')}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group"><label class="form-label">Cliente</label>
-      <select class="form-input" id="qs-cli"><option value="">Seleccionar</option>${(cls||[]).map(c=>`<option value="${c.id}">${h(c.nombre)}</option>`).join('')}</select>
-    </div>
+    <div class="form-group"><label class="form-label">Vehículo</label>${vehiculoSelect}</div>
+    <div class="form-group"><label class="form-label">Cliente</label>${clienteSelect}</div>
     <div class="form-group"><label class="form-label">Agregar ítem</label>
       <select class="form-input" id="venta-prod-sel" onchange="ventaAgregarProducto()">
         <option value="">Seleccionar producto/servicio...</option>
@@ -155,7 +150,7 @@ async function modalNuevoServicioRapido() {
       <div class="form-group"><label class="form-label">Descuento</label><input class="form-input" id="venta-descuento" type="number" value="0" oninput="ventaUpdateTotal()"></div>
       <div class="form-group"><label class="form-label">TOTAL</label><div id="venta-total" style="font-family:var(--font-head);font-size:1.5rem;color:var(--accent);padding-top:.3rem">₲0</div></div>
     </div>
-    <button class="btn-primary" style="background:var(--success)" onclick="guardarVenta(true)">✓ CONFIRMAR SERVICIO</button>
+    <button class="btn-primary" style="background:var(--success)" onclick="guardarVentaConSafeCall(true)">✓ CONFIRMAR SERVICIO</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
@@ -235,8 +230,13 @@ function ventaUpdateTotal() {
   document.getElementById('venta-total').textContent = '₲' + gs(Math.max(0, total - desc));
 }
 
+async function guardarVentaConSafeCall(esServicioRapido = false) {
+  await safeCall(async () => {
+    await guardarVenta(esServicioRapido);
+  }, null, 'No se pudo confirmar la venta');
+}
+
 async function guardarVenta(esServicioRapido = false) {
-  if (guardando()) return;
   if (window._ventaItems.length === 0) { toast('Agregá al menos un ítem', 'error'); return; }
   
   const total = window._ventaItems.reduce((s, i) => s + i.precio * i.cantidad, 0);
@@ -278,7 +278,7 @@ async function guardarVenta(esServicioRapido = false) {
   const { data: saved, error } = await offlineInsert('ventas', data);
   if (error) { toast('Error: '+error.message, 'error'); return; }
   
-  // ─── INTEGRACIÓN CON FINANZAS ─────────────────────────────────────────────
+  // Integración con Finanzas
   if (totalFinal > 0) {
     try {
       let categoriaId;
@@ -325,24 +325,28 @@ async function guardarVenta(esServicioRapido = false) {
 
 async function facturarVenta(id) {
   confirmar('¿Marcar esta venta como facturada?', async () => {
-    await sb.from('ventas').update({ estado: 'facturado', fecha_facturacion: new Date().toISOString() }).eq('id', id);
-    clearCache('ventas');
-    toast('✓ Venta facturada', 'success');
-    detalleVenta(id);
+    await safeCall(async () => {
+      await sb.from('ventas').update({ estado: 'facturado', fecha_facturacion: new Date().toISOString() }).eq('id', id);
+      clearCache('ventas');
+      toast('✓ Venta facturada', 'success');
+      detalleVenta(id);
+    }, null, 'No se pudo facturar la venta');
   });
 }
 
 async function eliminarVenta(id) {
   confirmar('¿Eliminar esta venta? También se eliminará el registro financiero asociado.', async () => {
-    await sb.from('movimientos_financieros')
-      .delete()
-      .eq('referencia_id', id)
-      .eq('referencia_tabla', 'ventas');
-    
-    await offlineDelete('ventas', 'id', id);
-    clearCache('ventas');
-    clearCache('finanzas');
-    toast('Venta eliminada');
-    navigate('ventas');
+    await safeCall(async () => {
+      await sb.from('movimientos_financieros')
+        .delete()
+        .eq('referencia_id', id)
+        .eq('referencia_tabla', 'ventas');
+      
+      await offlineDelete('ventas', 'id', id);
+      clearCache('ventas');
+      clearCache('finanzas');
+      toast('Venta eliminada');
+      navigate('ventas');
+    }, null, 'No se pudo eliminar la venta');
   });
 }
