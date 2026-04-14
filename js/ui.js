@@ -25,14 +25,12 @@ function closeModal() {
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const tid = () => currentPerfil?.taller_id;
 
-// Función gs CORREGIDA (maneja NaN)
 function gs(n) {
   let num = parseFloat(n);
   if (isNaN(num)) num = 0;
   return num.toLocaleString('es-PY');
 }
 
-// Formatear teléfono
 function formatPhone(input) {
   let v = input.value.replace(/\D/g, '');
   if (v.length > 10) v = v.slice(0, 10);
@@ -44,7 +42,6 @@ function formatPhone(input) {
   input.value = formatted;
 }
 
-// Generar HTML de input de teléfono
 function phoneInput(id, value, placeholder) {
   const prefijos = [
     {code:'+595',flag:'🇵🇾',name:'PY'},
@@ -93,7 +90,7 @@ function debounce(key, fn, ms = 400) {
 // ─── SKELETON LOADING ───────────────────────────────────────────────────────
 function getSkeleton(page) {
   if (page === 'dashboard') return `<div style="padding:.25rem 0"><div class="skeleton skel-title"></div><div class="skeleton skel-search"></div><div class="stats-grid"><div class="skeleton skel-stat"></div><div class="skeleton skel-stat"></div><div class="skeleton skel-stat"></div><div class="skeleton skel-stat"></div></div><div class="skeleton skel-panel"></div><div class="skeleton skel-card"></div><div class="skeleton skel-card"></div><div class="skeleton skel-card"></div></div>`;
-  if (['clientes','vehiculos','reparaciones','inventario','creditos','empleados','facturacion','usuarios'].includes(page)) return `<div class="skeleton skel-title"></div><div class="skeleton skel-search"></div><div class="skeleton skel-card"></div><div class="skeleton skel-card"></div><div class="skeleton skel-card"></div><div class="skeleton skel-card"></div><div class="skeleton skel-card"></div>`;
+  if (['clientes','vehiculos','reparaciones','inventario','creditos','empleados','presupuestos','usuarios'].includes(page)) return `<div class="skeleton skel-title"></div><div class="skeleton skel-search"></div><div class="skeleton skel-card"></div><div class="skeleton skel-card"></div><div class="skeleton skel-card"></div><div class="skeleton skel-card"></div><div class="skeleton skel-card"></div>`;
   if (page === 'reportes') return `<div class="skeleton skel-title"></div><div class="stats-grid"><div class="skeleton skel-stat"></div><div class="skeleton skel-stat"></div></div><div class="skeleton skel-panel"></div><div class="skeleton skel-panel"></div>`;
   return `<div class="skeleton skel-card"></div><div class="skeleton skel-card"></div><div class="skeleton skel-card"></div>`;
 }
@@ -148,7 +145,7 @@ function guardando() {
 }
 
 // ─── SEARCHABLE SELECT ──────────────────────────────────────────────────────
-function searchableSelect(id, placeholder, searchFn) {
+function searchableSelect(id, placeholder) {
   return `<div style="position:relative">
     <input class="form-input" id="${id}-search" placeholder="${placeholder}" autocomplete="off"
       oninput="ssSearch('${id}',this.value)" onfocus="ssSearch('${id}',this.value)">
@@ -265,9 +262,9 @@ function safeFotoUrl(url) {
   if (url.startsWith('data:image/jpeg') || url.startsWith('data:image/png') || url.startsWith('data:image/webp')) return url;
   if (url.startsWith('https://')) return url;
   return '';
-  // ─── FUNCIÓN PARA VERIFICAR SI EL USUARIO TIENE PRIVILEGIOS DE ADMINISTRADOR ───
+}
+
 function esAdmin() {
   const rol = currentPerfil?.rol;
   return rol === 'admin' || rol === 'superadmin';
-}
 }
