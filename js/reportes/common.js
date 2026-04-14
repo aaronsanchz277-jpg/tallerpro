@@ -77,7 +77,6 @@ function aplicarRangoFechas(callbackFn) {
   if (callbackFn) callbackFn();
 }
 
-// Exportar a PDF
 async function exportarReportePDF(titulo, contenidoId) {
   toast('Generando PDF...', 'info');
   try {
