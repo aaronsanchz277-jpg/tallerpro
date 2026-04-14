@@ -1,5 +1,4 @@
-// ─── PRESUPUESTOS (Flujo: Generado → Aprobado → OT automática con ítems) ─────
-// Este archivo unifica la funcionalidad de presupuestos y facturas.
+  // ─── PRESUPUESTOS (Flujo: Generado → Aprobado → OT automática con ítems) ─────
 
 const PRESUPUESTO_ESTADOS = {generado:'GENERADO',aprobado:'APROBADO',rechazado:'RECHAZADO'};
 const presupuestoBadge = (e) => ({generado:'badge-yellow',aprobado:'badge-green',rechazado:'badge-red'}[e]||'badge-blue');
@@ -124,64 +123,70 @@ async function detallePresupuesto(id) {
 
 async function aprobarPresupuesto(id) {
   confirmar(t('confirmarAprobar') || '¿Aprobar este presupuesto y crear la orden de trabajo?', async () => {
-    const { data:p } = await sb.from('presupuestos_v2').select('*').eq('id',id).single();
-    if (!p) return;
-    
-    const { data:rep, error } = await sb.from('reparaciones').insert({
-      descripcion: p.descripcion || 'Trabajo desde presupuesto',
-      tipo_trabajo: p.tipo_trabajo || 'Mecánica general',
-      vehiculo_id: p.vehiculo_id,
-      cliente_id: p.cliente_id,
-      costo: p.total || 0,
-      costo_repuestos: (p.items||[]).filter(i=>i.tipo==='producto').reduce((s,i)=>s+parseFloat(i.precio||0)*(i.cantidad||1),0),
-      estado: 'pendiente',
-      fecha: new Date().toISOString().split('T')[0],
-      notas: 'Generado desde presupuesto. '+(p.observaciones||''),
-      taller_id: tid()
-    }).select('id').single();
-    
-    if (error) { toast('Error: '+error.message,'error'); return; }
-    
-    const items = p.items || [];
-    if (items.length > 0) {
-      const itemsData = items.map(item => ({
-        reparacion_id: rep.id,
-        tipo: item.tipo,
-        descripcion: item.descripcion,
-        cantidad: item.cantidad || 1,
-        precio_unitario: item.precio || 0,
+    await safeCall(async () => {
+      const { data:p } = await sb.from('presupuestos_v2').select('*').eq('id',id).single();
+      if (!p) return;
+      
+      const { data:rep, error } = await sb.from('reparaciones').insert({
+        descripcion: p.descripcion || 'Trabajo desde presupuesto',
+        tipo_trabajo: p.tipo_trabajo || 'Mecánica general',
+        vehiculo_id: p.vehiculo_id,
+        cliente_id: p.cliente_id,
+        costo: p.total || 0,
+        costo_repuestos: (p.items||[]).filter(i=>i.tipo==='producto').reduce((s,i)=>s+parseFloat(i.precio||0)*(i.cantidad||1),0),
+        estado: 'pendiente',
+        fecha: new Date().toISOString().split('T')[0],
+        notas: 'Generado desde presupuesto. '+(p.observaciones||''),
         taller_id: tid()
-      }));
-      await sb.from('reparacion_items').insert(itemsData);
-    }
-    
-    await sb.from('presupuestos_v2').update({ 
-      estado: 'aprobado', 
-      reparacion_id: rep.id, 
-      fecha_aprobacion: new Date().toISOString() 
-    }).eq('id', id);
-    
-    clearCache('presupuestos'); clearCache('reparaciones');
-    toast('✓ Presupuesto aprobado — OT creada', 'success');
-    detallePresupuesto(id);
+      }).select('id').single();
+      
+      if (error) { toast('Error: '+error.message,'error'); return; }
+      
+      const items = p.items || [];
+      if (items.length > 0) {
+        const itemsData = items.map(item => ({
+          reparacion_id: rep.id,
+          tipo: item.tipo,
+          descripcion: item.descripcion,
+          cantidad: item.cantidad || 1,
+          precio_unitario: item.precio || 0,
+          taller_id: tid()
+        }));
+        await sb.from('reparacion_items').insert(itemsData);
+      }
+      
+      await sb.from('presupuestos_v2').update({ 
+        estado: 'aprobado', 
+        reparacion_id: rep.id, 
+        fecha_aprobacion: new Date().toISOString() 
+      }).eq('id', id);
+      
+      clearCache('presupuestos'); clearCache('reparaciones');
+      toast('✓ Presupuesto aprobado — OT creada', 'success');
+      detallePresupuesto(id);
+    }, null, 'No se pudo aprobar el presupuesto');
   });
 }
 
 async function rechazarPresupuesto(id) {
   confirmar(t('confirmarRechazar') || '¿Rechazar este presupuesto?', async () => {
-    await sb.from('presupuestos_v2').update({estado:'rechazado'}).eq('id', id);
-    clearCache('presupuestos');
-    toast('Presupuesto rechazado');
-    detallePresupuesto(id);
+    await safeCall(async () => {
+      await sb.from('presupuestos_v2').update({estado:'rechazado'}).eq('id', id);
+      clearCache('presupuestos');
+      toast('Presupuesto rechazado');
+      detallePresupuesto(id);
+    }, null, 'No se pudo rechazar el presupuesto');
   });
 }
 
 async function eliminarPresupuesto(id) {
   confirmar(t('confirmarEliminar') || '¿Eliminar este presupuesto permanentemente?', async () => {
-    await offlineDelete('presupuestos_v2', 'id', id);
-    clearCache('presupuestos');
-    toast('Presupuesto eliminado');
-    navigate('presupuestos');
+    await safeCall(async () => {
+      await offlineDelete('presupuestos_v2', 'id', id);
+      clearCache('presupuestos');
+      toast('Presupuesto eliminado');
+      navigate('presupuestos');
+    }, null, 'No se pudo eliminar el presupuesto');
   });
 }
 
@@ -191,27 +196,16 @@ async function modalNuevoPresupuesto(editId) {
     const { data } = await sb.from('presupuestos_v2').select('*').eq('id', editId).single();
     existing = data;
   }
-  const [{ data:cls }, { data:vehs }] = await Promise.all([
-    sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre'),
-    sb.from('vehiculos').select('id,patente,marca,modelo,cliente_id').eq('taller_id',tid()).order('patente')
-  ]);
+  
+  const clienteSelect = await renderClienteSelect('pp-cli', existing?.cliente_id, true);
+  const vehiculoSelect = await renderVehiculoSelect('pp-veh', existing?.vehiculo_id, null, true);
   window._pptoItems = existing?.items || [];
   
   openModal(`
     <div class="modal-title">${editId ? 'EDITAR' : 'NUEVO'} PRESUPUESTO</div>
     <div class="form-group"><label class="form-label">Descripción *</label><input class="form-input" id="pp-desc" value="${h(existing?.descripcion||'')}" placeholder="Cambio de frenos completo"></div>
-    <div class="form-group"><label class="form-label">Vehículo</label>
-      <select class="form-input" id="pp-veh" onchange="pptoAutoCliente()">
-        <option value="">Seleccionar vehículo</option>
-        ${(vehs||[]).map(v=>`<option value="${v.id}" data-cli="${v.cliente_id||''}" ${existing?.vehiculo_id===v.id?'selected':''}>${h(v.patente)} — ${h(v.marca)} ${h(v.modelo||'')}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group"><label class="form-label">Cliente</label>
-      <select class="form-input" id="pp-cli">
-        <option value="">Seleccionar cliente</option>
-        ${(cls||[]).map(c=>`<option value="${c.id}" ${existing?.cliente_id===c.id?'selected':''}>${h(c.nombre)}</option>`).join('')}
-      </select>
-    </div>
+    <div class="form-group"><label class="form-label">Vehículo</label>${vehiculoSelect}</div>
+    <div class="form-group"><label class="form-label">Cliente</label>${clienteSelect}</div>
     <div class="form-group"><label class="form-label">Tipo de trabajo</label>
       <select class="form-input" id="pp-tipo">
         ${TIPOS_TRABAJO.map(tt=>`<option ${existing?.tipo_trabajo===tt?'selected':''}>${tt}</option>`).join('')}
@@ -229,7 +223,7 @@ async function modalNuevoPresupuesto(editId) {
       <div class="form-group"><label class="form-label">TOTAL</label><div id="pp-total" style="font-family:var(--font-head);font-size:1.5rem;color:var(--accent);padding-top:.3rem">₲0</div></div>
     </div>
     <div class="form-group"><label class="form-label">Observaciones</label><textarea class="form-input" id="pp-obs" rows="2">${h(existing?.observaciones||'')}</textarea></div>
-    <button class="btn-primary" onclick="guardarPresupuesto(${editId?"'"+editId+"'":'null'})">${t('guardar')}</button>
+    <button class="btn-primary" onclick="guardarPresupuestoConSafeCall(${editId?"'"+editId+"'":'null'})">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
   pptoUpdateTotal();
 }
@@ -277,10 +271,16 @@ function pptoRenderItems() {
     </div>`).join('');
 }
 
+async function guardarPresupuestoConSafeCall(id) {
+  await safeCall(async () => {
+    await guardarPresupuesto(id);
+  }, null, 'No se pudo guardar el presupuesto');
+}
+
 async function guardarPresupuesto(id) {
-  if (guardando()) return;
   const desc = document.getElementById('pp-desc').value.trim();
-  if (!desc) { toast('La descripción es obligatoria','error'); return; }
+  if (!validateRequired(desc, 'Descripción')) return;
+  
   const total = window._pptoItems.reduce((s,i) => s + parseFloat(i.precio||0)*(i.cantidad||1), 0);
   const descuento = parseFloat(document.getElementById('pp-descuento').value) || 0;
   const data = {
