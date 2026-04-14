@@ -14,7 +14,7 @@ async function empleados() {
       <div class="card" onclick="detalleEmpleado('${e.id}')">
         <div class="card-header">
           <div class="card-avatar" style="overflow:hidden;padding:0">
-            ${e.foto_url?`<img src="${e.foto_url}" style="width:100%;height:100%;object-fit:cover">`:`<span style="font-size:1.3rem">${h(e.nombre).charAt(0).toUpperCase()}</span>`}
+            ${e.foto_url?`<img src="${safeFotoUrl(e.foto_url)}" style="width:100%;height:100%;object-fit:cover">`:`<span style="font-size:1.3rem">${h(e.nombre).charAt(0).toUpperCase()}</span>`}
           </div>
           <div class="card-info">
             <div class="card-name">${h(e.nombre)}</div>
@@ -74,7 +74,7 @@ async function detalleEmpleado(id) {
                   <div style="font-weight:500;font-size:.9rem">${h(t.tipo_trabajo)||'Trabajo general'}</div>
                   <div style="font-size:.75rem;color:var(--text2);margin-top:2px">${t.vehiculos?h(t.vehiculos.patente)+' · '+h(t.vehiculos.marca)+' '+(h(t.vehiculos.modelo)||''):t('sinVehiculo')}</div>
                   ${t.comentario?`<div style="font-size:.8rem;color:var(--text2);margin-top:.4rem;font-style:italic">"${h(t.comentario)}"</div>`:''}
-                  ${t.foto_vehiculo_url?`<img src="${t.foto_vehiculo_url}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-top:.5rem;border:1px solid var(--border)">`:''}
+                  ${t.foto_vehiculo_url?`<img src="${safeFotoUrl(t.foto_vehiculo_url)}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-top:.5rem;border:1px solid var(--border)">`:''}
                 </div>
                 <div style="text-align:right;flex-shrink:0">
                   <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--accent)">${t.horas}hs</div>
@@ -92,29 +92,37 @@ function modalNuevoEmpleado() {
     <div class="modal-title">${t("modNuevoEmpleado")}</div>
     <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" placeholder="Carlos Rodríguez"></div>
     <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" placeholder="Mecánico, Electricista..."></div>
-    <div class="form-group"><label class="form-label">Sueldo mensual ₲</label><input class="form-input" id="f-sueldo" type="number" placeholder="0"></div>
-    <div class="form-group"><label class="form-label">Máx. trabajos simultáneos</label><input class="form-input" id="f-max-trabajos" type="number" min="1" value="3"></div>
+    <div class="form-group"><label class="form-label">Sueldo mensual ₲</label>${renderMontoInput('f-sueldo', '', '0')}</div>
     <div class="form-group"><label class="form-label">Teléfono</label>${phoneInput('f-tel','','0981 123 456')}</div>
-    <button class="btn-primary" onclick="guardarEmpleado()">${t('guardar')}</button>
+    <button class="btn-primary" onclick="guardarEmpleadoConSafeCall()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
 }
 
+async function guardarEmpleadoConSafeCall() {
+  await safeCall(async () => {
+    await guardarEmpleado();
+  }, null, 'No se pudo guardar el empleado');
+}
+
 async function guardarEmpleado(id=null) {
-  if (guardando()) return;
   const nombre = document.getElementById('f-nombre').value.trim();
-  if (!nombre) { toast('El nombre es obligatorio','error'); return; }
-  const data = { 
-    nombre, 
-    rol: document.getElementById('f-rol').value, 
-    sueldo: parseFloat(document.getElementById('f-sueldo')?.value)||0, 
-    max_trabajos_simultaneos: parseInt(document.getElementById('f-max-trabajos')?.value) || 3,
-    telefono: document.getElementById('f-tel').value, 
-    taller_id: tid() 
+  if (!validateRequired(nombre, 'Nombre')) return;
+  
+  const data = {
+    nombre,
+    rol: document.getElementById('f-rol').value,
+    sueldo: parseFloat(document.getElementById('f-sueldo')?.value)||0,
+    telefono: document.getElementById('f-tel').value,
+    taller_id: tid()
   };
+  
   const { error } = id ? await offlineUpdate('empleados', data, 'id', id) : await offlineInsert('empleados', data);
   if (error) { toast('Error: '+error.message,'error'); return; }
-  clearCache('empleados');toast(id?'Empleado actualizado':'Empleado guardado','success');
-  closeModal(); empleados();
+  
+  clearCache('empleados');
+  toast(id ? 'Empleado actualizado' : 'Empleado guardado','success');
+  closeModal(); 
+  empleados();
 }
 
 async function modalEditarEmpleado(id) {
@@ -123,10 +131,9 @@ async function modalEditarEmpleado(id) {
     <div class="modal-title">${t("modEditarEmpleado")}</div>
     <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" value="${h(e.nombre||'')}"></div>
     <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" value="${h(e.rol||'')}"></div>
-    <div class="form-group"><label class="form-label">Sueldo mensual ₲</label><input class="form-input" id="f-sueldo" type="number" value="${e.sueldo||0}"></div>
-    <div class="form-group"><label class="form-label">Máx. trabajos simultáneos</label><input class="form-input" id="f-max-trabajos" type="number" min="1" value="${e.max_trabajos_simultaneos||3}"></div>
-    <div class="form-group"><label class="form-label">Teléfono</label>${phoneInput('f-tel',e.telefono,'0981 123 456')}</div>
-    <button class="btn-primary" onclick="guardarEmpleado('${id}')">${t('actualizar')}</button>
+    <div class="form-group"><label class="form-label">Sueldo mensual ₲</label>${renderMontoInput('f-sueldo', e.sueldo||0)}</div>
+    <div class="form-group"><label class="form-label">Teléfono</label>${phoneInput('f-tel', e.telefono, '0981 123 456')}</div>
+    <button class="btn-primary" onclick="guardarEmpleadoConSafeCall('${id}')">${t('actualizar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
 }
 
@@ -177,53 +184,84 @@ async function cargarVales(empleadoId) {
 function modalNuevoVale(empleadoId) {
   openModal(`
     <div class="modal-title">💵 Registrar Vale / Adelanto</div>
-    <div class="form-group"><label class="form-label">Monto ₲ *</label><input class="form-input" id="f-vale-monto" type="number" placeholder="50000"></div>
+    <div class="form-group"><label class="form-label">Monto ₲ *</label>${renderMontoInput('f-vale-monto', '', '50000')}</div>
     <div class="form-group"><label class="form-label">Concepto</label><input class="form-input" id="f-vale-concepto" placeholder="Almuerzo, adelanto, etc."></div>
-    <div class="form-group"><label class="form-label">Fecha</label><input class="form-input" id="f-vale-fecha" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
-    <button class="btn-primary" onclick="guardarVale('${empleadoId}')">Registrar vale</button>
+    <div class="form-group"><label class="form-label">Fecha</label>${renderFechaInput('f-vale-fecha')}</div>
+    <button class="btn-primary" onclick="guardarValeConSafeCall('${empleadoId}')">Registrar vale</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
+async function guardarValeConSafeCall(empleadoId) {
+  await safeCall(async () => {
+    await guardarVale(empleadoId);
+  }, null, 'No se pudo registrar el vale');
+}
+
 async function guardarVale(empleadoId) {
-  if (guardando()) return;
   const monto = parseFloat(document.getElementById('f-vale-monto').value);
-  if (!monto || monto <= 0) { toast('El monto debe ser mayor a 0','error'); return; }
+  if (!validatePositiveNumber(monto, 'Monto')) return;
+  
   const concepto = document.getElementById('f-vale-concepto').value || 'Vale';
   const fecha = document.getElementById('f-vale-fecha').value;
-  const { error } = await sb.from('vales_empleado').insert({ empleado_id:empleadoId, monto, concepto, fecha, taller_id:tid() });
+  
+  const { error } = await sb.from('vales_empleado').insert({
+    empleado_id: empleadoId,
+    monto,
+    concepto,
+    fecha,
+    taller_id: tid()
+  });
   if (error) { toast('Error: '+error.message,'error'); return; }
-  const { data: emp } = await sb.from('empleados').select('nombre').eq('id',empleadoId).single();
+  
+  const { data: emp } = await sb.from('empleados').select('nombre').eq('id', empleadoId).single();
   const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id',tid()).eq('nombre','Vales/Adelantos').limit(1);
   if (cats?.length) {
-    await sb.from('movimientos_financieros').insert({ taller_id:tid(), tipo:'egreso', categoria_id:cats[0].id, monto, descripcion:'Vale: '+(emp?.nombre||'')+' — '+concepto, fecha });
+    await sb.from('movimientos_financieros').insert({
+      taller_id: tid(),
+      tipo: 'egreso',
+      categoria_id: cats[0].id,
+      monto,
+      descripcion: 'Vale: ' + (emp?.nombre||'') + ' — ' + concepto,
+      fecha
+    });
   }
-  clearCache('empleados');toast('Vale registrado','success'); closeModal(); detalleEmpleado(empleadoId);
+  
+  clearCache('empleados');
+  clearCache('finanzas');
+  toast('Vale registrado','success');
+  closeModal(); 
+  detalleEmpleado(empleadoId);
 }
 
 async function eliminarVale(valeId, empleadoId) {
-  await sb.from('vales_empleado').delete().eq('id', valeId);
-  clearCache('empleados');toast('Vale eliminado'); detalleEmpleado(empleadoId);
+  confirmar('¿Eliminar este vale?', async () => {
+    await safeCall(async () => {
+      await sb.from('vales_empleado').delete().eq('id', valeId);
+      clearCache('empleados');
+      toast('Vale eliminado');
+      detalleEmpleado(empleadoId);
+    }, null, 'No se pudo eliminar el vale');
+  });
 }
 
 async function eliminarEmpleado(id) {
   confirmar('Esta acción eliminará al empleado y sus registros.', async () => {
-    await sb.from('trabajos_empleado').delete().eq('empleado_id',id);
-    await offlineDelete('empleados', 'id', id);
-    clearCache('empleados');toast('Empleado eliminado'); navigate('empleados');
+    await safeCall(async () => {
+      await sb.from('trabajos_empleado').delete().eq('empleado_id', id);
+      await offlineDelete('empleados', 'id', id);
+      clearCache('empleados');
+      toast('Empleado eliminado');
+      navigate('empleados');
+    }, null, 'No se pudo eliminar el empleado');
   });
 }
 
 async function modalNuevoTrabajo(empleadoId) {
-  const { data:vehs } = await sb.from('vehiculos').select('id,patente,marca,modelo').eq('taller_id',tid()).order('patente');
+  const vehiculoSelect = await renderVehiculoSelect('f-vehiculo', null, null, true);
   openModal(`
     <div class="modal-title">${t("modRegistrarTrabajo")}</div>
-    <div class="form-group"><label class="form-label">${t("lblFecha")} *</label><input class="form-input" id="f-fecha" type="date" value="${new Date().toISOString().split('T')[0]}"></div>
-    <div class="form-group"><label class="form-label">${t("lblVehiculo")}</label>
-      <select class="form-input" id="f-vehiculo">
-        <option value="">${t('sinVehiculo')}</option>
-        ${(vehs||[]).map(v => `<option value="${v.id}">${h(v.patente)} · ${h(v.marca)} ${h(v.modelo||'')}</option>`).join('')}
-      </select>
-    </div>
+    <div class="form-group"><label class="form-label">${t("lblFecha")} *</label>${renderFechaInput('f-fecha')}</div>
+    <div class="form-group"><label class="form-label">${t("lblVehiculo")}</label>${vehiculoSelect}</div>
     <div class="form-group"><label class="form-label">${t("lblTipoTrabajo")} *</label><input class="form-input" id="f-tipo" placeholder="Cambio de frenos, Alineación..."></div>
     <div class="form-group"><label class="form-label">${t("lblHoras")} trabajadas *</label><input class="form-input" id="f-horas" type="number" placeholder="2.5" min="0.5" step="0.5"></div>
     <div class="form-group"><label class="form-label">${t("lblComentario")}</label><textarea class="form-input" id="f-comentario" rows="2"></textarea></div>
@@ -233,25 +271,48 @@ async function modalNuevoTrabajo(empleadoId) {
       <div id="foto-prev"></div>
       <input type="hidden" id="f-foto-b64">
     </div>
-    <button class="btn-primary" onclick="guardarTrabajo('${empleadoId}')">${t('guardar')}</button>
+    <button class="btn-primary" onclick="guardarTrabajoConSafeCall('${empleadoId}')">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function guardarTrabajoConSafeCall(empleadoId) {
+  await safeCall(async () => {
+    await guardarTrabajo(empleadoId);
+  }, null, 'No se pudo registrar el trabajo');
 }
 
 async function guardarTrabajo(empleadoId) {
   const tipo = document.getElementById('f-tipo').value.trim();
+  if (!validateRequired(tipo, 'Tipo de trabajo')) return;
+  
   const horas = parseFloat(document.getElementById('f-horas').value);
-  if (!tipo) { toast('El tipo de trabajo es obligatorio','error'); return; }
-  if (!horas||horas<=0) { toast('Las horas deben ser mayor a 0','error'); return; }
+  if (!validatePositiveNumber(horas, 'Horas trabajadas')) return;
+  
   const vid = document.getElementById('f-vehiculo').value;
-  const data = { empleado_id:empleadoId, vehiculo_id:vid||null, fecha:document.getElementById('f-fecha').value, tipo_trabajo:tipo, horas, comentario:document.getElementById('f-comentario').value||null, foto_vehiculo_url:document.getElementById('f-foto-b64').value||null };
+  const data = {
+    empleado_id: empleadoId,
+    vehiculo_id: vid || null,
+    fecha: document.getElementById('f-fecha').value,
+    tipo_trabajo: tipo,
+    horas,
+    comentario: document.getElementById('f-comentario').value || null,
+    foto_vehiculo_url: document.getElementById('f-foto-b64').value || null
+  };
+  
   const { error } = await offlineInsert('trabajos_empleado', data);
   if (error) { toast('Error: '+error.message,'error'); return; }
-  toast('Trabajo registrado','success'); closeModal(); detalleEmpleado(empleadoId);
+  
+  toast('Trabajo registrado','success');
+  closeModal(); 
+  detalleEmpleado(empleadoId);
 }
 
 async function eliminarTrabajo(trabajoId, empleadoId) {
   confirmar('¿Eliminar este registro de trabajo?', async () => {
-    await offlineDelete('trabajos_empleado', 'id', trabajoId);
-    toast('Registro eliminado'); detalleEmpleado(empleadoId);
+    await safeCall(async () => {
+      await offlineDelete('trabajos_empleado', 'id', trabajoId);
+      toast('Registro eliminado');
+      detalleEmpleado(empleadoId);
+    }, null, 'No se pudo eliminar el trabajo');
   });
 }
