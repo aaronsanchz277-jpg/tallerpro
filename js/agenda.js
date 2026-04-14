@@ -1,4 +1,4 @@
-// ─── AGENDA DE CITAS ────────────────────────────────────────────────────────
+ // ─── AGENDA DE CITAS ────────────────────────────────────────────────────────
 async function agenda({ filtro='hoy' }={}) {
   const hoy = fechaHoy();
   const primerSemana = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()); return d.toISOString().split('T')[0]; })();
@@ -73,30 +73,40 @@ async function detalleCita(id) {
 }
 
 async function cambiarEstadoCita(id, estado) {
-  await offlineUpdate('citas', { estado }, 'id', id);
-  clearCache('citas');toast('✓', 'success'); detalleCita(id);
+  await safeCall(async () => {
+    await offlineUpdate('citas', { estado }, 'id', id);
+    clearCache('citas');
+    toast('✓', 'success');
+    detalleCita(id);
+  }, null, 'No se pudo cambiar el estado');
 }
 
 async function crearRepDesdeCita(clienteId, vehiculoId, descripcion) {
-  const { error } = await offlineInsert('reparaciones', {
-    descripcion: descripcion || 'Trabajo',
-    tipo_trabajo: 'Mecánica general',
-    cliente_id: clienteId || null,
-    vehiculo_id: vehiculoId || null,
-    costo: 0, costo_repuestos: 0,
-    estado: 'pendiente',
-    fecha: new Date().toISOString().split('T')[0],
-    taller_id: tid()
-  });
-  if (error) { toast('Error: '+error.message,'error'); return; }
-  clearCache('reparaciones');toast('Trabajo creado desde el turno','success');
-  navigate('reparaciones');
+  await safeCall(async () => {
+    const { error } = await offlineInsert('reparaciones', {
+      descripcion: descripcion || 'Trabajo',
+      tipo_trabajo: 'Mecánica general',
+      cliente_id: clienteId || null,
+      vehiculo_id: vehiculoId || null,
+      costo: 0, costo_repuestos: 0,
+      estado: 'pendiente',
+      fecha: new Date().toISOString().split('T')[0],
+      taller_id: tid()
+    });
+    if (error) { toast('Error: '+error.message,'error'); return; }
+    clearCache('reparaciones');
+    toast('Trabajo creado desde el turno','success');
+    navigate('reparaciones');
+  }, null, 'No se pudo crear la reparación');
 }
 
 async function eliminarCita(id) {
   confirmar(t('confirmar'), async () => {
-    await offlineDelete('citas', 'id', id);
-    toast('Eliminada'); navigate('agenda');
+    await safeCall(async () => {
+      await offlineDelete('citas', 'id', id);
+      toast('Eliminada');
+      navigate('agenda');
+    }, null, 'No se pudo eliminar la cita');
   });
 }
 
@@ -107,6 +117,9 @@ async function modalNuevaCita() {
     sb.from('config_taller').select('*').eq('taller_id',tid()).maybeSingle()
   ]);
   const durDef = config?.duracion_turno || 60;
+  const clienteSelect = await renderClienteSelect('f-cliente', null, true);
+  const vehiculoSelect = await renderVehiculoSelect('f-vehiculo', null, null, true);
+  
   openModal(`
     <div class="modal-title">${t('agendaNueva')}</div>
     <div class="form-group"><label class="form-label">${t('agendaDescripcion')}</label><input class="form-input" id="f-desc" placeholder="Cambio de aceite"></div>
@@ -115,22 +128,18 @@ async function modalNuevaCita() {
       <div class="form-group"><label class="form-label">${t('agendaHora')}</label><select class="form-input" id="f-hora"><option>Cargando...</option></select></div>
     </div>
     <div class="form-group"><label class="form-label">Duración (min)</label><input class="form-input" id="f-duracion" type="number" value="${durDef}" min="15" step="15"></div>
-    <div class="form-group"><label class="form-label">${t('lblCliente')}</label>
-      <select class="form-input" id="f-cliente">
-        <option value="">${t('sinCliente')}</option>
-        ${(cls||[]).map(c => `<option value="${c.id}">${h(c.nombre)}</option>`).join('')}
-      </select>
-    </div>
-    <div class="form-group"><label class="form-label">${t('lblVehiculo')}</label>
-      <select class="form-input" id="f-vehiculo">
-        <option value="">${t('sinVehiculo')}</option>
-        ${(vehs||[]).map(v => `<option value="${v.id}">${h(v.patente)} - ${h(v.marca)}</option>`).join('')}
-      </select>
-    </div>
+    <div class="form-group"><label class="form-label">${t('lblCliente')}</label>${clienteSelect}</div>
+    <div class="form-group"><label class="form-label">${t('lblVehiculo')}</label>${vehiculoSelect}</div>
     <div class="form-group"><label class="form-label">${t('lblNotas')}</label><textarea class="form-input" id="f-notas" rows="2"></textarea></div>
-    <button class="btn-primary" onclick="guardarCita()">${t('guardar')}</button>
+    <button class="btn-primary" onclick="guardarCitaConSafeCall()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
   setTimeout(cargarHorasDisponibles, 50);
+}
+
+async function guardarCitaConSafeCall() {
+  await safeCall(async () => {
+    await guardarCita();
+  }, null, 'No se pudo agendar la cita');
 }
 
 async function cargarHorasDisponibles() {
@@ -158,7 +167,6 @@ async function getAvailableSlots(fecha, tallerId) {
     sb.from('feriados').select('id').eq('taller_id', tallerId).eq('fecha', fecha).maybeSingle()
   ]);
 
-  // Si es feriado, no hay slots
   if (feriado) return { slots: [], feriado: true };
 
   const apertura = config?.hora_apertura || '08:00';
@@ -167,11 +175,9 @@ async function getAvailableSlots(fecha, tallerId) {
   const capacidad = config?.capacidad || 1;
   const diasLab = (config?.dias_laborales || '1,2,3,4,5,6').split(',').map(Number);
 
-  // Verificar día laboral
   const diaSemana = new Date(fecha + 'T12:00').getDay();
   if (!diasLab.includes(diaSemana)) return { slots: [], feriado: false };
 
-  // Generar slots
   const slots = [];
   const [aH, aM] = apertura.split(':').map(Number);
   const [cH, cM] = cierre.split(':').map(Number);
@@ -194,14 +200,29 @@ async function getAvailableSlots(fecha, tallerId) {
 
 async function guardarCita() {
   const desc = document.getElementById('f-desc').value.trim();
-  if (!desc) { toast('La descripción es obligatoria','error'); return; }
+  if (!validateRequired(desc, 'Descripción')) return;
+  
   const hora = document.getElementById('f-hora').value;
   if (!hora) { toast('Seleccioná un horario','error'); return; }
+  
   const duracion = parseInt(document.getElementById('f-duracion')?.value) || 60;
-  const data = { descripcion:desc, fecha:document.getElementById('f-fecha').value, hora, duracion, cliente_id:document.getElementById('f-cliente').value||null, vehiculo_id:document.getElementById('f-vehiculo').value||null, notas:document.getElementById('f-notas').value, taller_id:tid() };
+  const data = {
+    descripcion: desc,
+    fecha: document.getElementById('f-fecha').value,
+    hora,
+    duracion,
+    cliente_id: document.getElementById('f-cliente').value || null,
+    vehiculo_id: document.getElementById('f-vehiculo').value || null,
+    notas: document.getElementById('f-notas').value,
+    taller_id: tid()
+  };
+  
   const { error } = await offlineInsert('citas', data);
   if (error) { toast('Error: '+error.message,'error'); return; }
-  toast('Cita agendada','success'); closeModal(); agenda();
+  
+  toast('Cita agendada','success');
+  closeModal(); 
+  agenda();
 }
 
 // ─── CONFIG TALLER (horarios, capacidad) ────────────────────────────────────
@@ -213,6 +234,7 @@ async function modalConfigTaller() {
   const c = config || { hora_apertura:'08:00', hora_cierre:'18:00', duracion_turno:60, capacidad:1, dias_laborales:'1,2,3,4,5,6' };
   const dias = (c.dias_laborales||'').split(',').map(Number);
   const diasNombres = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  
   openModal(`
     <div class="modal-title">⚙️ ${t('agendaTitulo')} — Configuración</div>
     <div class="form-row">
@@ -239,7 +261,7 @@ async function modalConfigTaller() {
         <div class="form-group" style="margin:0"><input class="form-input" id="f-feriado-fecha" type="date"></div>
         <div class="form-group" style="margin:0"><input class="form-input" id="f-feriado-desc" placeholder="Descripción"></div>
       </div>
-      <button onclick="agregarFeriado()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.5rem;font-size:.8rem;cursor:pointer;margin-bottom:.75rem">+ Agregar feriado</button>
+      <button onclick="agregarFeriadoConSafeCall()" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.5rem;font-size:.8rem;cursor:pointer;margin-bottom:.75rem">+ Agregar feriado</button>
       ${(feriados||[]).length === 0 ? '<p style="font-size:.8rem;color:var(--text2)">No hay feriados cargados</p>' :
         (feriados||[]).map(f => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
@@ -247,43 +269,63 @@ async function modalConfigTaller() {
             <span style="font-size:.85rem;color:var(--text)">${formatFecha(f.fecha)}</span>
             <span style="font-size:.75rem;color:var(--text2);margin-left:.5rem">${h(f.descripcion||'')}</span>
           </div>
-          <button onclick="eliminarFeriado('${f.id}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 8px;cursor:pointer">✕</button>
+          <button onclick="eliminarFeriadoConSafeCall('${f.id}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 8px;cursor:pointer">✕</button>
         </div>`).join('')}
     </div>
     <button class="btn-secondary" onclick="closeModal()" style="margin-top:1rem">${t('cancelar')}</button>`);
 }
 
+async function agregarFeriadoConSafeCall() {
+  await safeCall(async () => {
+    await agregarFeriado();
+  }, null, 'No se pudo agregar el feriado');
+}
+
 async function agregarFeriado() {
   const fecha = document.getElementById('f-feriado-fecha').value;
-  if (!fecha) { toast('Seleccioná una fecha','error'); return; }
+  if (!validateRequired(fecha, 'Fecha')) return;
+  
   const desc = document.getElementById('f-feriado-desc').value.trim();
   const { error } = await sb.from('feriados').insert({ fecha, descripcion: desc, taller_id: tid() });
   if (error) { toast('Error: '+error.message,'error'); return; }
+  
   toast('Feriado agregado','success');
-  closeModal(); modalConfigTaller();
+  closeModal(); 
+  modalConfigTaller();
+}
+
+async function eliminarFeriadoConSafeCall(id) {
+  await safeCall(async () => {
+    await eliminarFeriado(id);
+  }, null, 'No se pudo eliminar el feriado');
 }
 
 async function eliminarFeriado(id) {
   await sb.from('feriados').delete().eq('id', id);
   toast('Feriado eliminado');
-  closeModal(); modalConfigTaller();
+  closeModal(); 
+  modalConfigTaller();
 }
 
 async function guardarConfigTaller(exists) {
-  const diasSel = Array.from(document.querySelectorAll('.dia-check:checked')).map(cb => cb.value).join(',');
-  const data = {
-    taller_id: tid(),
-    hora_apertura: document.getElementById('f-apertura').value,
-    hora_cierre: document.getElementById('f-cierre').value,
-    duracion_turno: parseInt(document.getElementById('f-dur-turno').value) || 60,
-    capacidad: parseInt(document.getElementById('f-capacidad').value) || 1,
-    dias_laborales: diasSel || '1,2,3,4,5,6'
-  };
-  const { error } = exists
-    ? await sb.from('config_taller').update(data).eq('taller_id', tid())
-    : await sb.from('config_taller').insert(data);
-  if (error) { toast('Error: '+error.message,'error'); return; }
-  toast('Configuración guardada','success'); closeModal(); agenda();
+  await safeCall(async () => {
+    const diasSel = Array.from(document.querySelectorAll('.dia-check:checked')).map(cb => cb.value).join(',');
+    const data = {
+      taller_id: tid(),
+      hora_apertura: document.getElementById('f-apertura').value,
+      hora_cierre: document.getElementById('f-cierre').value,
+      duracion_turno: parseInt(document.getElementById('f-dur-turno').value) || 60,
+      capacidad: parseInt(document.getElementById('f-capacidad').value) || 1,
+      dias_laborales: diasSel || '1,2,3,4,5,6'
+    };
+    const { error } = exists
+      ? await sb.from('config_taller').update(data).eq('taller_id', tid())
+      : await sb.from('config_taller').insert(data);
+    if (error) { toast('Error: '+error.message,'error'); return; }
+    toast('Configuración guardada','success'); 
+    closeModal(); 
+    agenda();
+  }, null, 'No se pudo guardar la configuración');
 }
 
 // ─── VISTA CLIENTE: MIS MANTENIMIENTOS ──────────────────────────────────────
@@ -355,14 +397,24 @@ async function misCitas() {
 
 async function cancelarMiCita(id) {
   confirmar(t('confirmar'), async () => {
-    await offlineUpdate('citas', { estado: 'cancelada' }, 'id', id);
-    toast('Cita cancelada', 'success');
-    misCitas();
+    await safeCall(async () => {
+      await offlineUpdate('citas', { estado: 'cancelada' }, 'id', id);
+      toast('Cita cancelada', 'success');
+      misCitas();
+    }, null, 'No se pudo cancelar la cita');
   });
 }
 
 async function modalPedirCita() {
   const vehs = window._misVehsCliente || [];
+  const vehiculoSelect = vehs.length > 0 ? `
+    <div class="form-group"><label class="form-label">${t('lblVehiculo')}</label>
+      <select class="form-input" id="f-vehiculo">
+        <option value="">${t('sinVehiculo')}</option>
+        ${vehs.map(v => `<option value="${v.id}">${h(v.patente)} - ${h(v.marca)}</option>`).join('')}
+      </select>
+    </div>` : '<input type="hidden" id="f-vehiculo" value="">';
+  
   openModal(`
     <div class="modal-title">${t('agendaNueva')}</div>
     <div class="form-group"><label class="form-label">${t('agendaDescripcion')}</label><input class="form-input" id="f-desc" placeholder="Cambio de aceite, revisión..."></div>
@@ -372,16 +424,17 @@ async function modalPedirCita() {
       <div id="slots-container" style="display:flex;flex-wrap:wrap;gap:.4rem;min-height:40px"><div class="loading" style="padding:.5rem">Cargando horarios...</div></div>
     </div>
     <input type="hidden" id="f-hora" value="">
-    ${vehs.length > 0 ? `<div class="form-group"><label class="form-label">${t('lblVehiculo')}</label>
-      <select class="form-input" id="f-vehiculo">
-        <option value="">${t('sinVehiculo')}</option>
-        ${vehs.map(v => `<option value="${v.id}">${h(v.patente)} - ${h(v.marca)}</option>`).join('')}
-      </select>
-    </div>` : '<input type="hidden" id="f-vehiculo" value="">'}
+    ${vehiculoSelect}
     <div class="form-group"><label class="form-label">${t('lblNotas')}</label><textarea class="form-input" id="f-notas" rows="2" placeholder="Detalles adicionales..."></textarea></div>
-    <button class="btn-primary" onclick="guardarCitaCliente()">${t('guardar')}</button>
+    <button class="btn-primary" onclick="guardarCitaClienteConSafeCall()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
   setTimeout(cargarSlotsCliente, 50);
+}
+
+async function guardarCitaClienteConSafeCall() {
+  await safeCall(async () => {
+    await guardarCitaCliente();
+  }, null, 'No se pudo solicitar la cita');
 }
 
 async function cargarSlotsCliente() {
@@ -421,13 +474,28 @@ function seleccionarSlot(btn, hora) {
 
 async function guardarCitaCliente() {
   const desc = document.getElementById('f-desc').value.trim();
-  if (!desc) { toast('La descripción es obligatoria','error'); return; }
+  if (!validateRequired(desc, 'Descripción')) return;
+  
   const hora = document.getElementById('f-hora').value;
   if (!hora) { toast('Seleccioná un horario','error'); return; }
+  
   const { data:config } = await sb.from('config_taller').select('duracion_turno').eq('taller_id',tid()).maybeSingle();
-  const data = { descripcion:desc, fecha:document.getElementById('f-fecha').value, hora, duracion:config?.duracion_turno||60, cliente_id:window._miClienteId||null, vehiculo_id:document.getElementById('f-vehiculo')?.value||null, notas:document.getElementById('f-notas')?.value||'', taller_id:tid(), estado:'pendiente' };
+  const data = {
+    descripcion: desc,
+    fecha: document.getElementById('f-fecha').value,
+    hora,
+    duracion: config?.duracion_turno || 60,
+    cliente_id: window._miClienteId || null,
+    vehiculo_id: document.getElementById('f-vehiculo')?.value || null,
+    notas: document.getElementById('f-notas')?.value || '',
+    taller_id: tid(),
+    estado: 'pendiente'
+  };
+  
   const { error } = await offlineInsert('citas', data);
   if (error) { toast('Error: '+error.message,'error'); return; }
-  toast('¡Cita solicitada! El taller la confirmará.','success'); closeModal(); misCitas();
+  
+  toast('¡Cita solicitada! El taller la confirmará.','success');
+  closeModal(); 
+  misCitas();
 }
-
