@@ -70,28 +70,56 @@ function modalNuevoItem() {
       <div class="form-group"><label class="form-label">${t("lblStockMin")}</label><input class="form-input" id="f-min" type="number" value="5" min="0"></div>
       <div class="form-group"><label class="form-label">${t("lblPrecioUnit")}</label><input class="form-input" id="f-precio" type="number" min="0" value="0"></div>
     </div>
-    <button class="btn-primary" onclick="guardarItem()">${t('guardar')}</button>
+    <button class="btn-primary" onclick="guardarItemConSafeCall()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
   cargarZonasSelect('f-zona');
   cargarUbicaciones('f-ubicacion');
 }
 
+async function guardarItemConSafeCall() {
+  await safeCall(async () => {
+    await guardarItem();
+  }, null, 'No se pudo guardar el producto');
+}
+
 async function guardarItem(id=null) {
-  if (guardando()) return;
   const nombre = document.getElementById('f-nombre').value.trim();
-  if (!nombre) { toast('El nombre es obligatorio','error'); return; }
+  if (!validateRequired(nombre, 'Nombre')) return;
+  
   const nuevoPrecio = parseFloat(document.getElementById('f-precio').value)||0;
   const ubicacionId = document.getElementById('f-ubicacion')?.value||null;
-  const data = { nombre, categoria:document.getElementById('f-cat').value, zona:document.getElementById('f-zona')?.value||null, cantidad:parseFloat(document.getElementById('f-qty').value)||0, unidad:document.getElementById('f-unidad').value||'unidad', stock_minimo:parseFloat(document.getElementById('f-min').value)||5, precio_unitario:nuevoPrecio, codigo_barras:document.getElementById('f-barcode')?.value?.trim()||null, ubicacion_id:ubicacionId, taller_id:tid() };
+  const data = {
+    nombre,
+    categoria: document.getElementById('f-cat').value,
+    zona: document.getElementById('f-zona')?.value||null,
+    cantidad: parseFloat(document.getElementById('f-qty').value)||0,
+    unidad: document.getElementById('f-unidad').value||'unidad',
+    stock_minimo: parseFloat(document.getElementById('f-min').value)||5,
+    precio_unitario: nuevoPrecio,
+    codigo_barras: document.getElementById('f-barcode')?.value?.trim()||null,
+    ubicacion_id: ubicacionId,
+    taller_id: tid()
+  };
+  
   if (id) {
     const { data: prev } = await sb.from('inventario').select('precio_unitario').eq('id',id).single();
     if (prev && parseFloat(prev.precio_unitario) !== nuevoPrecio) {
-      await sb.from('historial_precios').insert({ producto_id:id, precio_anterior:prev.precio_unitario, precio_nuevo:nuevoPrecio, taller_id:tid(), fecha:new Date().toISOString() }).catch(()=>{});
+      await sb.from('historial_precios').insert({
+        producto_id: id,
+        precio_anterior: prev.precio_unitario,
+        precio_nuevo: nuevoPrecio,
+        taller_id: tid(),
+        fecha: new Date().toISOString()
+      }).catch(()=>{});
     }
   }
+  
   const { error } = id ? await offlineUpdate('inventario', data, 'id', id) : await offlineInsert('inventario', data);
   if (error) { toast('Error: '+error.message,'error'); return; }
-  toast('Producto guardado','success'); closeModal(); inventario();
+  
+  toast('Producto guardado','success');
+  closeModal(); 
+  inventario();
 }
 
 async function modalEditarItem(id) {
@@ -117,7 +145,7 @@ async function modalEditarItem(id) {
       <div class="form-group"><label class="form-label">${t("lblStockMin")}</label><input class="form-input" id="f-min" type="number" value="${item.stock_minimo||5}" min="0"></div>
       <div class="form-group"><label class="form-label">${t("lblPrecioUnit")}</label><input class="form-input" id="f-precio" type="number" min="0" value="${item.precio_unitario||0}"></div>
     </div>
-    <button class="btn-primary" onclick="guardarItem('${id}')">${t('actualizar')}</button>
+    <button class="btn-primary" onclick="guardarItemConSafeCall('${id}')">${t('actualizar')}</button>
     <div style="display:flex;gap:.5rem">
       <button class="btn-secondary" style="margin:0;flex:1" onclick="modalDescontarStock('${id}','${h(item.nombre)}',${item.cantidad})">- Descontar stock</button>
       ${isAdmin?`<button class="btn-danger" style="margin:0" onclick="eliminarItem('${id}')">${t('eliminarBtn')}</button>`:''}
@@ -160,32 +188,49 @@ function modalDescontarStock(id, nombre, stockActual) {
         </select>
       </div>
       <div class="form-group"><label class="form-label">${t("lblMotivo")}</label><input class="form-input" id="f-motivo" placeholder="Usado en reparación..."></div>
-      <button class="btn-primary" onclick="descontarStock('${id}',${stockActual})">DESCONTAR</button>
+      <button class="btn-primary" onclick="descontarStockConSafeCall('${id}',${stockActual})">DESCONTAR</button>
       <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
   });
 }
 
+async function descontarStockConSafeCall(id, stockActual) {
+  await safeCall(async () => {
+    await descontarStock(id, stockActual);
+  }, null, 'No se pudo descontar el stock');
+}
+
 async function descontarStock(id, stockActual) {
   const descuento = parseFloat(document.getElementById('f-descuento').value)||0;
-  if (descuento<=0) { toast('Ingresá una cantidad válida','error'); return; }
-  if (descuento>stockActual) { toast('No hay suficiente stock','error'); return; }
+  if (!validatePositiveNumber(descuento, 'Cantidad a descontar')) return;
+  if (descuento > stockActual) { toast('No hay suficiente stock','error'); return; }
+  
   const repId = document.getElementById('f-desc-rep')?.value || null;
   const motivo = document.getElementById('f-motivo')?.value || '';
+  
   const { error } = await offlineUpdate('inventario', { cantidad: stockActual - descuento }, 'id', id);
   if (error) { toast('Error','error'); return; }
+  
   const { data: item } = await sb.from('inventario').select('nombre,precio_unitario').eq('id',id).single();
   if (repId && item) {
     const { data: rep } = await sb.from('reparaciones').select('costo_repuestos').eq('id',repId).single();
     const costoTotal = parseFloat(rep?.costo_repuestos||0) + (parseFloat(item.precio_unitario||0) * descuento);
     await sb.from('reparaciones').update({ costo_repuestos: costoTotal }).eq('id', repId);
   }
-  clearCache('inventario');toast(`Stock actualizado${repId?' y vinculado al trabajo':''}`,'success'); closeModal(); inventario();
+  
+  clearCache('inventario');
+  toast(`Stock actualizado${repId?' y vinculado al trabajo':''}`,'success');
+  closeModal(); 
+  inventario();
 }
 
 async function eliminarItem(id) {
   confirmar('Esta acción eliminará el producto permanentemente.', async () => {
-    await offlineDelete('inventario', 'id', id);
-    clearCache('inventario');toast('Producto eliminado'); inventario();
+    await safeCall(async () => {
+      await offlineDelete('inventario', 'id', id);
+      clearCache('inventario');
+      toast('Producto eliminado');
+      inventario();
+    }, null, 'No se pudo eliminar el producto');
   });
 }
 
@@ -227,7 +272,7 @@ async function modalEntradaMercaderia() {
         <span id="ent-total" style="font-family:var(--font-head);color:var(--danger)">₲0</span>
       </div>
     </div>
-    <button class="btn-primary" onclick="guardarEntrada()">Registrar entrada</button>
+    <button class="btn-primary" onclick="guardarEntradaConSafeCall()">Registrar entrada</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
     
   setTimeout(() => {
@@ -252,15 +297,19 @@ async function modalEntradaMercaderia() {
   }, 100);
 }
 
+async function guardarEntradaConSafeCall() {
+  await safeCall(async () => {
+    await guardarEntrada();
+  }, null, 'No se pudo registrar la entrada');
+}
+
 async function guardarEntrada() {
-  if (guardando()) return;
-  
   const proveedor = document.getElementById('f-ent-prov').value.trim();
-  if (!proveedor) { toast('El proveedor es obligatorio','error'); return; }
+  if (!validateRequired(proveedor, 'Proveedor')) return;
   
   let itemId = document.getElementById('f-ent-item').value;
   const qty = parseFloat(document.getElementById('f-ent-qty').value) || 0;
-  if (qty <= 0) { toast('La cantidad debe ser mayor a 0','error'); return; }
+  if (!validatePositiveNumber(qty, 'Cantidad')) return;
   
   const costoUnit = parseFloat(document.getElementById('f-ent-costo').value) || 0;
   const factura = document.getElementById('f-ent-factura').value.trim();
@@ -273,7 +322,7 @@ async function guardarEntrada() {
 
   if (itemId === '__nuevo__') {
     const nombre = document.getElementById('f-ent-nombre').value.trim();
-    if (!nombre) { toast('El nombre del producto es obligatorio','error'); return; }
+    if (!validateRequired(nombre, 'Nombre del producto')) return;
     const categoria = document.getElementById('f-ent-cat')?.value || '';
     const unidad = document.getElementById('f-ent-unidad')?.value || 'unidad';
     
