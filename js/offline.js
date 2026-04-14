@@ -46,6 +46,10 @@ async function addToQueue(operation) {
     const tx = db.transaction('queue', 'readwrite');
     tx.objectStore('queue').add({ ...operation, createdAt: Date.now() });
     updateSyncBadge();
+    // Mostrar indicador persistente de cambios sin sincronizar
+    if (typeof showOfflinePendingIndicator === 'function') {
+      showOfflinePendingIndicator();
+    }
   } catch(e) { console.error('Queue write failed:', e); }
 }
 
@@ -85,7 +89,12 @@ async function clearQueueItem(id) {
 async function processOfflineQueue() {
   if (!navigator.onLine) return;
   const items = await getAllQueue();
-  if (items.length === 0) return;
+  if (items.length === 0) {
+    if (typeof hideOfflinePendingIndicator === 'function') {
+      hideOfflinePendingIndicator();
+    }
+    return;
+  }
   
   let processed = 0;
   for (const item of items) {
@@ -113,18 +122,21 @@ async function processOfflineQueue() {
     // Refrescar la vista actual
     if (currentPage) navigate(currentPage);
   }
+  
+  const remaining = await getQueueCount();
+  if (remaining === 0 && typeof hideOfflinePendingIndicator === 'function') {
+    hideOfflinePendingIndicator();
+  }
   updateSyncBadge();
 }
 
 // ─── OFFLINE: Wrapper para operaciones CRUD ──────────────────────────────────
-// Reemplaza las llamadas directas a Supabase cuando no hay internet
 async function offlineInsert(table, data) {
   if (navigator.onLine) {
     const result = await sb.from(table).insert(data);
-    if (!result.error) cacheLocal(`${table}_list`, null); // Invalidar cache
+    if (!result.error) cacheLocal(`${table}_list`, null);
     return result;
   }
-  // Offline: guardar en cola
   await addToQueue({ table, action: 'insert', data });
   toast('Guardado offline — se sincronizará al volver internet', 'info');
   return { data: [data], error: null };
@@ -158,19 +170,16 @@ function clearCache(prefix) {
   if (!prefix) { Object.keys(_memCache).forEach(k => delete _memCache[k]); return; }
   Object.keys(_memCache).forEach(k => { if (k.startsWith(prefix)) delete _memCache[k]; });
   Object.keys(_memCache).forEach(k => { if (k.startsWith('dash_')) delete _memCache[k]; });
-  // Invalidar contexto IA
   if (typeof _iaContextCache !== 'undefined') _iaContextCache = null;
 }
 
 async function cachedQuery(cacheKey, queryFn) {
-  // Cache en memoria: si la query se hizo hace menos de 30s, devolver resultado anterior
   if (_memCache[cacheKey] && (Date.now() - _memCache[cacheKey].ts < CACHE_TTL)) {
     return _memCache[cacheKey].result;
   }
   if (navigator.onLine) {
     try {
       const result = await queryFn();
-      // Detectar sesión expirada
       if (result.error && (result.error.code === 'PGRST301' || result.error.code === '401' || result.error.message?.includes('JWT') || result.error.message?.includes('token'))) {
         toast('Tu sesión expiró. Volvé a iniciar sesión.','error');
         logout();
@@ -185,14 +194,12 @@ async function cachedQuery(cacheKey, queryFn) {
       // Network error — fall through to cache
     }
   }
-  // Offline o error de red: leer del cache en memoria primero
   if (_memCache[cacheKey]) return _memCache[cacheKey].result;
   const cached = await readCache(cacheKey);
   if (cached) return cached;
   return { data: [], count: 0, error: { message: 'Sin conexión y sin datos en cache' } };
 }
 
-// Wrapper seguro para queries directas (no cacheadas)
 async function safeQuery(queryFn, fallback = null) {
   try {
     const result = await queryFn();
@@ -221,7 +228,6 @@ function updateOnlineStatus() {
   if (bar) bar.classList.toggle('show', !_isOnline);
   document.body.classList.toggle('is-offline', !_isOnline);
   
-  // Cuando vuelve internet, sincronizar
   if (_isOnline) {
     setTimeout(processOfflineQueue, 1000);
   }
@@ -238,6 +244,5 @@ async function updateSyncBadge() {
 
 window.addEventListener('online', updateOnlineStatus);
 window.addEventListener('offline', updateOnlineStatus);
-// Init on load
 setTimeout(updateOnlineStatus, 100);
 
