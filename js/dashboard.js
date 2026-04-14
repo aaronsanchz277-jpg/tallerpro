@@ -18,6 +18,7 @@ async function dashboard() {
     return d.toISOString().split('T')[0];
   })();
 
+  // Consultas optimizadas (paralelizadas)
   const [
     { count: totalClientes },
     { count: totalVehiculos },
@@ -51,8 +52,8 @@ async function dashboard() {
   let totalQSMes = 0, totalPOSMes = 0, totalGastosMes = 0;
   if (currentPerfil?.rol === 'admin') {
     const [{ data:qsMes },{ data:posMes },{ data:gastosMes }] = await Promise.all([
-      cachedQuery('dash_qs_mes', () => sb.from('quickservices').select('total').eq('taller_id',tid()).gte('created_at',primerMes+'T00:00:00')),
-      cachedQuery('dash_pos_mes', () => sb.from('ventas_pos').select('total').eq('taller_id',tid()).gte('created_at',primerMes+'T00:00:00')),
+      cachedQuery('dash_qs_mes', () => sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', true).gte('created_at', primerMes+'T00:00:00')),
+      cachedQuery('dash_pos_mes', () => sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', false).gte('created_at', primerMes+'T00:00:00')),
       cachedQuery('dash_gastos_mes', () => sb.from('gastos_taller').select('monto').eq('taller_id',tid()).gte('fecha',primerMes))
     ]);
     totalQSMes = (qsMes||[]).reduce((s,r) => s+parseFloat(r.total||0), 0);
@@ -60,6 +61,7 @@ async function dashboard() {
     totalGastosMes = (gastosMes||[]).reduce((s,r) => s+parseFloat(r.monto||0), 0);
   }
 
+  // Secciones condicionales (deudores, cuentas vencidas) se mantienen igual
   let deudoresHTML = '';
   if (currentPerfil?.rol === 'admin') {
     const { data: repsConDeuda } = await sb.from('reparaciones').select('id,descripcion,costo,clientes(nombre)').eq('taller_id',tid()).eq('estado','finalizado').gt('costo',0).limit(50);
@@ -188,36 +190,38 @@ async function buscarPatente(valor) {
   if (!patente) { resultsEl.innerHTML = ''; return; }
   clearTimeout(patenteBusquedaTimer);
   patenteBusquedaTimer = setTimeout(async () => {
-    const { data: vehs } = await sb.from('vehiculos')
-      .select('*, clientes(nombre,telefono), reparaciones(id,descripcion,estado,costo,fecha)')
-      .eq('taller_id', tid())
-      .ilike('patente', `%${patente}%`)
-      .limit(3);
-    if (!vehs || vehs.length === 0) {
-      resultsEl.innerHTML = `<div style="background:var(--surface2);border-radius:10px;padding:.75rem;margin-bottom:1rem;font-size:.85rem;color:var(--text2)">No se encontró ningún vehículo con esa patente.</div>`;
-      return;
-    }
-    resultsEl.innerHTML = vehs.map(v => {
-      const reps = (v.reparaciones||[]).sort((a,b) => (b.fecha||'').localeCompare(a.fecha||'')).slice(0,5);
-      return `
-        <div style="background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:1rem;margin-bottom:1rem">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
-            <div>
-              <div style="font-family:var(--font-head);font-size:1.2rem;color:var(--accent);letter-spacing:2px">${h(v.patente)}</div>
-              <div style="font-size:.82rem;color:var(--text2)">${h(v.marca||'')} ${h(v.modelo||'')} ${v.anio?'· '+v.anio:''}</div>
-              ${v.clientes?`<div style="font-size:.8rem;color:var(--text2)">👤 ${h(v.clientes.nombre)}</div>`:''}
+    await safeCall(async () => {
+      const { data: vehs } = await sb.from('vehiculos')
+        .select('*, clientes(nombre,telefono), reparaciones(id,descripcion,estado,costo,fecha)')
+        .eq('taller_id', tid())
+        .ilike('patente', `%${patente}%`)
+        .limit(3);
+      if (!vehs || vehs.length === 0) {
+        resultsEl.innerHTML = `<div style="background:var(--surface2);border-radius:10px;padding:.75rem;margin-bottom:1rem;font-size:.85rem;color:var(--text2)">No se encontró ningún vehículo con esa patente.</div>`;
+        return;
+      }
+      resultsEl.innerHTML = vehs.map(v => {
+        const reps = (v.reparaciones||[]).sort((a,b) => (b.fecha||'').localeCompare(a.fecha||'')).slice(0,5);
+        return `
+          <div style="background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:1rem;margin-bottom:1rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+              <div>
+                <div style="font-family:var(--font-head);font-size:1.2rem;color:var(--accent);letter-spacing:2px">${h(v.patente)}</div>
+                <div style="font-size:.82rem;color:var(--text2)">${h(v.marca||'')} ${h(v.modelo||'')} ${v.anio?'· '+v.anio:''}</div>
+                ${v.clientes?`<div style="font-size:.8rem;color:var(--text2)">👤 ${h(v.clientes.nombre)}</div>`:''}
+              </div>
+              <button onclick="detalleVehiculo('${v.id}')" style="font-size:.72rem;background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 8px;cursor:pointer">Ver</button>
             </div>
-            <button onclick="detalleVehiculo('${v.id}')" style="font-size:.72rem;background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 8px;cursor:pointer">Ver</button>
-          </div>
-          <div style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">HISTORIAL (${reps.length})</div>
-          ${reps.length === 0 ? '<div style="font-size:.8rem;color:var(--text2)">${t("vehSinReps")}</div>' :
-            reps.map(r => `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.82rem">
-              <span>${h(r.descripcion)}</span>
-              <span class="card-badge ${estadoBadge(r.estado)}" style="font-size:.65rem">${estadoLabel(r.estado)}</span>
-            </div>`).join('')}
-        </div>`;
-    }).join('');
+            <div style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">HISTORIAL (${reps.length})</div>
+            ${reps.length === 0 ? '<div style="font-size:.8rem;color:var(--text2)">${t("vehSinReps")}</div>' :
+              reps.map(r => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.82rem">
+                <span>${h(r.descripcion)}</span>
+                <span class="card-badge ${estadoBadge(r.estado)}" style="font-size:.65rem">${estadoLabel(r.estado)}</span>
+              </div>`).join('')}
+          </div>`;
+      }).join('');
+    }, null, 'Error al buscar patente');
   }, 500);
 }
 
@@ -254,8 +258,8 @@ async function reportes() {
 
   let repQSMes=0, repPOSMes=0, repGastosMes=0;
   const [{data:_qsM},{data:_posM},{data:_gastM}] = await Promise.all([
-    sb.from('quickservices').select('total').eq('taller_id',tid()).gte('created_at',primerMes+'T00:00:00'),
-    sb.from('ventas_pos').select('total').eq('taller_id',tid()).gte('created_at',primerMes+'T00:00:00'),
+    sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', true).gte('created_at',primerMes+'T00:00:00'),
+    sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', false).gte('created_at',primerMes+'T00:00:00'),
     sb.from('gastos_taller').select('monto').eq('taller_id',tid()).gte('fecha',primerMes)
   ]);
   repQSMes = (_qsM||[]).reduce((s,r)=>s+parseFloat(r.total||0),0);
