@@ -22,7 +22,7 @@ async function repMecanicos_modal(repId) {
     sb.from('perfiles').select('id,nombre').eq('taller_id', tid()).in('rol', ['admin','empleado']).order('nombre'),
     sb.from('empleados').select('id,nombre').eq('taller_id', tid()).order('nombre')
   ]);
-  // Combinar: perfiles (source:perfil) + empleados manuales (source:empleado)
+  
   const todos = [];
   (perfilesEmps||[]).forEach(e => todos.push({ id: e.id, nombre: e.nombre, source: 'perfil' }));
   (empleadosManuales||[]).forEach(e => {
@@ -37,16 +37,16 @@ async function repMecanicos_modal(repId) {
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.5rem .65rem">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.35rem">
             <span style="font-size:.85rem;font-weight:500">${h(m.nombre_mecanico||'?')}</span>
-            <button onclick="repMecanicos_quitar('${m.id}','${repId}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.8rem;padding:0">✕</button>
+            <button onclick="repMecanicos_quitarConSafeCall('${m.id}','${repId}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.8rem;padding:0">✕</button>
           </div>
           <div style="display:flex;gap:.4rem;align-items:center">
             <div style="flex:1">
               <div style="font-size:.6rem;color:var(--text2);margin-bottom:2px">HORAS</div>
-              <input type="number" value="${m.horas||0}" min="0" step="0.5" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px;color:var(--text);font-size:.8rem;text-align:center" onchange="repMecanicos_actualizar('${m.id}','horas',this.value)">
+              <input type="number" value="${m.horas||0}" min="0" step="0.5" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px;color:var(--text);font-size:.8rem;text-align:center" onchange="repMecanicos_actualizarConSafeCall('${m.id}','horas',this.value,'${repId}')">
             </div>
             <div style="flex:1">
               <div style="font-size:.6rem;color:var(--text2);margin-bottom:2px">PAGO ₲</div>
-              <input type="number" value="${m.pago||0}" min="0" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px;color:var(--success);font-size:.8rem;text-align:center" onchange="repMecanicos_actualizar('${m.id}','pago',this.value)">
+              <input type="number" value="${m.pago||0}" min="0" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px;color:var(--success);font-size:.8rem;text-align:center" onchange="repMecanicos_actualizarConSafeCall('${m.id}','pago',this.value,'${repId}')">
             </div>
           </div>
         </div>`).join('')}
@@ -58,9 +58,15 @@ async function repMecanicos_modal(repId) {
         <option value="">Seleccionar...</option>
         ${todos.filter(e => !asignados.includes(e.id)).map(e => `<option value="${e.id}" data-source="${e.source}">${h(e.nombre)}${e.source==='empleado'?' (manual)':''}</option>`).join('')}
       </select>
-      <button onclick="repMecanicos_agregar('${repId}')" class="btn-add" style="font-size:.8rem;padding:.4rem .8rem">+</button>
+      <button onclick="repMecanicos_agregarConSafeCall('${repId}')" class="btn-add" style="font-size:.8rem;padding:.4rem .8rem">+</button>
     </div>
     <button class="btn-secondary" style="margin-top:1rem" onclick="closeModal();detalleReparacion('${repId}')">Listo</button>`);
+}
+
+async function repMecanicos_agregarConSafeCall(repId) {
+  await safeCall(async () => {
+    await repMecanicos_agregar(repId);
+  }, null, 'No se pudo agregar el mecánico');
 }
 
 async function repMecanicos_agregar(repId) {
@@ -76,14 +82,32 @@ async function repMecanicos_agregar(repId) {
   };
   if (source === 'perfil') insertData.mecanico_id = mecId;
   else insertData.empleado_id = mecId;
+  
   const { error } = await sb.from('reparacion_mecanicos').insert(insertData);
   if (error) { toast(error.message.includes('duplicate') ? 'Ya está asignado' : 'Error: ' + error.message, 'error'); return; }
-  toast('Mecánico asignado','success'); repMecanicos_modal(repId);
+  
+  toast('Mecánico asignado','success');
+  repMecanicos_modal(repId);
+}
+
+async function repMecanicos_quitarConSafeCall(id, repId) {
+  await safeCall(async () => {
+    await repMecanicos_quitar(id, repId);
+  }, null, 'No se pudo quitar el mecánico');
 }
 
 async function repMecanicos_quitar(id, repId) {
   await sb.from('reparacion_mecanicos').delete().eq('id', id);
-  toast('Mecánico removido','success'); repMecanicos_modal(repId);
+  toast('Mecánico removido','success');
+  repMecanicos_modal(repId);
+}
+
+async function repMecanicos_actualizarConSafeCall(id, campo, valor, repId) {
+  await safeCall(async () => {
+    await repMecanicos_actualizar(id, campo, valor);
+    // Refrescar el modal sin perder los cambios visuales
+    repMecanicos_modal(repId);
+  }, null, 'No se pudo actualizar');
 }
 
 async function repMecanicos_actualizar(id, campo, valor) {
@@ -91,5 +115,3 @@ async function repMecanicos_actualizar(id, campo, valor) {
   update[campo] = campo === 'horas' || campo === 'pago' ? parseFloat(valor)||0 : valor;
   await sb.from('reparacion_mecanicos').update(update).eq('id', id);
 }
-
-
