@@ -41,8 +41,8 @@ async function reporteComparativas() {
   const ingresosAnioAnterior = calcIngresos(repsAnioAnterior, ventasAnioAnterior);
   const gananciaAnioActual = calcGanancia(repsAnioActual);
   const gananciaAnioAnterior = calcGanancia(repsAnioAnterior);
-  const gastosAnioActual = calcGastos(gastosAnioActual);
-  const gastosAnioAnterior = calcGastos(gastosAnioAnterior);
+  const totalGastosAnioActual = calcGastos(gastosAnioActual);
+  const totalGastosAnioAnterior = calcGastos(gastosAnioAnterior);
 
   document.getElementById('main-content').innerHTML = `
     <div style="padding:.25rem 0">
