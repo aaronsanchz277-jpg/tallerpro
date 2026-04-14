@@ -1,3 +1,194 @@
+// ─── INVENTARIO ──────────────────────────────────────────────────────────────
+async function inventario({ search='', offset=0, zona='' }={}) {
+  const cacheKey = `inventario_${search}_${offset}_${zona}`;
+  const { data, count } = await cachedQuery(cacheKey, () => {
+    let q = sb.from('inventario').select('*', {count:'exact'}).eq('taller_id',tid()).order('nombre');
+    if (search) q = q.ilike('nombre',`%${search}%`);
+    if (zona) q = q.eq('zona', zona);
+    return q.range(offset, offset + PAGE_SIZE - 1);
+  });
+
+  const { data: allItems } = await sb.from('inventario').select('zona').eq('taller_id',tid()).limit(1000);
+  const zonas = [...new Set((allItems||[]).map(i=>i.zona).filter(Boolean))].sort();
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${t('invTitulo')} ${count ? `<span style="font-size:.75rem;color:var(--text2)">(${count})</span>` : ''}</div>
+      <div style="display:flex;gap:.3rem">
+        <button onclick="barcode_scan()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.4rem .6rem;cursor:pointer;color:var(--accent);font-size:.9rem" title="Escanear">📷</button>
+        <button onclick="modalEntradaMercaderia()" style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;color:var(--success);font-size:.72rem;font-family:var(--font-head)">📥 Entrada</button>
+        <button onclick="modalGestionarUbicaciones()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.4rem .6rem;cursor:pointer;color:var(--accent);font-size:.9rem" title="Gestionar ubicaciones">📍</button>
+        <button class="btn-add" onclick="modalNuevoItem()">+ Nuevo</button>
+      </div>
+    </div>
+    ${zonas.length > 0 ? `<div style="display:flex;gap:.3rem;margin-bottom:.75rem;overflow-x:auto;padding-bottom:.3rem">
+      <button onclick="inventario({zona:''})" style="background:${!zona?'var(--accent)':'var(--surface2)'};color:${!zona?'#000':'var(--text2)'};border:1px solid ${!zona?'var(--accent)':'var(--border)'};border-radius:8px;padding:.3rem .6rem;font-size:.72rem;cursor:pointer;white-space:nowrap">Todos</button>
+      ${zonas.map(z => `<button onclick="inventario({zona:'${h(z)}'})" style="background:${zona===z?'var(--accent)':'var(--surface2)'};color:${zona===z?'#000':'var(--text2)'};border:1px solid ${zona===z?'var(--accent)':'var(--border)'};border-radius:8px;padding:.3rem .6rem;font-size:.72rem;cursor:pointer;white-space:nowrap">📍 ${h(z)}</button>`).join('')}
+    </div>` : ''}
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" placeholder="${t('invBuscar')}" value="${h(search)}" oninput="debounce('inv',()=>inventario({search:this.value,zona:'${zona}'}))" class="form-input" style="padding-left:2.5rem">
+    </div>
+    ${(data||[]).length===0 ? `<div class="empty"><p>${t('invSinDatos')}</p></div>` :
+      (data||[]).map(item => {
+        const bajo = parseFloat(item.cantidad)<=parseFloat(item.stock_minimo);
+        return `<div class="inv-card" onclick="modalEditarItem('${item.id}')">
+          <div class="inv-icon">📦</div>
+          <div class="inv-info">
+            <div class="inv-name">${h(item.nombre)}</div>
+            <div class="inv-meta">${h(item.categoria||t('sinCategoria'))}${item.zona?' · 📍'+h(item.zona):''}${item.ubicacion_id?' · 🗂️':' '} · ₲${gs(item.precio_unitario)} c/u</div>
+          </div>
+          <div class="inv-stock">
+            <div class="inv-qty ${bajo?'stock-low':'stock-ok'}">${item.cantidad}</div>
+            <div class="inv-unit">${h(item.unidad)}</div>
+            ${bajo?'<div style="font-size:.65rem;color:var(--danger)">⚠ BAJO</div>':''}
+          </div>
+        </div>`;
+      }).join('')}
+    ${renderPagination(count||0, offset, '_navInv')}`;
+}
+function _navInv(o) { inventario({offset:o}); }
+
+function modalNuevoItem() {
+  openModal(`
+    <div class="modal-title">${t("modNuevoProducto")}</div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" placeholder="Aceite motor 5W30"></div>
+    <div class="form-group"><label class="form-label">Código de barras</label>
+      <div style="display:flex;gap:.4rem">
+        <input class="form-input" id="f-barcode" placeholder="Escanear o escribir" style="flex:1">
+        <button onclick="barcode_scan('f-barcode')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 .6rem;cursor:pointer;color:var(--accent);font-size:1.1rem" title="Escanear">📷</button>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblCategoria")}</label><input class="form-input" id="f-cat" placeholder="Lubricantes, Frenos..."></div>
+    <div class="form-group"><label class="form-label">Ubicación</label><select class="form-input" id="f-ubicacion"></select></div>
+    <div class="form-group"><label class="form-label">Ubicación / Zona</label><select class="form-input" id="f-zona"><option value="">Sin zona</option></select></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblCantidad")}</label><input class="form-input" id="f-qty" type="number" value="0" min="0"></div>
+      <div class="form-group"><label class="form-label">${t("lblUnidad")}</label><input class="form-input" id="f-unidad" placeholder="unidad, litro..."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblStockMin")}</label><input class="form-input" id="f-min" type="number" value="5" min="0"></div>
+      <div class="form-group"><label class="form-label">${t("lblPrecioUnit")}</label><input class="form-input" id="f-precio" type="number" min="0" value="0"></div>
+    </div>
+    <button class="btn-primary" onclick="guardarItem()">${t('guardar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+  cargarZonasSelect('f-zona');
+  cargarUbicaciones('f-ubicacion');
+}
+
+async function guardarItem(id=null) {
+  if (guardando()) return;
+  const nombre = document.getElementById('f-nombre').value.trim();
+  if (!nombre) { toast('El nombre es obligatorio','error'); return; }
+  const nuevoPrecio = parseFloat(document.getElementById('f-precio').value)||0;
+  const ubicacionId = document.getElementById('f-ubicacion')?.value||null;
+  const data = { nombre, categoria:document.getElementById('f-cat').value, zona:document.getElementById('f-zona')?.value||null, cantidad:parseFloat(document.getElementById('f-qty').value)||0, unidad:document.getElementById('f-unidad').value||'unidad', stock_minimo:parseFloat(document.getElementById('f-min').value)||5, precio_unitario:nuevoPrecio, codigo_barras:document.getElementById('f-barcode')?.value?.trim()||null, ubicacion_id:ubicacionId, taller_id:tid() };
+  if (id) {
+    const { data: prev } = await sb.from('inventario').select('precio_unitario').eq('id',id).single();
+    if (prev && parseFloat(prev.precio_unitario) !== nuevoPrecio) {
+      await sb.from('historial_precios').insert({ producto_id:id, precio_anterior:prev.precio_unitario, precio_nuevo:nuevoPrecio, taller_id:tid(), fecha:new Date().toISOString() }).catch(()=>{});
+    }
+  }
+  const { error } = id ? await offlineUpdate('inventario', data, 'id', id) : await offlineInsert('inventario', data);
+  if (error) { toast('Error: '+error.message,'error'); return; }
+  toast('Producto guardado','success'); closeModal(); inventario();
+}
+
+async function modalEditarItem(id) {
+  const { data:item } = await sb.from('inventario').select('*').eq('id',id).single();
+  const isAdmin = currentPerfil?.rol==='admin';
+  openModal(`
+    <div class="modal-title">${t("modEditarProducto")}</div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" value="${h(item.nombre||'')}"></div>
+    <div class="form-group"><label class="form-label">Código de barras</label>
+      <div style="display:flex;gap:.4rem">
+        <input class="form-input" id="f-barcode" value="${h(item.codigo_barras||'')}" placeholder="Escanear o escribir" style="flex:1">
+        <button onclick="barcode_scan('f-barcode')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0 .6rem;cursor:pointer;color:var(--accent);font-size:1.1rem" title="Escanear">📷</button>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblCategoria")}</label><input class="form-input" id="f-cat" value="${h(item.categoria||'')}"></div>
+    <div class="form-group"><label class="form-label">Ubicación</label><select class="form-input" id="f-ubicacion"></select></div>
+    <div class="form-group"><label class="form-label">Ubicación / Zona</label><select class="form-input" id="f-zona"><option value="">Sin zona</option></select></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblCantidad")}</label><input class="form-input" id="f-qty" type="number" value="${item.cantidad||0}" min="0"></div>
+      <div class="form-group"><label class="form-label">${t("lblUnidad")}</label><input class="form-input" id="f-unidad" value="${h(item.unidad||'unidad')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblStockMin")}</label><input class="form-input" id="f-min" type="number" value="${item.stock_minimo||5}" min="0"></div>
+      <div class="form-group"><label class="form-label">${t("lblPrecioUnit")}</label><input class="form-input" id="f-precio" type="number" min="0" value="${item.precio_unitario||0}"></div>
+    </div>
+    <button class="btn-primary" onclick="guardarItem('${id}')">${t('actualizar')}</button>
+    <div style="display:flex;gap:.5rem">
+      <button class="btn-secondary" style="margin:0;flex:1" onclick="modalDescontarStock('${id}','${h(item.nombre)}',${item.cantidad})">- Descontar stock</button>
+      ${isAdmin?`<button class="btn-danger" style="margin:0" onclick="eliminarItem('${id}')">${t('eliminarBtn')}</button>`:''}
+    </div>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+  cargarZonasSelect('f-zona', item.zona);
+  cargarUbicaciones('f-ubicacion', item.ubicacion_id);
+}
+
+async function cargarZonasSelect(selectId, valorActual) {
+  const { data } = await sb.from('inventario').select('zona').eq('taller_id',tid()).limit(1000);
+  const zonas = [...new Set((data||[]).map(i=>i.zona).filter(Boolean))].sort();
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Sin zona</option>' +
+    zonas.map(z => `<option value="${h(z)}" ${z===valorActual?'selected':''}>${h(z)}</option>`).join('') +
+    '<option value="__nueva__">+ Crear nueva zona...</option>';
+  sel.onchange = function() {
+    if (this.value === '__nueva__') {
+      const nueva = prompt('Nombre de la nueva zona:');
+      if (nueva?.trim()) {
+        const opt = document.createElement('option');
+        opt.value = nueva.trim(); opt.textContent = nueva.trim(); opt.selected = true;
+        sel.insertBefore(opt, sel.lastElementChild);
+      } else { this.value = valorActual || ''; }
+    }
+  };
+}
+
+function modalDescontarStock(id, nombre, stockActual) {
+  sb.from('reparaciones').select('id,descripcion,vehiculos(patente)').eq('taller_id',tid()).in('estado',['pendiente','en_progreso','esperando_repuestos']).order('created_at',{ascending:false}).limit(20).then(({data:repsActivas}) => {
+    openModal(`
+      <div class="modal-title">${t("modDescontarStock")}</div>
+      <p style="color:var(--text2);font-size:.85rem;margin-bottom:1rem">${nombre} · ${t('stockActual')}: <strong style="color:var(--accent)">${stockActual}</strong></p>
+      <div class="form-group"><label class="form-label">${t("lblCantDescontar")}</label><input class="form-input" id="f-descuento" type="number" value="1" min="1" max="${stockActual}"></div>
+      <div class="form-group"><label class="form-label">Para reparación (opcional)</label>
+        <select class="form-input" id="f-desc-rep">
+          <option value="">Sin vincular</option>
+          ${(repsActivas||[]).map(r => `<option value="${r.id}">${h(r.descripcion)}${r.vehiculos?' — '+h(r.vehiculos.patente):''}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">${t("lblMotivo")}</label><input class="form-input" id="f-motivo" placeholder="Usado en reparación..."></div>
+      <button class="btn-primary" onclick="descontarStock('${id}',${stockActual})">DESCONTAR</button>
+      <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+  });
+}
+
+async function descontarStock(id, stockActual) {
+  const descuento = parseFloat(document.getElementById('f-descuento').value)||0;
+  if (descuento<=0) { toast('Ingresá una cantidad válida','error'); return; }
+  if (descuento>stockActual) { toast('No hay suficiente stock','error'); return; }
+  const repId = document.getElementById('f-desc-rep')?.value || null;
+  const motivo = document.getElementById('f-motivo')?.value || '';
+  const { error } = await offlineUpdate('inventario', { cantidad: stockActual - descuento }, 'id', id);
+  if (error) { toast('Error','error'); return; }
+  const { data: item } = await sb.from('inventario').select('nombre,precio_unitario').eq('id',id).single();
+  if (repId && item) {
+    const { data: rep } = await sb.from('reparaciones').select('costo_repuestos').eq('id',repId).single();
+    const costoTotal = parseFloat(rep?.costo_repuestos||0) + (parseFloat(item.precio_unitario||0) * descuento);
+    await sb.from('reparaciones').update({ costo_repuestos: costoTotal }).eq('id', repId);
+  }
+  clearCache('inventario');toast(`Stock actualizado${repId?' y vinculado al trabajo':''}`,'success'); closeModal(); inventario();
+}
+
+async function eliminarItem(id) {
+  confirmar('Esta acción eliminará el producto permanentemente.', async () => {
+    await offlineDelete('inventario', 'id', id);
+    clearCache('inventario');toast('Producto eliminado'); inventario();
+  });
+}
+
 // ─── ENTRADA DE MERCADERÍA (Compra a proveedor) ─────────────────────────────
 
 async function modalEntradaMercaderia() {
@@ -39,7 +230,6 @@ async function modalEntradaMercaderia() {
     <button class="btn-primary" onclick="guardarEntrada()">Registrar entrada</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
     
-  // Event listeners para calcular total en tiempo real
   setTimeout(() => {
     const qtyInput = document.getElementById('f-ent-qty');
     const costoInput = document.getElementById('f-ent-costo');
@@ -81,7 +271,6 @@ async function guardarEntrada() {
   let precioAnterior = 0;
   let stockAnterior = 0;
 
-  // Si es producto nuevo, crearlo primero
   if (itemId === '__nuevo__') {
     const nombre = document.getElementById('f-ent-nombre').value.trim();
     if (!nombre) { toast('El nombre del producto es obligatorio','error'); return; }
@@ -103,7 +292,6 @@ async function guardarEntrada() {
     nombreProducto = nombre;
     stockAnterior = 0;
   } else {
-    // Obtener datos actuales del producto
     const { data: item } = await sb.from('inventario').select('nombre,cantidad,precio_unitario').eq('id', itemId).single();
     if (!item) { toast('Producto no encontrado','error'); return; }
     nombreProducto = item.nombre;
@@ -111,7 +299,6 @@ async function guardarEntrada() {
     precioAnterior = parseFloat(item.precio_unitario) || 0;
   }
   
-  // Actualizar stock y precio de venta si cambió
   const nuevoStock = stockAnterior + qty;
   const updates = { cantidad: nuevoStock };
   if (costoUnit > 0 && costoUnit !== precioAnterior) {
@@ -119,7 +306,6 @@ async function guardarEntrada() {
   }
   await sb.from('inventario').update(updates).eq('id', itemId);
   
-  // Registrar movimiento de inventario
   const { data: mov, error: movError } = await sb.from('movimientos_inventario').insert({
     taller_id: tid(),
     inventario_id: itemId,
@@ -137,9 +323,7 @@ async function guardarEntrada() {
   const totalCompra = qty * costoUnit;
   const movimientoId = mov?.id;
   
-  // ─── INTEGRACIÓN CON FINANZAS Y CUENTAS A PAGAR ───────────────────────────
   if (crearDeuda && totalCompra > 0) {
-    // Crear cuenta a pagar
     const { data: cuenta, error: cuentaError } = await sb.from('cuentas_pagar').insert({
       taller_id: tid(),
       proveedor,
@@ -155,9 +339,7 @@ async function guardarEntrada() {
       toast('✓ Cuenta a pagar registrada', 'info');
     }
   } else if (totalCompra > 0) {
-    // Pago al contado: registrar egreso en finanzas
     try {
-      // Buscar o crear categoría "Repuestos"
       let categoriaId;
       const { data: cats } = await sb.from('categorias_financieras')
         .select('id')
@@ -192,7 +374,6 @@ async function guardarEntrada() {
     }
   }
   
-  // Si el costo unitario cambió, registrar en historial de precios
   if (costoUnit > 0 && costoUnit !== precioAnterior && itemId !== '__nuevo__') {
     await sb.from('historial_precios').insert({
       producto_id: itemId,
@@ -213,4 +394,35 @@ async function guardarEntrada() {
   toast(`✓ Entrada registrada: ${qty} x ${nombreProducto} — Total: ₲${gs(totalCompra)}`, 'success');
   closeModal();
   inventario();
+}
+
+async function modalGestionarZonas() {
+  const { data: items } = await sb.from('inventario').select('zona').eq('taller_id',tid()).limit(1000);
+  const zonas = [...new Set((items||[]).map(i=>i.zona).filter(Boolean))].sort();
+  openModal(`
+    <div class="modal-title">📍 Gestionar Zonas</div>
+    <div style="font-size:.8rem;color:var(--text2);margin-bottom:1rem">Las zonas te permiten organizar tu inventario por ubicación física</div>
+    <div id="zonas-list" style="margin-bottom:1rem">
+      ${zonas.length === 0 ? '<div style="font-size:.82rem;color:var(--text2);padding:.5rem 0">No hay zonas creadas. Agregá una zona al crear o editar un producto.</div>' :
+        zonas.map(z => {
+          const count = (items||[]).filter(i=>i.zona===z).length;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border)">
+            <div><span style="font-size:.85rem">${h(z)}</span> <span style="font-size:.7rem;color:var(--text2)">(${count} productos)</span></div>
+          </div>`;
+        }).join('')}
+    </div>
+    <div style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">AGREGAR ZONA</div>
+    <div style="display:flex;gap:.4rem">
+      <input class="form-input" id="f-nueva-zona" placeholder="Estante A, Depósito 2..." style="flex:1">
+      <button onclick="agregarZonaRapida()" class="btn-add" style="font-size:.8rem;padding:.4rem .8rem">+</button>
+    </div>
+    <div style="font-size:.7rem;color:var(--text2);margin-top:.3rem">La zona se crea cuando asignás un producto a ella.</div>
+    <button class="btn-secondary" style="margin-top:1rem" onclick="closeModal()">Cerrar</button>`);
+}
+
+function agregarZonaRapida() {
+  const zona = document.getElementById('f-nueva-zona').value.trim();
+  if (!zona) { toast('Escribí un nombre de zona','error'); return; }
+  toast('Zona "'+zona+'" disponible. Asignala a un producto.','success');
+  closeModal();
 }
