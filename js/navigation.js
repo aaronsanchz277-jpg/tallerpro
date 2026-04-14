@@ -53,7 +53,13 @@ function buildNav() {
       { id:'gastos', label:'Gastos', icon:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>' },
       { id:'cuentas-pagar', label:'Cuentas a pagar', icon:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>' },
       { id:'sueldos', label:'Sueldos', icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
-      { id:'reportes', label:'Reportes', icon:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>' },
+    ]});
+    sidebarSections.push({ title: 'REPORTES', items: [
+      { id:'reportes', label:'Resumen Rápido', icon:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>' },
+      { id:'reporte-rentabilidad', label:'Rentabilidad', icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+      { id:'reporte-flujo-caja', label:'Flujo de Caja', icon:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>' },
+      { id:'reporte-comparativas', label:'Comparativas', icon:'<path d="M2 12h20M12 2v20M4 4l4 4-4 4M20 4l-4 4 4 4"/>' },
+      { id:'reporte-tendencias', label:'Tendencias', icon:'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>' },
     ]});
     sidebarSections.push({ title: 'CONFIGURACIÓN', items: [
       { id:'empleados', label:'Empleados', icon:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' },
@@ -129,7 +135,7 @@ function closeSidebar() {
 
 async function navigate(page, params = {}) {
   const rol = currentPerfil?.rol;
-  const adminOnly = ['finanzas','creditos','cuentas-pagar','reportes','empleados','usuarios','mi-plan','gastos','presupuestos','ventas','sueldos'];
+  const adminOnly = ['finanzas','creditos','cuentas-pagar','reportes','empleados','usuarios','mi-plan','gastos','presupuestos','ventas','sueldos','reporte-rentabilidad','reporte-flujo-caja','reporte-comparativas','reporte-tendencias'];
   if (adminOnly.includes(page) && rol !== 'admin') { toast('No tenés acceso a esta sección','error'); navigate('dashboard'); return; }
   
   const staffOnly = ['reparaciones','clientes','vehiculos','inventario','agenda','mantenimientos','panel-trabajo'];
@@ -159,7 +165,11 @@ async function navigate(page, params = {}) {
     ventas, 
     gastos, 
     'panel-trabajo': panelTrabajo,
-    sueldos
+    sueldos,
+    'reporte-rentabilidad': reporteRentabilidad,
+    'reporte-flujo-caja': reporteFlujoCaja,
+    'reporte-comparativas': reporteComparativas,
+    'reporte-tendencias': reporteTendencias
   };
   if (pages[page]) {
     try { await pages[page](params); }
@@ -168,5 +178,4 @@ async function navigate(page, params = {}) {
       document.getElementById('main-content').innerHTML = `<div class="empty"><p>Error al cargar. <button onclick="navigate('${page}')" style="color:var(--accent);background:none;border:none;cursor:pointer;text-decoration:underline">Reintentar</button></p></div>`; 
     }
   }
-}
 }
