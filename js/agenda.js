@@ -1,4 +1,4 @@
- // ─── AGENDA DE CITAS ────────────────────────────────────────────────────────
+// ─── AGENDA DE CITAS ────────────────────────────────────────────────────────
 async function agenda({ filtro='hoy' }={}) {
   const hoy = fechaHoy();
   const primerSemana = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()); return d.toISOString().split('T')[0]; })();
@@ -63,16 +63,16 @@ async function detalleCita(id) {
     </div>
     ${c.notas?`<div class="info-item" style="margin-bottom:1rem"><div class="label">${t('lblNotas')}</div><div class="value">${h(c.notas)}</div></div>`:''}
     <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-      ${c.estado==='pendiente'?`<button class="btn-primary" style="flex:1" onclick="cambiarEstadoCita('${id}','confirmada')">${t('agendaConfirmar')}</button>`:''}
-      ${c.estado==='confirmada'?`<button class="btn-primary" style="flex:1" onclick="cambiarEstadoCita('${id}','completada')">${t('agendaCompletar')}</button>`:''}
-      ${c.estado!=='cancelada'&&c.estado!=='completada'?`<button class="btn-secondary" style="margin:0" onclick="cambiarEstadoCita('${id}','cancelada')">${t('agendaCancelar')}</button>`:''}
-      ${c.estado==='confirmada'?`<button onclick="crearRepDesdeCita('${c.cliente_id||''}','${c.vehiculo_id||''}','${h(c.descripcion||'')}')" style="flex:1;background:rgba(0,229,255,.12);color:var(--accent);border:1px solid rgba(0,229,255,.3);border-radius:10px;padding:.6rem;font-family:var(--font-head);font-size:.82rem;cursor:pointer">🔧 Crear reparación</button>`:''}
+      ${c.estado==='pendiente'?`<button class="btn-primary" style="flex:1" onclick="cambiarEstadoCitaConSafeCall('${id}','confirmada')">${t('agendaConfirmar')}</button>`:''}
+      ${c.estado==='confirmada'?`<button class="btn-primary" style="flex:1" onclick="cambiarEstadoCitaConSafeCall('${id}','completada')">${t('agendaCompletar')}</button>`:''}
+      ${c.estado!=='cancelada'&&c.estado!=='completada'?`<button class="btn-secondary" style="margin:0" onclick="cambiarEstadoCitaConSafeCall('${id}','cancelada')">${t('agendaCancelar')}</button>`:''}
+      ${c.estado==='confirmada'?`<button onclick="crearRepDesdeCitaConSafeCall('${c.cliente_id||''}','${c.vehiculo_id||''}','${h(c.descripcion||'')}')" style="flex:1;background:rgba(0,229,255,.12);color:var(--accent);border:1px solid rgba(0,229,255,.3);border-radius:10px;padding:.6rem;font-family:var(--font-head);font-size:.82rem;cursor:pointer">🔧 Crear reparación</button>`:''}
       ${tel&&c.estado==='pendiente'?`<button onclick="window.open('https://wa.me/${tel}?text=${encodeURIComponent(t('agendaMsgWsp')+' '+formatFecha(c.fecha)+(c.hora?' a las '+c.hora.slice(0,5):'')+'. '+tallerNombre+'.')}')" style="flex:1;background:rgba(37,211,102,.15);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:10px;padding:.6rem;font-family:var(--font-head);font-size:.85rem;cursor:pointer">${t('agendaConfirmarWsp')}</button>`:''}
-      <button class="btn-danger" style="margin:0" onclick="eliminarCita('${id}')">${t('eliminarBtn')}</button>
+      <button class="btn-danger" style="margin:0" onclick="eliminarCitaConSafeCall('${id}')">${t('eliminarBtn')}</button>
     </div>`;
 }
 
-async function cambiarEstadoCita(id, estado) {
+async function cambiarEstadoCitaConSafeCall(id, estado) {
   await safeCall(async () => {
     await offlineUpdate('citas', { estado }, 'id', id);
     clearCache('citas');
@@ -81,7 +81,7 @@ async function cambiarEstadoCita(id, estado) {
   }, null, 'No se pudo cambiar el estado');
 }
 
-async function crearRepDesdeCita(clienteId, vehiculoId, descripcion) {
+async function crearRepDesdeCitaConSafeCall(clienteId, vehiculoId, descripcion) {
   await safeCall(async () => {
     const { error } = await offlineInsert('reparaciones', {
       descripcion: descripcion || 'Trabajo',
@@ -100,7 +100,7 @@ async function crearRepDesdeCita(clienteId, vehiculoId, descripcion) {
   }, null, 'No se pudo crear la reparación');
 }
 
-async function eliminarCita(id) {
+async function eliminarCitaConSafeCall(id) {
   confirmar(t('confirmar'), async () => {
     await safeCall(async () => {
       await offlineDelete('citas', 'id', id);
@@ -389,13 +389,13 @@ async function misCitas() {
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
             <span class="card-badge ${badges[c.estado]||'badge-yellow'}">${labels[c.estado]||c.estado}</span>
-            ${c.estado==='pendiente'?`<button onclick="event.stopPropagation();cancelarMiCita('${c.id}')" style="font-size:.65rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 6px;cursor:pointer">${t('agendaCancelar')}</button>`:''}
+            ${c.estado==='pendiente'?`<button onclick="event.stopPropagation();cancelarMiCitaConSafeCall('${c.id}')" style="font-size:.65rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 6px;cursor:pointer">${t('agendaCancelar')}</button>`:''}
           </div>
         </div>
       </div>`).join('')}`;
 }
 
-async function cancelarMiCita(id) {
+async function cancelarMiCitaConSafeCall(id) {
   confirmar(t('confirmar'), async () => {
     await safeCall(async () => {
       await offlineUpdate('citas', { estado: 'cancelada' }, 'id', id);
