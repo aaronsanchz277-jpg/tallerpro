@@ -1,11 +1,7 @@
 // ─── PUSH NOTIFICATIONS ─────────────────────────────────────────────────────
-// Notificaciones para: citas próximas, mantenimientos vencidos, stock bajo
-
 const PUSH_STORAGE_KEY = 'tallerpro_push_enabled';
-const PUSH_CHECK_INTERVAL = 60 * 60 * 1000; // Revisar cada hora
 let _pushCheckTimer = null;
 
-// ─── Solicitar permiso ──────────────────────────────────────────────────────
 async function pushRequestPermission() {
   if (!('Notification' in window)) {
     toast('Tu navegador no soporta notificaciones', 'error');
@@ -13,7 +9,7 @@ async function pushRequestPermission() {
   }
   if (Notification.permission === 'granted') return true;
   if (Notification.permission === 'denied') {
-    toast('Las notificaciones están bloqueadas. Habilitalasen la config del navegador.', 'error');
+    toast('Las notificaciones están bloqueadas. Habilítalas en la config del navegador.', 'error');
     return false;
   }
   const result = await Notification.requestPermission();
@@ -26,7 +22,6 @@ async function pushRequestPermission() {
   return false;
 }
 
-// ─── Enviar notificación local ──────────────────────────────────────────────
 function pushNotify(title, body, tag, onclick) {
   if (Notification.permission !== 'granted') return;
   const options = {
@@ -41,90 +36,62 @@ function pushNotify(title, body, tag, onclick) {
   try {
     const notif = new Notification(title, options);
     if (onclick) {
-      notif.onclick = () => {
-        window.focus();
-        onclick();
-        notif.close();
-      };
+      notif.onclick = () => { window.focus(); onclick(); notif.close(); };
     }
-  } catch(e) {
-    // Fallback para cuando Notification constructor falla (ej: algunos Android)
+  } catch (e) {
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.ready.then(reg => {
-        reg.showNotification(title, options);
-      });
+      navigator.serviceWorker.ready.then(reg => reg.showNotification(title, options));
     }
   }
 }
 
-// ─── Revisar citas de hoy ──────────────────────────────────────────────────
 async function pushCheckCitas() {
   if (!currentPerfil || Notification.permission !== 'granted') return;
   const hoy = new Date().toISOString().split('T')[0];
   const ahora = new Date();
   const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
 
-  try {
+  await safeCall(async () => {
     const { data: citas } = await sb.from('citas').select('id,descripcion,fecha,hora,clientes(nombre)')
       .eq('taller_id', tid()).eq('fecha', hoy).in('estado', ['pendiente', 'confirmada']);
-    
     if (!citas || citas.length === 0) return;
 
     const notificadas = JSON.parse(localStorage.getItem('tallerpro_notif_citas') || '{}');
     const hoyKey = hoy;
 
     citas.forEach(c => {
-      if (notificadas[c.id + '_' + hoyKey]) return; // Ya notificada hoy
-      
+      if (notificadas[c.id + '_' + hoyKey]) return;
       if (c.hora) {
         const [h, m] = c.hora.split(':').map(Number);
         const minutosCita = h * 60 + m;
         const diff = minutosCita - horaActual;
-        
-        // Notificar si falta 1 hora o menos
         if (diff > 0 && diff <= 60) {
-          pushNotify(
-            `📅 Cita en ${diff} min`,
-            `${c.descripcion}${c.clientes ? ' — ' + c.clientes.nombre : ''} a las ${c.hora.slice(0, 5)}`,
-            'cita-' + c.id,
-            () => navigate('agenda')
-          );
+          pushNotify(`📅 Cita en ${diff} min`, `${c.descripcion}${c.clientes ? ' — ' + c.clientes.nombre : ''} a las ${c.hora.slice(0, 5)}`, 'cita-' + c.id, () => navigate('agenda'));
           notificadas[c.id + '_' + hoyKey] = true;
         }
       }
     });
-
     localStorage.setItem('tallerpro_notif_citas', JSON.stringify(notificadas));
-  } catch(e) { console.warn('Push check citas failed:', e); }
+  }, null, 'Error verificando citas');
 }
 
-// ─── Revisar mantenimientos vencidos ────────────────────────────────────────
 async function pushCheckMantenimientos() {
   if (!currentPerfil || Notification.permission !== 'granted') return;
   if (currentPerfil.rol === 'cliente') return;
 
   const hoy = new Date().toISOString().split('T')[0];
   const notifKey = 'tallerpro_notif_mant_' + hoy;
-  if (localStorage.getItem(notifKey)) return; // Ya se notificó hoy
+  if (localStorage.getItem(notifKey)) return;
 
-  try {
+  await safeCall(async () => {
     const { data } = await sb.from('mantenimientos').select('id,tipo,vehiculos(patente),clientes(nombre)')
       .eq('taller_id', tid()).eq('estado', 'activo').lte('proximo_fecha', hoy).limit(10);
-    
     if (!data || data.length === 0) return;
-    
-    pushNotify(
-      `🔔 ${data.length} mantenimiento${data.length > 1 ? 's' : ''} vencido${data.length > 1 ? 's' : ''}`,
-      data.slice(0, 3).map(m => `${m.tipo} — ${m.vehiculos?.patente || ''}`).join(', '),
-      'mant-vencidos',
-      () => navigate('mantenimientos')
-    );
-
+    pushNotify(`🔔 ${data.length} mantenimiento${data.length > 1 ? 's' : ''} vencido${data.length > 1 ? 's' : ''}`, data.slice(0, 3).map(m => `${m.tipo} — ${m.vehiculos?.patente || ''}`).join(', '), 'mant-vencidos', () => navigate('mantenimientos'));
     localStorage.setItem(notifKey, '1');
-  } catch(e) { console.warn('Push check mantenimientos failed:', e); }
+  }, null, 'Error verificando mantenimientos');
 }
 
-// ─── Revisar stock bajo ─────────────────────────────────────────────────────
 async function pushCheckStock() {
   if (!currentPerfil || Notification.permission !== 'granted') return;
   if (currentPerfil.rol === 'cliente') return;
@@ -132,25 +99,15 @@ async function pushCheckStock() {
   const notifKey = 'tallerpro_notif_stock_' + new Date().toISOString().split('T')[0];
   if (localStorage.getItem(notifKey)) return;
 
-  try {
-    const { data } = await sb.from('inventario').select('nombre,cantidad,stock_minimo')
-      .eq('taller_id', tid()).limit(200);
-    
+  await safeCall(async () => {
+    const { data } = await sb.from('inventario').select('nombre,cantidad,stock_minimo').eq('taller_id', tid()).limit(200);
     const bajo = (data || []).filter(i => parseFloat(i.cantidad) <= parseFloat(i.stock_minimo));
     if (bajo.length === 0) return;
-
-    pushNotify(
-      `⚠ ${bajo.length} producto${bajo.length > 1 ? 's' : ''} con stock bajo`,
-      bajo.slice(0, 3).map(i => `${i.nombre}: ${i.cantidad}`).join(', '),
-      'stock-bajo',
-      () => navigate('inventario')
-    );
-
+    pushNotify(`⚠ ${bajo.length} producto${bajo.length > 1 ? 's' : ''} con stock bajo`, bajo.slice(0, 3).map(i => `${i.nombre}: ${i.cantidad}`).join(', '), 'stock-bajo', () => navigate('inventario'));
     localStorage.setItem(notifKey, '1');
-  } catch(e) { console.warn('Push check stock failed:', e); }
+  }, null, 'Error verificando stock');
 }
 
-// ─── Loop principal ─────────────────────────────────────────────────────────
 async function pushRunChecks() {
   await pushCheckCitas();
   await pushCheckMantenimientos();
@@ -159,20 +116,16 @@ async function pushRunChecks() {
 
 function pushStartChecking() {
   if (_pushCheckTimer) clearInterval(_pushCheckTimer);
-  // Primera revisión después de 10 segundos (dar tiempo a que cargue la app)
   setTimeout(pushRunChecks, 10000);
-  // Revisar citas cada 15 minutos (más frecuente que mantenimientos)
   _pushCheckTimer = setInterval(pushRunChecks, 15 * 60 * 1000);
 }
 
-// ─── Init: activar si ya tiene permiso ──────────────────────────────────────
 function pushInit() {
   if (Notification.permission === 'granted' && localStorage.getItem(PUSH_STORAGE_KEY)) {
     pushStartChecking();
   }
 }
 
-// ─── UI: Botón para activar notificaciones (se muestra en sidebar) ──────────
 function getPushBanner() {
   if (!('Notification' in window)) return '';
   if (Notification.permission === 'granted') return '';
@@ -186,37 +139,27 @@ function getPushBanner() {
   </div>`;
 }
 
-// Limpiar notificaciones viejas (más de 7 días)
 function pushCleanOldNotifs() {
   try {
     const citasStr = localStorage.getItem('tallerpro_notif_citas');
     if (citasStr) {
       const citas = JSON.parse(citasStr);
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 7);
+      const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7);
       const cutoffStr = cutoff.toISOString().split('T')[0];
       const cleaned = {};
-      Object.entries(citas).forEach(([k, v]) => {
-        const dateMatch = k.match(/\d{4}-\d{2}-\d{2}/);
-        if (dateMatch && dateMatch[0] >= cutoffStr) cleaned[k] = v;
-      });
+      Object.entries(citas).forEach(([k, v]) => { const dateMatch = k.match(/\d{4}-\d{2}-\d{2}/); if (dateMatch && dateMatch[0] >= cutoffStr) cleaned[k] = v; });
       localStorage.setItem('tallerpro_notif_citas', JSON.stringify(cleaned));
     }
-    // Limpiar keys de stock/mant viejas
     Object.keys(localStorage).forEach(k => {
       if (k.startsWith('tallerpro_notif_mant_') || k.startsWith('tallerpro_notif_stock_')) {
         const dateMatch = k.match(/\d{4}-\d{2}-\d{2}/);
         if (dateMatch) {
-          const cutoff = new Date();
-          cutoff.setDate(cutoff.getDate() - 7);
-          if (dateMatch[0] < cutoff.toISOString().split('T')[0]) {
-            localStorage.removeItem(k);
-          }
+          const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7);
+          if (dateMatch[0] < cutoff.toISOString().split('T')[0]) localStorage.removeItem(k);
         }
       }
     });
-  } catch(e) {}
+  } catch (e) {}
 }
 
-// Ejecutar limpieza al cargar
 pushCleanOldNotifs();
