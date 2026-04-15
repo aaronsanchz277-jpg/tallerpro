@@ -1,7 +1,8 @@
-  // ─── PRESUPUESTOS (Flujo: Generado → Aprobado → OT automática con ítems) ─────
-
+// ─── PRESUPUESTOS (Flujo: Generado → Aprobado → OT automática con ítems) ─────
 const PRESUPUESTO_ESTADOS = {generado:'GENERADO',aprobado:'APROBADO',rechazado:'RECHAZADO'};
 const presupuestoBadge = (e) => ({generado:'badge-yellow',aprobado:'badge-green',rechazado:'badge-red'}[e]||'badge-blue');
+
+let _presupuestoReparacionId = null; // Para vincular desde una reparación existente
 
 async function presupuestos({ filtro='todos', search='', offset=0 }={}) {
   const cacheKey = `presupuestos_${filtro}_${search}_${offset}`;
@@ -127,42 +128,75 @@ async function aprobarPresupuesto(id) {
       const { data:p } = await sb.from('presupuestos_v2').select('*').eq('id',id).single();
       if (!p) return;
       
-      const { data:rep, error } = await sb.from('reparaciones').insert({
-        descripcion: p.descripcion || 'Trabajo desde presupuesto',
-        tipo_trabajo: p.tipo_trabajo || 'Mecánica general',
-        vehiculo_id: p.vehiculo_id,
-        cliente_id: p.cliente_id,
-        costo: p.total || 0,
-        costo_repuestos: (p.items||[]).filter(i=>i.tipo==='producto').reduce((s,i)=>s+parseFloat(i.precio||0)*(i.cantidad||1),0),
-        estado: 'pendiente',
-        fecha: new Date().toISOString().split('T')[0],
-        notas: 'Generado desde presupuesto. '+(p.observaciones||''),
-        taller_id: tid()
-      }).select('id').single();
-      
-      if (error) { toast('Error: '+error.message,'error'); return; }
-      
-      const items = p.items || [];
-      if (items.length > 0) {
-        const itemsData = items.map(item => ({
-          reparacion_id: rep.id,
-          tipo: item.tipo,
-          descripcion: item.descripcion,
-          cantidad: item.cantidad || 1,
-          precio_unitario: item.precio || 0,
+      // Si el presupuesto ya está vinculado a una reparación, actualizarla en lugar de crear una nueva
+      if (p.reparacion_id) {
+        // Actualizar la reparación existente con los datos del presupuesto
+        const updates = {
+          descripcion: p.descripcion || 'Trabajo desde presupuesto',
+          tipo_trabajo: p.tipo_trabajo || 'Mecánica general',
+          costo: p.total || 0,
+          costo_repuestos: (p.items||[]).filter(i=>i.tipo==='producto').reduce((s,i)=>s+parseFloat(i.precio||0)*(i.cantidad||1),0),
+          notas: (await sb.from('reparaciones').select('notas').eq('id',p.reparacion_id).single())?.data?.notas + '\nActualizado desde presupuesto ' + (p.observaciones||'')
+        };
+        await sb.from('reparaciones').update(updates).eq('id', p.reparacion_id);
+        
+        // Actualizar ítems: eliminar los existentes y volver a insertar
+        await sb.from('reparacion_items').delete().eq('reparacion_id', p.reparacion_id);
+        const items = p.items || [];
+        if (items.length > 0) {
+          const itemsData = items.map(item => ({
+            reparacion_id: p.reparacion_id,
+            tipo: item.tipo,
+            descripcion: item.descripcion,
+            cantidad: item.cantidad || 1,
+            precio_unitario: item.precio || 0,
+            taller_id: tid()
+          }));
+          await sb.from('reparacion_items').insert(itemsData);
+        }
+        
+        toast('✓ Reparación actualizada con el presupuesto', 'success');
+      } else {
+        // Crear nueva reparación
+        const { data:rep, error } = await sb.from('reparaciones').insert({
+          descripcion: p.descripcion || 'Trabajo desde presupuesto',
+          tipo_trabajo: p.tipo_trabajo || 'Mecánica general',
+          vehiculo_id: p.vehiculo_id,
+          cliente_id: p.cliente_id,
+          costo: p.total || 0,
+          costo_repuestos: (p.items||[]).filter(i=>i.tipo==='producto').reduce((s,i)=>s+parseFloat(i.precio||0)*(i.cantidad||1),0),
+          estado: 'pendiente',
+          fecha: new Date().toISOString().split('T')[0],
+          notas: 'Generado desde presupuesto. '+(p.observaciones||''),
           taller_id: tid()
-        }));
-        await sb.from('reparacion_items').insert(itemsData);
+        }).select('id').single();
+        
+        if (error) { toast('Error: '+error.message,'error'); return; }
+        
+        const items = p.items || [];
+        if (items.length > 0) {
+          const itemsData = items.map(item => ({
+            reparacion_id: rep.id,
+            tipo: item.tipo,
+            descripcion: item.descripcion,
+            cantidad: item.cantidad || 1,
+            precio_unitario: item.precio || 0,
+            taller_id: tid()
+          }));
+          await sb.from('reparacion_items').insert(itemsData);
+        }
+        
+        // Actualizar el presupuesto con el ID de la nueva reparación
+        await sb.from('presupuestos_v2').update({ reparacion_id: rep.id }).eq('id', id);
+        toast('✓ Presupuesto aprobado — OT creada', 'success');
       }
       
       await sb.from('presupuestos_v2').update({ 
         estado: 'aprobado', 
-        reparacion_id: rep.id, 
         fecha_aprobacion: new Date().toISOString() 
       }).eq('id', id);
       
       clearCache('presupuestos'); clearCache('reparaciones');
-      toast('✓ Presupuesto aprobado — OT creada', 'success');
       detallePresupuesto(id);
     }, null, 'No se pudo aprobar el presupuesto');
   });
@@ -190,15 +224,28 @@ async function eliminarPresupuesto(id) {
   });
 }
 
-async function modalNuevoPresupuesto(editId) {
+async function modalNuevoPresupuesto(editId, repId = null) {
+  _presupuestoReparacionId = repId; // Guardar ID de reparación si viene desde una OT
+  
   let existing = null;
   if (editId) {
     const { data } = await sb.from('presupuestos_v2').select('*').eq('id', editId).single();
     existing = data;
   }
   
-  const clienteSelect = await renderClienteSelect('pp-cli', existing?.cliente_id, true);
-  const vehiculoSelect = await renderVehiculoSelect('pp-veh', existing?.vehiculo_id, null, true);
+  // Si viene de una reparación, precargar cliente y vehículo de esa reparación
+  let clienteId = existing?.cliente_id || null;
+  let vehiculoId = existing?.vehiculo_id || null;
+  if (repId && !editId) {
+    const { data: rep } = await sb.from('reparaciones').select('cliente_id, vehiculo_id, descripcion').eq('id', repId).single();
+    if (rep) {
+      clienteId = rep.cliente_id;
+      vehiculoId = rep.vehiculo_id;
+    }
+  }
+  
+  const clienteSelect = await renderClienteSelect('pp-cli', clienteId, true);
+  const vehiculoSelect = await renderVehiculoSelect('pp-veh', vehiculoId, null, true);
   window._pptoItems = existing?.items || [];
   
   openModal(`
@@ -292,7 +339,8 @@ async function guardarPresupuesto(id) {
     total: Math.max(0, total - descuento),
     descuento,
     observaciones: document.getElementById('pp-obs').value,
-    taller_id: tid()
+    taller_id: tid(),
+    reparacion_id: _presupuestoReparacionId // Vincular a la reparación si existe
   };
   if (!id) data.estado = 'generado';
   
@@ -301,8 +349,10 @@ async function guardarPresupuesto(id) {
     : await offlineInsert('presupuestos_v2', data);
     
   if (error) { toast('Error: '+error.message,'error'); return; }
+  
   clearCache('presupuestos');
   toast(id ? 'Presupuesto actualizado' : 'Presupuesto creado', 'success');
+  _presupuestoReparacionId = null;
   closeModal();
   presupuestos();
 }
@@ -429,4 +479,4 @@ async function enviarPresupuestoWhatsApp(id) {
   const tallerNombre = currentPerfil?.talleres?.nombre || 'TallerPro';
   const msg = `Hola! Te envío el presupuesto de ${tallerNombre}:\n\n📋 ${p.descripcion}\n💰 Total: ₲${gs(p.total)}\n\n¿Aprobás el trabajo?`;
   window.open(`https://wa.me/595${tel}?text=${encodeURIComponent(msg)}`);
-}
+}  
