@@ -75,11 +75,7 @@ async function repMecanicos_agregar(repId) {
   if (!mecId) { toast('Seleccioná un mecánico','error'); return; }
   const source = sel.selectedOptions[0]?.dataset?.source || 'perfil';
   const nombre = sel.selectedOptions[0]?.textContent?.replace(' (manual)','') || '';
-  const insertData = {
-    reparacion_id: repId,
-    nombre_mecanico: nombre,
-    horas: 0
-  };
+  const insertData = { reparacion_id: repId, nombre_mecanico: nombre, horas: 0 };
   if (source === 'perfil') insertData.mecanico_id = mecId;
   else insertData.empleado_id = mecId;
   
@@ -105,7 +101,6 @@ async function repMecanicos_quitar(id, repId) {
 async function repMecanicos_actualizarConSafeCall(id, campo, valor, repId) {
   await safeCall(async () => {
     await repMecanicos_actualizar(id, campo, valor);
-    // Refrescar el modal sin perder los cambios visuales
     repMecanicos_modal(repId);
   }, null, 'No se pudo actualizar');
 }
@@ -114,4 +109,4 @@ async function repMecanicos_actualizar(id, campo, valor) {
   const update = {};
   update[campo] = campo === 'horas' || campo === 'pago' ? parseFloat(valor)||0 : valor;
   await sb.from('reparacion_mecanicos').update(update).eq('id', id);
-}
+} 
