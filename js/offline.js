@@ -1,6 +1,6 @@
-// ─── OFFLINE: IndexedDB para cache local ─────────────────────────────────────
+ // ─── OFFLINE: IndexedDB para cache local ─────────────────────────────────────
 const DB_NAME = 'tallerpro_offline';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Incrementado para agregar índices
 let _offlineDB = null;
 
 function openOfflineDB() {
@@ -10,7 +10,10 @@ function openOfflineDB() {
     req.onupgradeneeded = e => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache', { keyPath: 'key' });
-      if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
+      if (!db.objectStoreNames.contains('queue')) {
+        const queueStore = db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
+        queueStore.createIndex('by_created', 'createdAt');
+      }
     };
     req.onsuccess = e => { _offlineDB = e.target.result; resolve(_offlineDB); };
     req.onerror = e => reject(e.target.error);
@@ -44,9 +47,18 @@ async function addToQueue(operation) {
   try {
     const db = await openOfflineDB();
     const tx = db.transaction('queue', 'readwrite');
-    tx.objectStore('queue').add({ ...operation, createdAt: Date.now() });
+    // Verificar si ya existe una operación similar para evitar duplicados
+    const store = tx.objectStore('queue');
+    const all = await new Promise(resolve => { const req = store.getAll(); req.onsuccess = () => resolve(req.result); });
+    const exists = all.some(item => 
+      item.table === operation.table && 
+      item.action === operation.action && 
+      JSON.stringify(item.data) === JSON.stringify(operation.data)
+    );
+    if (exists) return;
+    
+    store.add({ ...operation, createdAt: Date.now() });
     updateSyncBadge();
-    // Mostrar indicador persistente de cambios sin sincronizar
     if (typeof showOfflinePendingIndicator === 'function') {
       showOfflinePendingIndicator();
     }
@@ -119,7 +131,6 @@ async function processOfflineQueue() {
   
   if (processed > 0) {
     toast(`✓ ${processed} cambio${processed>1?'s':''} sincronizado${processed>1?'s':''}`, 'success');
-    // Refrescar la vista actual
     if (currentPage) navigate(currentPage);
   }
   
@@ -183,21 +194,22 @@ async function cachedQuery(cacheKey, queryFn) {
       if (result.error && (result.error.code === 'PGRST301' || result.error.code === '401' || result.error.message?.includes('JWT') || result.error.message?.includes('token'))) {
         toast('Tu sesión expiró. Volvé a iniciar sesión.','error');
         logout();
-        return { data: [], count: 0, error: result.error };
+        return { data: [], count: 0, error: result.error, fromCache: false };
       }
       if (result.data || result.count !== undefined) {
         _memCache[cacheKey] = { result, ts: Date.now() };
         cacheLocal(cacheKey, result);
       }
-      return result;
+      return { ...result, fromCache: false };
     } catch(e) {
-      // Network error — fall through to cache
+      // Fall through to cache
     }
   }
-  if (_memCache[cacheKey]) return _memCache[cacheKey].result;
+  // Offline: leer de memoria o IndexedDB
+  if (_memCache[cacheKey]) return { ..._memCache[cacheKey].result, fromCache: true };
   const cached = await readCache(cacheKey);
-  if (cached) return cached;
-  return { data: [], count: 0, error: { message: 'Sin conexión y sin datos en cache' } };
+  if (cached) return { ...cached, fromCache: true };
+  return { data: [], count: 0, error: { message: 'Sin conexión y sin datos en cache' }, fromCache: false };
 }
 
 async function safeQuery(queryFn, fallback = null) {
@@ -219,6 +231,15 @@ async function safeQuery(queryFn, fallback = null) {
   }
 }
 
+// ─── HELPER PARA ACCIONES QUE REQUIEREN CONEXIÓN ─────────────────────────────
+function requireOnline(actionName = 'realizar esta acción') {
+  if (!navigator.onLine) {
+    toast(`Necesitás conexión a internet para ${actionName}`, 'error');
+    return false;
+  }
+  return true;
+}
+
 // ─── OFFLINE: Estado de conexión ─────────────────────────────────────────────
 let _isOnline = navigator.onLine;
 
@@ -230,6 +251,9 @@ function updateOnlineStatus() {
   
   if (_isOnline) {
     setTimeout(processOfflineQueue, 1000);
+    toast('✓ Conexión restablecida', 'success', 1500);
+  } else {
+    toast('⚡ Sin conexión — modo offline activado', 'info', 2000);
   }
 }
 
@@ -242,7 +266,13 @@ async function updateSyncBadge() {
   }
 }
 
+// Registrar Background Sync si está disponible
+if ('serviceWorker' in navigator && 'SyncManager' in window) {
+  navigator.serviceWorker.ready.then(reg => {
+    reg.sync.register('sync-queue').catch(e => console.warn('Background sync no disponible:', e));
+  });
+}
+
 window.addEventListener('online', updateOnlineStatus);
 window.addEventListener('offline', updateOnlineStatus);
 setTimeout(updateOnlineStatus, 100);
-
