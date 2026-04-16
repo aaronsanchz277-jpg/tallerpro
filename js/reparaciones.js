@@ -764,6 +764,7 @@ function modalFotosEtapa(repId, etapa) {
 }
 
 async function subirFotosEtapa(repId, etapa) {
+  if (!requireOnline('subir fotos')) return;
   const input = document.getElementById('f-fotos-etapa');
   if (!input.files.length) { toast('Seleccioná al menos una foto','error'); return; }
   toast('Subiendo fotos...','info');
@@ -789,7 +790,6 @@ async function subirFotosEtapa(repId, etapa) {
     detalleReparacion(repId);
   }, null, 'Error al subir las fotos');
 }
-
 // ─── FICHA DE RECEPCIÓN ─────────────────────────────────────────────────────
 async function modalFichaRecepcion(repId) {
   const { data:rep } = await sb.from('reparaciones').select('*, vehiculos(patente,marca,modelo,color), clientes(nombre,telefono)').eq('id',repId).single();
