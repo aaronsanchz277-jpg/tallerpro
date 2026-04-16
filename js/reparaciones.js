@@ -1029,8 +1029,10 @@ async function wizardNextStep() {
   const step = window._wizardStep;
   
   if (step === 1) {
-    const clienteId = document.getElementById('wizard-cliente')?.value;
-    const nombreNuevo = document.getElementById('wizard-nombre-cliente')?.value.trim();
+    const selCliente = document.getElementById('wizard-cliente');
+    const clienteId = selCliente ? selCliente.value : null;
+    const nombreNuevoInput = document.getElementById('wizard-nombre-cliente');
+    const nombreNuevo = nombreNuevoInput ? nombreNuevoInput.value.trim() : '';
     
     if (!clienteId && !nombreNuevo) {
       toast('Seleccioná un cliente o creá uno nuevo', 'error');
@@ -1038,9 +1040,10 @@ async function wizardNextStep() {
     }
     
     if (nombreNuevo) {
+      const telInput = document.getElementById('wizard-tel-cliente');
       const { data: nuevo } = await sb.from('clientes').insert({
         nombre: nombreNuevo,
-        telefono: document.getElementById('wizard-tel-cliente')?.value || null,
+        telefono: telInput ? telInput.value : null,
         taller_id: tid()
       }).select('id').single();
       window._wizardData.cliente_id = nuevo.id;
@@ -1063,9 +1066,12 @@ async function wizardNextStep() {
     
     updateWizardDots(2);
   } else if (step === 2) {
-    const vehiculoId = document.getElementById('wizard-vehiculo')?.value;
-    const patenteNueva = document.getElementById('wizard-patente')?.value.trim().toUpperCase();
-    const marcaNueva = document.getElementById('wizard-marca')?.value.trim();
+    const selVehiculo = document.getElementById('wizard-vehiculo');
+    const vehiculoId = selVehiculo ? selVehiculo.value : null;
+    const patenteInput = document.getElementById('wizard-patente');
+    const patenteNueva = patenteInput ? patenteInput.value.trim().toUpperCase() : '';
+    const marcaInput = document.getElementById('wizard-marca');
+    const marcaNueva = marcaInput ? marcaInput.value.trim() : '';
     
     if (!vehiculoId && !patenteNueva) {
       toast('Seleccioná un vehículo o creá uno nuevo', 'error');
@@ -1107,13 +1113,15 @@ function wizardPrevStep() {
 }
 
 async function wizardGuardar() {
-  const desc = document.getElementById('wizard-desc')?.value.trim();
+  const descInput = document.getElementById('wizard-desc');
+  const desc = descInput ? descInput.value.trim() : '';
   if (!desc) {
     toast('Describí el trabajo a realizar', 'error');
     return;
   }
   
-  const costo = parseFloat(document.getElementById('wizard-costo')?.value) || 0;
+  const costoInput = document.getElementById('wizard-costo');
+  const costo = parseFloat(costoInput ? costoInput.value : '') || 0;
   
   await safeCall(async () => {
     const { data: rep, error } = await sb.from('reparaciones').insert({
