@@ -76,20 +76,14 @@ function ia_toggleVoice() {
 function ia_speak(text) {
   if (!_iaVoiceEnabled) return;
   if (!window.speechSynthesis) return;
-  
-  // Cancelar cualquier voz anterior
   window.speechSynthesis.cancel();
-  
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'es-PY';
   utterance.rate = 1.0;
   utterance.pitch = 1.1;
-  
-  // Buscar una voz femenina en español
   const voices = window.speechSynthesis.getVoices();
   const spanishVoice = voices.find(v => v.lang.includes('es'));
   if (spanishVoice) utterance.voice = spanishVoice;
-  
   window.speechSynthesis.speak(utterance);
 }
 
@@ -101,8 +95,6 @@ function ia_addMsg(html, isUser) {
   div.innerHTML = html;
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
-  
-  // Si es respuesta del asistente y no es usuario, hablar
   if (!isUser) {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
@@ -199,6 +191,7 @@ async function ia_getContexto() {
 }
 
 async function ia_enviar() {
+  if (!requireOnline('usar el asistente IA')) return;
   const input = document.getElementById('ia-input');
   if (!input) return;
   const text = input.value.trim();
@@ -282,7 +275,6 @@ ACCIONES DISPONIBLES:
     _iaMessages.push({ role: 'assistant', content: respText });
     ia_removeLoading();
 
-    // Parseo tolerante de JSON
     let action;
     try {
       let cleanText = respText.trim();
