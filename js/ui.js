@@ -268,3 +268,12 @@ function esAdmin() {
   const rol = currentPerfil?.rol;
   return rol === 'admin' || rol === 'superadmin';
 }
+
+// ─── VERIFICACIÓN DE CONEXIÓN PARA ACCIONES CRÍTICAS ─────────────────────────
+function requireOnline(actionName = 'realizar esta acción') {
+  if (!navigator.onLine) {
+    toast(`Necesitás conexión a internet para ${actionName}`, 'error');
+    return false;
+  }
+  return true;
+}
