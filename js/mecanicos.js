@@ -22,13 +22,28 @@ async function repMecanicos_modal(repId) {
     sb.from('perfiles').select('id,nombre').eq('taller_id', tid()).in('rol', ['admin','empleado']).order('nombre'),
     sb.from('empleados').select('id,nombre').eq('taller_id', tid()).order('nombre')
   ]);
+
+  // Construir lista única de empleados disponibles (priorizando perfiles)
+  const todosMap = new Map();
   
-  const todos = [];
-  (perfilesEmps||[]).forEach(e => todos.push({ id: e.id, nombre: e.nombre, source: 'perfil' }));
-  (empleadosManuales||[]).forEach(e => {
-    if (!todos.find(t => t.id === e.id)) todos.push({ id: e.id, nombre: e.nombre, source: 'empleado' });
+  // Agregar perfiles primero (tienen prioridad)
+  (perfilesEmps || []).forEach(e => {
+    if (e.id && e.nombre) {
+      todosMap.set(e.id, { id: e.id, nombre: e.nombre.trim() || 'Sin nombre', source: 'perfil' });
+    }
   });
-  const asignados = mecanicos.map(m => m.mecanico_id || m.empleado_id).filter(Boolean);
+  
+  // Agregar empleados manuales solo si su ID no está ya en el mapa
+  (empleadosManuales || []).forEach(e => {
+    if (e.id && !todosMap.has(e.id)) {
+      todosMap.set(e.id, { id: e.id, nombre: e.nombre?.trim() || 'Sin nombre', source: 'empleado' });
+    }
+  });
+  
+  const todos = Array.from(todosMap.values());
+  
+  // IDs de mecánicos ya asignados
+  const asignadosIds = mecanicos.map(m => m.mecanico_id || m.empleado_id).filter(Boolean);
 
   openModal(`
     <div class="modal-title">Mecánicos asignados</div>
@@ -36,7 +51,7 @@ async function repMecanicos_modal(repId) {
       ${mecanicos.map(m => `
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.5rem .65rem">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.35rem">
-            <span style="font-size:.85rem;font-weight:500">${h(m.nombre_mecanico||'?')}</span>
+            <span style="font-size:.85rem;font-weight:500">${h(m.nombre_mecanico||'Sin nombre')}</span>
             <button onclick="repMecanicos_quitarConSafeCall('${m.id}','${repId}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.8rem;padding:0">✕</button>
           </div>
           <div style="display:flex;gap:.4rem;align-items:center">
@@ -56,7 +71,7 @@ async function repMecanicos_modal(repId) {
     <div style="display:flex;gap:.4rem">
       <select class="form-input" id="f-mec-add" style="flex:1">
         <option value="">Seleccionar...</option>
-        ${todos.filter(e => !asignados.includes(e.id)).map(e => `<option value="${e.id}" data-source="${e.source}">${h(e.nombre)}${e.source==='empleado'?' (manual)':''}</option>`).join('')}
+        ${todos.filter(e => !asignadosIds.includes(e.id)).map(e => `<option value="${e.id}" data-source="${e.source}">${h(e.nombre)}${e.source==='empleado'?' (manual)':''}</option>`).join('')}
       </select>
       <button onclick="repMecanicos_agregarConSafeCall('${repId}')" class="btn-add" style="font-size:.8rem;padding:.4rem .8rem">+</button>
     </div>
@@ -71,18 +86,48 @@ async function repMecanicos_agregarConSafeCall(repId) {
 
 async function repMecanicos_agregar(repId) {
   const sel = document.getElementById('f-mec-add');
+  if (!sel) return;
+  
   const mecId = sel.value;
-  if (!mecId) { toast('Seleccioná un mecánico','error'); return; }
-  const source = sel.selectedOptions[0]?.dataset?.source || 'perfil';
-  const nombre = sel.selectedOptions[0]?.textContent?.replace(' (manual)','') || '';
-  const insertData = { reparacion_id: repId, nombre_mecanico: nombre, horas: 0 };
-  if (source === 'perfil') insertData.mecanico_id = mecId;
-  else insertData.empleado_id = mecId;
+  if (!mecId) {
+    toast('Seleccioná un mecánico', 'error');
+    return;
+  }
+  
+  const selectedOption = sel.options[sel.selectedIndex];
+  const source = selectedOption?.dataset?.source || 'perfil';
+  const nombre = selectedOption?.textContent?.replace(' (manual)', '').trim() || 'Sin nombre';
+  
+  const insertData = {
+    reparacion_id: repId,
+    nombre_mecanico: nombre,
+    horas: 0,
+    pago: 0
+  };
+  
+  if (source === 'perfil') {
+    insertData.mecanico_id = mecId;
+  } else {
+    insertData.empleado_id = mecId;
+  }
+  
+  console.log('Intentando agregar mecánico:', insertData);
   
   const { error } = await sb.from('reparacion_mecanicos').insert(insertData);
-  if (error) { toast(error.message.includes('duplicate') ? 'Ya está asignado' : 'Error: ' + error.message, 'error'); return; }
   
-  toast('Mecánico asignado','success');
+  if (error) {
+    console.error('Error al agregar mecánico:', error);
+    if (error.message.includes('duplicate')) {
+      toast('Este mecánico ya está asignado a este trabajo', 'error');
+    } else if (error.code === '42501' || error.message.includes('permission')) {
+      toast('No tenés permiso para asignar mecánicos. Verificá tu rol.', 'error');
+    } else {
+      toast('Error al agregar: ' + error.message, 'error');
+    }
+    return;
+  }
+  
+  toast('Mecánico asignado', 'success');
   repMecanicos_modal(repId);
 }
 
@@ -93,8 +138,13 @@ async function repMecanicos_quitarConSafeCall(id, repId) {
 }
 
 async function repMecanicos_quitar(id, repId) {
-  await sb.from('reparacion_mecanicos').delete().eq('id', id);
-  toast('Mecánico removido','success');
+  const { error } = await sb.from('reparacion_mecanicos').delete().eq('id', id);
+  if (error) {
+    console.error('Error al quitar mecánico:', error);
+    toast('Error al quitar: ' + error.message, 'error');
+    return;
+  }
+  toast('Mecánico removido', 'success');
   repMecanicos_modal(repId);
 }
 
@@ -107,6 +157,11 @@ async function repMecanicos_actualizarConSafeCall(id, campo, valor, repId) {
 
 async function repMecanicos_actualizar(id, campo, valor) {
   const update = {};
-  update[campo] = campo === 'horas' || campo === 'pago' ? parseFloat(valor)||0 : valor;
-  await sb.from('reparacion_mecanicos').update(update).eq('id', id);
-} 
+  update[campo] = campo === 'horas' || campo === 'pago' ? parseFloat(valor) || 0 : valor;
+  
+  const { error } = await sb.from('reparacion_mecanicos').update(update).eq('id', id);
+  if (error) {
+    console.error('Error al actualizar mecánico:', error);
+    toast('Error al actualizar: ' + error.message, 'error');
+  }
+}
