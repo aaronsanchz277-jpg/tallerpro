@@ -86,10 +86,10 @@ function buildNav() {
   }
 
   if (typeof _isSuperAdmin !== 'undefined' && _isSuperAdmin && typeof tallerpro_testUI === 'function') {
-  sidebarSections.push({ title: 'DEV', items: [
-    { id:'_tests', label:'🧪 Tests', icon:'<path d="M9 2h6l-2 5h4l-7 9 2-6H7z"/>', onclick:'tallerpro_testUI()' },
-  ]});
-}
+    sidebarSections.push({ title: 'DEV', items: [
+      { id:'_tests', label:'🧪 Tests', icon:'<path d="M9 2h6l-2 5h4l-7 9 2-6H7z"/>', onclick:'tallerpro_testUI()' },
+    ]});
+  }
 
   // RENDER BOTTOM NAV
   document.getElementById('bottom-nav').innerHTML = bottomItems.map(n => `
