@@ -43,7 +43,7 @@ async function dashboard() {
     totalGastosMes = (gastosMes || []).reduce((s, r) => s + parseFloat(r.monto || 0), 0);
   }
 
-  // Secciones de deudores y cuentas vencidas (sin cambios)
+  // Secciones de deudores y cuentas vencidas
   let deudoresHTML = '';
   if (currentPerfil?.rol === 'admin') {
     const { data: repsConDeuda } = await sb.from('reparaciones').select('id,descripcion,costo,clientes(nombre)').eq('taller_id', tid()).eq('estado', 'finalizado').gt('costo', 0).limit(50);
@@ -59,7 +59,7 @@ async function dashboard() {
         const totalDeuda = deudores.reduce((s, d) => s + d.saldo, 0);
         deudoresHTML = `<div style="background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.3);border-radius:10px;padding:.75rem;margin-bottom:1rem;cursor:pointer" onclick="navigate('reparaciones')">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
-            <div style="font-size:.72rem;color:var(--warning);font-family:var(--font-head);letter-spacing:1px">💸 DINERO EN LA CALLE</div>
+            <div style="font-size:.72rem;color:var(--warning);font-family:var(--font-head);letter-spacing:1px">💸 PAGOS PARCIALES PENDIENTES</div>
             <div style="font-family:var(--font-head);color:var(--warning);font-size:1rem">₲${gs(totalDeuda)}</div>
           </div>
           ${deudores.slice(0, 3).map(d => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(d.clientes?.nombre || 'Sin cliente')} — <span style="color:var(--warning)">debe ₲${gs(d.saldo)}</span></div>`).join('')}
@@ -80,7 +80,7 @@ async function dashboard() {
       const totalUrgente = urgentes.reduce((s, c) => s + parseFloat(c.monto || 0), 0);
       cuentasVencidasHTML = `<div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:.75rem;margin-bottom:1rem;cursor:pointer" onclick="navigate('cuentas-pagar')">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
-          <div style="font-size:.72rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">🚨 CUENTAS POR PAGAR</div>
+          <div style="font-size:.72rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">📋 CUENTAS POR PAGAR</div>
           <div style="font-family:var(--font-head);color:var(--danger);font-size:1rem">₲${gs(totalUrgente)}</div>
         </div>
         ${urgentes.slice(0, 3).map(c => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(c.proveedor)} — ₲${gs(c.monto)}${c.fecha_vencimiento < hoyStr ? ' <span style="color:var(--danger)">VENCIDA</span>' : ' vence ' + formatFecha(c.fecha_vencimiento)}</div>`).join('')}
@@ -95,6 +95,33 @@ async function dashboard() {
         ${currentPerfil?.rol === 'admin' ? `<button onclick="modalConfigDatos()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem">⚙️ Configurar</button>` : ''}
       </div>
       <div style="font-size:.75rem;color:var(--text2);margin-bottom:1rem">${t('bienvenido')}, ${h(currentPerfil?.nombre || '')}</div>
+
+      ${typeof getModoSimpleToggle === 'function' ? getModoSimpleToggle() : ''}
+
+      ${typeof esModoSimple === 'function' && esModoSimple() ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
+          <div onclick="modalNuevaReparacionSimple()" style="background:linear-gradient(145deg, var(--surface), var(--surface2));border:2px solid var(--accent);border-radius:16px;padding:1.2rem .5rem;text-align:center;cursor:pointer">
+            <div style="font-size:2.5rem">🔧</div>
+            <div style="font-family:var(--font-head);font-size:1rem;color:var(--accent);margin-top:.3rem">Nuevo trabajo</div>
+            <div style="font-size:.7rem;color:var(--text2)">Registrar ingreso de vehículo</div>
+          </div>
+          <div onclick="navigate('ventas')" style="background:linear-gradient(145deg, var(--surface), var(--surface2));border:2px solid var(--success);border-radius:16px;padding:1.2rem .5rem;text-align:center;cursor:pointer">
+            <div style="font-size:2.5rem">💰</div>
+            <div style="font-family:var(--font-head);font-size:1rem;color:var(--success);margin-top:.3rem">Cobrar servicio</div>
+            <div style="font-size:.7rem;color:var(--text2)">Venta rápida de productos</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
+          <div onclick="navigate('agenda')" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.8rem;text-align:center;cursor:pointer">
+            <div style="font-size:1.5rem">📅</div>
+            <div style="font-size:.8rem;color:var(--text)">Turnos de hoy</div>
+          </div>
+          <div onclick="modalCierreCaja()" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.8rem;text-align:center;cursor:pointer">
+            <div style="font-size:1.5rem">🔐</div>
+            <div style="font-size:.8rem;color:var(--text)">Cierre de caja</div>
+          </div>
+        </div>
+      ` : ''}
 
       ${alertasStock.length > 0 ? `
       <div style="background:rgba(255,68,68,.1);border-left:4px solid var(--danger);border-radius:8px;padding:.75rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between">
@@ -204,3 +231,140 @@ async function buscarPatente(valor) {
     }, null, 'Error al buscar patente');
   }, 500);
 }
+
+// ─── REPORTES (RESUMEN RÁPIDO) ─────────────────────────────────────────────────
+async function reportes() {
+  const hoy = fechaHoy();
+  const primerMes = primerDiaMes();
+  const primerSemana = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - d.getDay());
+    return d.toISOString().split('T')[0];
+  })();
+
+  const [
+    { data: repsHoy },
+    { data: repsSemana },
+    { data: repsMes },
+    { data: todasReps },
+    { data: creditosPend },
+    { data: repsPorEmpleado }
+  ] = await Promise.all([
+    sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').eq('fecha',hoy),
+    sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerSemana),
+    sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerMes),
+    sb.from('reparaciones').select('descripcion,costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerMes),
+    sb.from('fiados').select('monto').eq('taller_id',tid()).eq('pagado',false),
+    sb.from('reparacion_mecanicos').select('nombre_mecanico, horas, reparaciones(costo, estado, fecha, taller_id)').order('created_at', {ascending: false})
+  ]);
+
+  const ganHoy = (repsHoy||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
+  const ganSemana = (repsSemana||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
+  const ganMes = (repsMes||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
+  const totalCréditos = (creditosPend||[]).reduce((s,f)=>s+parseFloat(f.monto||0),0);
+
+  let repQSMes=0, repPOSMes=0, repGastosMes=0;
+  const [{data:_qsM},{data:_posM},{data:_gastM}] = await Promise.all([
+    sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', true).gte('created_at',primerMes+'T00:00:00'),
+    sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', false).gte('created_at',primerMes+'T00:00:00'),
+    sb.from('gastos_taller').select('monto').eq('taller_id',tid()).gte('fecha',primerMes)
+  ]);
+  repQSMes = (_qsM||[]).reduce((s,r)=>s+parseFloat(r.total||0),0);
+  repPOSMes = (_posM||[]).reduce((s,r)=>s+parseFloat(r.total||0),0);
+  repGastosMes = (_gastM||[]).reduce((s,r)=>s+parseFloat(r.monto||0),0);
+  const ingresosTotalMes = ganMes + repQSMes + repPOSMes;
+  const gananciaNeta = ingresosTotalMes - repGastosMes;
+
+  const serviciosCount = {};
+  (todasReps||[]).forEach(r => {
+    const key = r.descripcion || 'Sin descripción';
+    serviciosCount[key] = (serviciosCount[key]||0) + parseFloat(r.costo||0);
+  });
+  const topServicios = Object.entries(serviciosCount).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  document.getElementById('main-content').innerHTML = `
+    <div style="padding:.25rem 0">
+      <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.75rem">${t('repGanancias')}</div>
+      <div class="stats-grid" style="margin-bottom:1rem">
+        <div class="stat-card"><div class="stat-value" style="font-size:1.3rem">₲${gs(ganHoy)}</div><div class="stat-label">${t('repHoy2')}</div></div>
+        <div class="stat-card"><div class="stat-value" style="font-size:1.3rem">₲${gs(ganSemana)}</div><div class="stat-label">${t('repSemana')}</div></div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:.72rem;color:var(--text2);letter-spacing:1px;font-family:var(--font-head)">${t('repMes')} — INGRESOS TOTALES</div>
+          <div style="font-family:var(--font-head);font-size:2rem;font-weight:700;color:var(--success)">₲${gs(ingresosTotalMes)}</div>
+          <div style="font-size:.7rem;color:var(--text2);margin-top:.2rem">OTs: ₲${gs(ganMes)} · QS: ₲${gs(repQSMes)} · POS: ₲${gs(repPOSMes)}</div>
+        </div>
+        <div style="font-size:2.5rem">💰</div>
+      </div>
+      ${repGastosMes>0?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
+        <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:.75rem;cursor:pointer" onclick="navigate('gastos')">
+          <div style="font-size:.68rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">GASTOS MES</div>
+          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--danger)">₲${gs(repGastosMes)}</div>
+        </div>
+        <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem">
+          <div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">GANANCIA NETA</div>
+          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${gananciaNeta>=0?'var(--success)':'var(--danger)'}">₲${gs(gananciaNeta)}</div>
+        </div>
+      </div>`:''}
+      <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:.72rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">${t('repFiados')}</div>
+          <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--danger)">₲${gs(totalCréditos)}</div>
+        </div>
+        <button onclick="navigate('creditos')" style="background:rgba(255,68,68,.15);border:1px solid rgba(255,68,68,.3);color:var(--danger);border-radius:8px;padding:.5rem .75rem;font-size:.8rem;cursor:pointer">${t('repVerCreditos')}</button>
+      </div>
+      ${topServicios.length > 0 ? `
+      <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.6rem">${t('repTopServ')}</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem">
+        ${topServicios.map(([desc,total],i) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;gap:.5rem;align-items:center">
+              <span style="font-family:var(--font-head);font-size:.85rem;color:var(--accent2)">#${i+1}</span>
+              <span style="font-size:.85rem">${h(desc)}</span>
+            </div>
+            <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">₲${gs(total)}</span>
+          </div>`).join('')}
+      </div>` : `<div class="empty"><p>${t('repSinReps2')}</p></div>`}
+
+      ${(() => {
+        const empStats = {};
+        (repsPorEmpleado||[]).forEach(r => {
+          if (!r.reparaciones || r.reparaciones.taller_id !== tid()) return;
+          if (r.reparaciones.fecha < primerMes) return;
+          const nombre = r.nombre_mecanico || 'Sin nombre';
+          if (!empStats[nombre]) empStats[nombre] = { total:0, finalizadas:0, ingresos:0, horas:0 };
+          empStats[nombre].total++;
+          empStats[nombre].horas += parseFloat(r.horas||0);
+          if (r.reparaciones.estado === 'finalizado') { empStats[nombre].finalizadas++; empStats[nombre].ingresos += parseFloat(r.reparaciones.costo||0); }
+        });
+        const empArr = Object.entries(empStats).sort((a,b)=>b[1].ingresos-a[1].ingresos);
+        if (empArr.length === 0) return '';
+        return `
+        <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.6rem">PRODUCTIVIDAD POR EMPLEADO (MES)</div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem">
+          ${empArr.map(([nombre, s], i) => {
+            const pct = empArr[0][1].ingresos > 0 ? Math.round(s.ingresos / empArr[0][1].ingresos * 100) : 0;
+            return `
+            <div style="padding:.6rem 0;${i<empArr.length-1?'border-bottom:1px solid var(--border)':''}">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+                <div style="display:flex;gap:.5rem;align-items:center">
+                  <div style="width:28px;height:28px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:var(--accent)">${h(nombre).charAt(0)}</div>
+                  <span style="font-size:.85rem;font-weight:500">${h(nombre)}</span>
+                </div>
+                <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">₲${gs(s.ingresos)}</span>
+              </div>
+              <div style="display:flex;gap:1rem;font-size:.72rem;color:var(--text2);margin-left:2.3rem">
+                <span>${s.finalizadas} finalizadas</span>
+                <span>${s.total} asignadas</span>
+                <span>${s.horas}h trabajadas</span>
+              </div>
+              <div style="margin-left:2.3rem;margin-top:.3rem;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden">
+                <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:2px"></div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+      })()}
+    </div>`;
+} 
