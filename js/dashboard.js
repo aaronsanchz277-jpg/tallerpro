@@ -11,8 +11,11 @@ async function dashboard() {
   const hoy = fechaHoy();
   const primerMes = primerDiaMes();
 
-  // Obtener estadísticas consolidadas vía RPC
-  const { data: stats, error } = await sb.rpc('get_dashboard_stats', { p_taller_id: tid() });
+  // Obtener estadísticas consolidadas vía RPC con caché
+  const { data: stats, error, fromCache } = await cachedQuery('dash_stats', () => 
+    sb.rpc('get_dashboard_stats', { p_taller_id: tid() })
+  );
+  
   if (error) {
     console.error('Error cargando dashboard:', error);
     document.getElementById('main-content').innerHTML = `<div class="empty"><p>Error al cargar el dashboard</p></div>`;
@@ -34,21 +37,25 @@ async function dashboard() {
   let totalQSMes = 0, totalPOSMes = 0, totalGastosMes = 0;
   if (currentPerfil?.rol === 'admin') {
     const [{ data: qsMes }, { data: posMes }, { data: gastosMes }] = await Promise.all([
-      sb.from('ventas').select('total').eq('taller_id', tid()).eq('es_servicio_rapido', true).gte('created_at', primerMes + 'T00:00:00'),
-      sb.from('ventas').select('total').eq('taller_id', tid()).eq('es_servicio_rapido', false).gte('created_at', primerMes + 'T00:00:00'),
-      sb.from('gastos_taller').select('monto').eq('taller_id', tid()).gte('fecha', primerMes)
+      cachedQuery('dash_qs_mes', () => sb.from('ventas').select('total').eq('taller_id', tid()).eq('es_servicio_rapido', true).gte('created_at', primerMes + 'T00:00:00')),
+      cachedQuery('dash_pos_mes', () => sb.from('ventas').select('total').eq('taller_id', tid()).eq('es_servicio_rapido', false).gte('created_at', primerMes + 'T00:00:00')),
+      cachedQuery('dash_gastos_mes', () => sb.from('gastos_taller').select('monto').eq('taller_id', tid()).gte('fecha', primerMes))
     ]);
-    totalQSMes = (qsMes || []).reduce((s, r) => s + parseFloat(r.total || 0), 0);
-    totalPOSMes = (posMes || []).reduce((s, r) => s + parseFloat(r.total || 0), 0);
-    totalGastosMes = (gastosMes || []).reduce((s, r) => s + parseFloat(r.monto || 0), 0);
+    totalQSMes = (qsMes?.data || []).reduce((s, r) => s + parseFloat(r.total || 0), 0);
+    totalPOSMes = (posMes?.data || []).reduce((s, r) => s + parseFloat(r.total || 0), 0);
+    totalGastosMes = (gastosMes?.data || []).reduce((s, r) => s + parseFloat(r.monto || 0), 0);
   }
 
-  // Secciones de deudores y cuentas vencidas
+  // Secciones de deudores y cuentas vencidas (con caché)
   let deudoresHTML = '';
   if (currentPerfil?.rol === 'admin') {
-    const { data: repsConDeuda } = await sb.from('reparaciones').select('id,descripcion,costo,clientes(nombre)').eq('taller_id', tid()).eq('estado', 'finalizado').gt('costo', 0).limit(50);
+    const { data: repsConDeuda } = await cachedQuery('dash_deudores', () => 
+      sb.from('reparaciones').select('id,descripcion,costo,clientes(nombre)').eq('taller_id', tid()).eq('estado', 'finalizado').gt('costo', 0).limit(50)
+    );
     if (repsConDeuda?.length) {
-      const { data: allPagos } = await sb.from('pagos_reparacion').select('reparacion_id,monto').eq('taller_id', tid()).limit(500);
+      const { data: allPagos } = await cachedQuery('dash_pagos_rep', () =>
+        sb.from('pagos_reparacion').select('reparacion_id,monto').eq('taller_id', tid()).limit(500)
+      );
       const pagosPorRep = {};
       (allPagos || []).forEach(p => { if (!pagosPorRep[p.reparacion_id]) pagosPorRep[p.reparacion_id] = 0; pagosPorRep[p.reparacion_id] += parseFloat(p.monto || 0); });
       const deudores = repsConDeuda.filter(r => {
@@ -71,7 +78,9 @@ async function dashboard() {
 
   let cuentasVencidasHTML = '';
   if (currentPerfil?.rol === 'admin') {
-    const { data: cuentasP } = await sb.from('cuentas_pagar').select('proveedor,monto,fecha_vencimiento').eq('taller_id', tid()).eq('pagada', false).order('fecha_vencimiento').limit(10);
+    const { data: cuentasP } = await cachedQuery('dash_cuentas_pagar', () =>
+      sb.from('cuentas_pagar').select('proveedor,monto,fecha_vencimiento').eq('taller_id', tid()).eq('pagada', false).order('fecha_vencimiento').limit(10)
+    );
     const hoyStr = new Date().toISOString().split('T')[0];
     const vencidas = (cuentasP || []).filter(c => c.fecha_vencimiento && c.fecha_vencimiento < hoyStr);
     const porVencer = (cuentasP || []).filter(c => c.fecha_vencimiento && c.fecha_vencimiento >= hoyStr && c.fecha_vencimiento <= new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
@@ -88,14 +97,21 @@ async function dashboard() {
     }
   }
 
-  document.getElementById('main-content').innerHTML = `
+  // Construir el HTML del dashboard
+  let html = `
     <div style="padding:.25rem 0 .75rem">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.15rem">
         <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text)">${h(tallerNombre)}</div>
         ${currentPerfil?.rol === 'admin' ? `<button onclick="modalConfigDatos()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem">⚙️ Configurar</button>` : ''}
       </div>
-      <div style="font-size:.75rem;color:var(--text2);margin-bottom:1rem">${t('bienvenido')}, ${h(currentPerfil?.nombre || '')}</div>
+      <div style="font-size:.75rem;color:var(--text2);margin-bottom:1rem">${t('bienvenido')}, ${h(currentPerfil?.nombre || '')}</div>`;
 
+  // Indicador de caché
+  if (fromCache) {
+    html += `<div id="cache-indicator" style="background:var(--warning);color:#000;padding:2px 8px;border-radius:20px;font-size:.65rem;margin-bottom:.5rem;display:inline-block">📦 Datos en caché</div>`;
+  }
+
+  html += `
       ${typeof getModoSimpleToggle === 'function' ? getModoSimpleToggle() : ''}
 
       ${typeof esModoSimple === 'function' && esModoSimple() ? `
@@ -189,6 +205,8 @@ async function dashboard() {
           </div>
         </div>`).join('')}
     </div>`;
+
+  document.getElementById('main-content').innerHTML = html;
 }
 
 let patenteBusquedaTimer = null;
@@ -200,14 +218,15 @@ async function buscarPatente(valor) {
   clearTimeout(patenteBusquedaTimer);
   patenteBusquedaTimer = setTimeout(async () => {
     await safeCall(async () => {
-      const { data: vehs } = await sb.from('vehiculos')
-        .select('*, clientes(nombre,telefono), reparaciones(id,descripcion,estado,costo,fecha)')
-        .eq('taller_id', tid()).ilike('patente', `%${patente}%`).limit(3);
+      const { data: vehs, fromCache } = await cachedQuery(`buscar_patente_${patente}`, () =>
+        sb.from('vehiculos').select('*, clientes(nombre,telefono), reparaciones(id,descripcion,estado,costo,fecha)').eq('taller_id', tid()).ilike('patente', `%${patente}%`).limit(3)
+      );
       if (!vehs || vehs.length === 0) {
         resultsEl.innerHTML = `<div style="background:var(--surface2);border-radius:10px;padding:.75rem;margin-bottom:1rem;font-size:.85rem;color:var(--text2)">No se encontró ningún vehículo con esa patente.</div>`;
         return;
       }
-      resultsEl.innerHTML = vehs.map(v => {
+      let html = fromCache ? '<div style="font-size:.6rem;color:var(--warning);margin-bottom:.3rem">📦 Resultados en caché</div>' : '';
+      html += vehs.map(v => {
         const reps = (v.reparaciones || []).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 5);
         return `
           <div style="background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:1rem;margin-bottom:1rem">
@@ -228,6 +247,7 @@ async function buscarPatente(valor) {
               </div>`).join('')}
           </div>`;
       }).join('');
+      resultsEl.innerHTML = html;
     }, null, 'Error al buscar patente');
   }, 500);
 }
@@ -250,12 +270,12 @@ async function reportes() {
     { data: creditosPend },
     { data: repsPorEmpleado }
   ] = await Promise.all([
-    sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').eq('fecha',hoy),
-    sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerSemana),
-    sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerMes),
-    sb.from('reparaciones').select('descripcion,costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerMes),
-    sb.from('fiados').select('monto').eq('taller_id',tid()).eq('pagado',false),
-    sb.from('reparacion_mecanicos').select('nombre_mecanico, horas, reparaciones(costo, estado, fecha, taller_id)').order('created_at', {ascending: false})
+    cachedQuery('rep_hoy', () => sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').eq('fecha',hoy)),
+    cachedQuery('rep_semana', () => sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerSemana)),
+    cachedQuery('rep_mes', () => sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerMes)),
+    cachedQuery('rep_todas', () => sb.from('reparaciones').select('descripcion,costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerMes)),
+    cachedQuery('cred_pend', () => sb.from('fiados').select('monto').eq('taller_id',tid()).eq('pagado',false)),
+    cachedQuery('rep_emp', () => sb.from('reparacion_mecanicos').select('nombre_mecanico, horas, reparaciones(costo, estado, fecha, taller_id)').order('created_at', {ascending: false}))
   ]);
 
   const ganHoy = (repsHoy||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
@@ -265,9 +285,9 @@ async function reportes() {
 
   let repQSMes=0, repPOSMes=0, repGastosMes=0;
   const [{data:_qsM},{data:_posM},{data:_gastM}] = await Promise.all([
-    sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', true).gte('created_at',primerMes+'T00:00:00'),
-    sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', false).gte('created_at',primerMes+'T00:00:00'),
-    sb.from('gastos_taller').select('monto').eq('taller_id',tid()).gte('fecha',primerMes)
+    cachedQuery('rep_qs', () => sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', true).gte('created_at',primerMes+'T00:00:00')),
+    cachedQuery('rep_pos', () => sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', false).gte('created_at',primerMes+'T00:00:00')),
+    cachedQuery('rep_gastos', () => sb.from('gastos_taller').select('monto').eq('taller_id',tid()).gte('fecha',primerMes))
   ]);
   repQSMes = (_qsM||[]).reduce((s,r)=>s+parseFloat(r.total||0),0);
   repPOSMes = (_posM||[]).reduce((s,r)=>s+parseFloat(r.total||0),0);
@@ -367,4 +387,4 @@ async function reportes() {
         </div>`;
       })()}
     </div>`;
-} 
+}
