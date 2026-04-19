@@ -45,8 +45,8 @@ function toggleTema() {
 
 function getTemaToggle() {
   return `
-    <button onclick="toggleTema()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem">
-      ${_temaActual === 'dark' ? '☀️' : '🌙'}
+    <button onclick="toggleTema()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center">
+      ${iconoSVG('tema', 'var(--text2)', 16)}
     </button>
   `;
 }
