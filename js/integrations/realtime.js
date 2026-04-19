@@ -3,8 +3,8 @@ let _realtimeChannel = null;
 
 function realtime_init() {
   if (_realtimeChannel) return;
-  if (!currentPerfil || !currentPerfil.taller_id) {
-    console.warn('Realtime: No hay taller_id, esperando...');
+  if (!currentPerfil || !tid()) {
+    console.warn('Realtime: Usuario no autenticado o sin taller.');
     return;
   }
   
