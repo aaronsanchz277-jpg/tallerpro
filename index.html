@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a0a0f">
@@ -25,7 +25,7 @@
 
 <div id="toast"></div>
 
-<!-- LOGIN -->
+<!-- LOGIN SCREEN -->
 <div id="login-screen">
   <!-- HERO -->
   <div style="text-align:center;padding:2rem 1.5rem 1rem;max-width:500px;margin:0 auto">
@@ -81,14 +81,12 @@
   <!-- LOGIN BOX -->
   <div class="login-box">
     <div id="login-form">
-
       <!-- LOGIN NORMAL -->
       <div id="login-normal">
         <div class="login-tabs">
           <button class="login-tab active" onclick="switchLoginTab('login')" id="lt-ingresar">Ingresar</button>
           <button class="login-tab" id="tab-nuevo-taller" onclick="switchLoginTab('nuevo-taller')">Nuevo Taller</button>
         </div>
-
         <!-- NUEVO TALLER (ADMIN) -->
         <div id="nuevo-taller-fields" style="display:none">
           <div style="background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.2);border-radius:8px;padding:.75rem;margin-bottom:1rem;font-size:.8rem;color:var(--text2)" id="lt-registro-msg">
@@ -98,7 +96,6 @@
           <div class="form-group"><label class="form-label">Nombre del taller *</label><input class="form-input" id="reg-taller" placeholder="Taller San José"></div>
           <div class="form-group"><label class="form-label">Teléfono del taller</label><input class="form-input" id="reg-tel" placeholder="+595 21 000 000"></div>
         </div>
-
         <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="auth-email" type="email" placeholder="tu@email.com"></div>
         <div class="form-group"><label class="form-label">Contraseña *</label><input class="form-input" id="auth-pass" type="password" placeholder="••••••••"></div>
         <button class="btn-primary" id="auth-btn" onclick="handleAuth()">INGRESAR</button>
@@ -108,7 +105,7 @@
         </div>
       </div>
 
-      <!-- REGISTRO POR INVITACIÓN (con campos de tipo persona) -->
+      <!-- REGISTRO POR INVITACIÓN -->
       <div id="login-invitacion" style="display:none">
         <div style="background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.2);border-radius:10px;padding:.75rem;margin-bottom:1.25rem;text-align:center;font-size:.82rem;color:var(--text2)">
           Fuiste invitado a un taller. Completá tus datos para registrarte.
@@ -121,8 +118,6 @@
           <label class="form-label">Teléfono *</label>
           <div class="phone-wrap"><select class="phone-prefix" id="inv-telefono-prefix"><option value="+595" selected>🇵🇾 +595</option><option value="+54">🇦🇷 +54</option><option value="+55">🇧🇷 +55</option><option value="+56">🇨🇱 +56</option><option value="+57">🇨🇴 +57</option><option value="+598">🇺🇾 +598</option><option value="+1">🇺🇸 +1</option></select><input class="form-input" id="inv-telefono" type="tel" placeholder="0981 123 456" oninput="formatPhone(this)"></div>
         </div>
-
-        <!-- Campos de persona física/jurídica -->
         <div class="form-group">
           <label class="form-label">Tipo de persona</label>
           <select class="form-input" id="inv-tipo-persona" onchange="toggleRazonSocialInv()">
@@ -136,7 +131,6 @@
         <div id="inv-campo-razon-social" style="display:none">
           <div class="form-group"><label class="form-label">Razón social</label><input class="form-input" id="inv-razon-social" placeholder="Empresa S.A."></div>
         </div>
-
         <div class="form-group">
           <label class="form-label">Código *</label>
           <input class="form-input" id="inv-codigo" placeholder="Código del taller" style="text-transform:uppercase;letter-spacing:3px" oninput="onCodigoInput(this.value)">
@@ -150,7 +144,6 @@
           <button onclick="showLoginNormal(true)" style="background:none;border:none;color:var(--text2);font-size:.8rem;cursor:pointer;text-decoration:underline">Ya tengo cuenta → Ingresar</button>
         </div>
       </div>
-
     </div>
   </div>
 
@@ -216,72 +209,88 @@
   <nav class="bottom-nav" id="bottom-nav"></nav>
 </div>
 
-<!-- Núcleo y dependencias -->
-<script src="./js/config.js"></script>
-<script src="./js/pwa.js"></script>
-<script src="./js/offline.js"></script>
-<script src="./js/i18n.js"></script>
-<script src="./js/ui.js"></script>
-<script src="./js/core.js"></script>
-<script src="./js/components.js"></script>
+<!-- ==================== SCRIPTS ==================== -->
+<!-- Núcleo -->
+<script src="./js/core/config.js"></script>
+<script src="./js/core/pwa.js"></script>
+<script src="./js/core/offline.js"></script>
+<script src="./js/core/i18n.js"></script>
+<script src="./js/core/ui.js"></script>
+<script src="./js/core/core.js"></script>
+<script src="./js/core/components.js"></script>
 
-<!-- Navegación y autenticación -->
-<script src="./js/navigation.js"></script>
-<script src="./js/auth.js"></script>
+<!-- Autenticación -->
+<script src="./js/auth/auth.js"></script>
+<script src="./js/auth/plan.js"></script>
+<script src="./js/auth/admin.js"></script>
 
-<!-- Módulos principales -->
-<script src="./js/dashboard.js"></script>
-<script src="./js/simple-mode.js"></script>
-<script src="./js/clientes.js"></script>
-<script src="./js/vehiculos.js"></script>
-<script src="./js/reparaciones.js"></script>
-<script src="./js/inventario.js"></script>
-<script src="./js/creditos.js"></script>
-<script src="./js/empleados.js"></script>
-<script src="./js/usuarios.js"></script>
-<script src="./js/cliente-view.js"></script>
-<script src="./js/mantenimientos.js"></script>
-<script src="./js/agenda.js"></script>
-<script src="./js/plan.js"></script>
-<script src="./js/admin.js"></script>
-<script src="./js/finanzas.js"></script>
-<script src="./js/mecanicos.js"></script>
-<script src="./js/barcode.js"></script>
-<script src="./js/caja.js"></script>
-<script src="./js/cuentas.js"></script>
-<script src="./js/perfil.js"></script>
-<script src="./js/presupuestos.js"></script>
-<script src="./js/ventas.js"></script>
-<script src="./js/gastos.js"></script>
-<script src="./js/kanban.js"></script>
-<script src="./js/sueldos.js"></script>
-<script src="./js/ubicaciones.js"></script>
-<script src="./js/tests.js"></script>
+<!-- Navegación -->
+<script src="./js/navigation/navigation.js"></script>
 
-<!-- Asistente IA y notificaciones -->
-<script src="./js/ia.js"></script>
-<script src="./js/push.js"></script>
+<!-- Dashboard -->
+<script src="./js/dashboard/dashboard.js"></script>
+<script src="./js/dashboard/simple-mode.js"></script>
+<script src="./js/dashboard/modo-taller.js"></script>
 
-<!-- Reportes avanzados -->
-<script src="./js/reportes/common.js"></script>
-<script src="./js/reportes/rentabilidad.js"></script>
-<script src="./js/reportes/flujo-caja.js"></script>
-<script src="./js/reportes/comparativas.js"></script>
-<script src="./js/reportes/tendencias.js"></script>
+<!-- CRM -->
+<script src="./js/crm/clientes.js"></script>
+<script src="./js/crm/vehiculos.js"></script>
+<script src="./js/crm/cliente-view.js"></script>
 
-<!-- NUEVAS FUNCIONALIDADES (mejoras 4-10) -->
-<script src="./js/recordatorios.js"></script>
-<script src="./js/ocr.js"></script>
-<script src="./js/checklist-templates.js"></script>
-<script src="./js/google-calendar.js"></script>
-<script src="./js/modo-taller.js"></script>
-<script src="./js/tutorial.js"></script>
-<script src="./js/theme.js"></script>
-<script src="./js/export-excel.js"></script>
-<script src="./js/optimize-images.js"></script>
-<script src="./js/realtime.js"></script>
+<!-- Taller -->
+<script src="./js/workshop/reparaciones.js"></script>
+<script src="./js/workshop/inventario.js"></script>
+<script src="./js/workshop/barcode.js"></script>
+<script src="./js/workshop/agenda.js"></script>
+<script src="./js/workshop/mantenimientos.js"></script>
+<script src="./js/workshop/kanban.js"></script>
+<script src="./js/workshop/checklist-templates.js"></script>
 
-<!-- Función auxiliar para el formulario de invitación (evita error "toggleRazonSocialInv is not defined") -->
+<!-- Finanzas -->
+<script src="./js/finances/finanzas.js"></script>
+<script src="./js/finances/creditos.js"></script>
+<script src="./js/finances/cuentas.js"></script>
+<script src="./js/finances/gastos.js"></script>
+<script src="./js/finances/caja.js"></script>
+<script src="./js/finances/sueldos.js"></script>
+
+<!-- RRHH -->
+<script src="./js/hr/empleados.js"></script>
+<script src="./js/hr/usuarios.js"></script>
+<script src="./js/hr/mecanicos.js"></script>
+<script src="./js/hr/perfil.js"></script>
+
+<!-- Ventas -->
+<script src="./js/sales/ventas.js"></script>
+<script src="./js/sales/presupuestos.js"></script>
+
+<!-- Reportes -->
+<script src="./js/reports/common.js"></script>
+<script src="./js/reports/rentabilidad.js"></script>
+<script src="./js/reports/flujo-caja.js"></script>
+<script src="./js/reports/comparativas.js"></script>
+<script src="./js/reports/tendencias.js"></script>
+<script src="./js/reports/export-excel.js"></script>
+
+<!-- Integraciones -->
+<script src="./js/integrations/ia.js"></script>
+<script src="./js/integrations/push.js"></script>
+<script src="./js/integrations/ocr.js"></script>
+<script src="./js/integrations/google-calendar.js"></script>
+<script src="./js/integrations/recordatorios.js"></script>
+<script src="./js/integrations/realtime.js"></script>
+<script src="./js/integrations/integrations-wizard.js"></script>
+
+<!-- UX -->
+<script src="./js/ux/tutorial.js"></script>
+<script src="./js/ux/theme.js"></script>
+<script src="./js/ux/optimize-images.js"></script>
+<script src="./js/ux/ubicaciones.js"></script>
+
+<!-- Dev -->
+<script src="./js/dev/tests.js"></script>
+
+<!-- Función auxiliar para el formulario de invitación -->
 <script>
   function toggleRazonSocialInv() {
     const tipo = document.getElementById('inv-tipo-persona')?.value;
