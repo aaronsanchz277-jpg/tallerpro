@@ -219,7 +219,7 @@ async function dashboard() {
       ${typeof esModoSimple === 'function' && esModoSimple() ? `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
           <div onclick="modalNuevaReparacionSimple()" style="background:linear-gradient(145deg, var(--surface), var(--surface2));border:2px solid var(--accent);border-radius:16px;padding:1.2rem .5rem;text-align:center;cursor:pointer">
-            <div style="font-size:2.5rem">🔧</div>
+            <div style="margin-bottom:8px">${iconoSVG('nuevoTrabajo', 'var(--accent)', 32)}</div>
             <div style="font-family:var(--font-head);font-size:1rem;color:var(--accent);margin-top:.3rem">Nuevo trabajo</div>
             <div style="font-size:.7rem;color:var(--text2)">Registrar ingreso de vehículo</div>
           </div>
