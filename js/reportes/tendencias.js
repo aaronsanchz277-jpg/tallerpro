@@ -12,6 +12,7 @@ async function reporteTendencias() {
     sb.from('gastos_taller').select('fecha, monto').eq('taller_id', tid()).gte('fecha', inicio).lte('fecha', fin).order('fecha')
   ]);
 
+  // Agrupar por día
   const porDia = {};
   
   (reparaciones || []).forEach(r => {
@@ -26,7 +27,7 @@ async function reporteTendencias() {
     if (!fecha) return;
     if (!porDia[fecha]) porDia[fecha] = { ingresos: 0, ganancia: 0, gastos: 0 };
     porDia[fecha].ingresos += parseFloat(v.total || 0);
-    porDia[fecha].ganancia += parseFloat(v.total || 0) * 0.3;
+    porDia[fecha].ganancia += parseFloat(v.total || 0) * 0.3; // Estimación de margen en ventas (30%)
   });
 
   (gastos || []).forEach(g => {
@@ -54,6 +55,7 @@ async function reporteTendencias() {
       ${renderSelectorFechas('reporteTendencias')}
       
       <div id="tendencias-content">
+        <!-- Resumen -->
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-bottom:1rem">
           <div style="background:rgba(0,255,136,.08);border-radius:8px;padding:.5rem;text-align:center">
             <div style="font-size:.6rem;color:var(--success)">INGRESOS</div>
@@ -69,10 +71,12 @@ async function reporteTendencias() {
           </div>
         </div>
 
+        <!-- Gráfico -->
         <div class="chart-container" style="padding:.5rem">
           <canvas id="chart-tendencias" style="width:100%;height:250px"></canvas>
         </div>
 
+        <!-- Tabla de datos -->
         <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);margin:1rem 0 .5rem">📋 DETALLE POR DÍA</div>
         <div style="max-height:300px;overflow-y:auto">
           <table style="width:100%;border-collapse:collapse;font-size:.75rem">
@@ -99,6 +103,7 @@ async function reporteTendencias() {
       </div>
     </div>`;
 
+  // Renderizar gráfico
   if (fechas.length > 0) {
     setTimeout(async () => {
       await loadChartJs();
