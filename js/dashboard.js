@@ -387,4 +387,89 @@ async function reportes() {
         </div>`;
       })()}
     </div>`;
+  // ─── CONFIGURACIÓN DE KPIS DEL DASHBOARD ────────────────────────────────────
+let _dashboardConfig = null;
+
+async function cargarDashboardConfig() {
+  if (_dashboardConfig) return _dashboardConfig;
+  const { data } = await sb.from('dashboard_config').select('*').eq('taller_id', tid()).maybeSingle();
+  if (!data) {
+    _dashboardConfig = {
+      kpis_visibles: ['clientes', 'en_progreso', 'hoy', 'creditos', 'ingresos_mes', 'ganancia_neta', 'vehiculos_hoy'],
+      orden_kpis: []
+    };
+  } else {
+    _dashboardConfig = data;
+  }
+  return _dashboardConfig;
+}
+
+async function modalConfigurarKPIs() {
+  const config = await cargarDashboardConfig();
+  const kpisDisponibles = [
+    { id: 'clientes', label: 'Total clientes', icon: '👥' },
+    { id: 'vehiculos', label: 'Total vehículos', icon: '🚗' },
+    { id: 'en_progreso', label: 'Trabajos en progreso', icon: '🔧' },
+    { id: 'hoy', label: 'Trabajos hoy', icon: '📅' },
+    { id: 'creditos', label: 'Créditos pendientes', icon: '💰' },
+    { id: 'ingresos_mes', label: 'Ingresos del mes', icon: '📊' },
+    { id: 'ganancia_neta', label: 'Ganancia neta', icon: '💎' },
+    { id: 'vehiculos_hoy', label: 'Vehículos hoy', icon: '🚙' },
+    { id: 'stock_bajo', label: 'Alertas stock bajo', icon: '⚠️' }
+  ];
+  
+  const visibles = config.kpis_visibles || [];
+  
+  openModal(`
+    <div class="modal-title">📊 Configurar KPIs del Dashboard</div>
+    <div style="font-size:.8rem;color:var(--text2);margin-bottom:1rem">Seleccioná qué indicadores querés ver en la pantalla principal</div>
+    <div style="display:grid;gap:.5rem;margin-bottom:1rem">
+      ${kpisDisponibles.map(kpi => `
+        <label style="display:flex;align-items:center;gap:.5rem;padding:.5rem;background:var(--surface2);border-radius:8px;cursor:pointer">
+          <input type="checkbox" value="${kpi.id}" ${visibles.includes(kpi.id) ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent)">
+          <span style="font-size:.9rem">${kpi.icon} ${kpi.label}</span>
+        </label>
+      `).join('')}
+    </div>
+    <button class="btn-primary" onclick="guardarKPIsConfig()">Guardar configuración</button>
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function guardarKPIsConfig() {
+  const checkboxes = document.querySelectorAll('#modal-overlay input[type="checkbox"]');
+  const visibles = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+  
+  await sb.from('dashboard_config').upsert({
+    taller_id: tid(),
+    kpis_visibles: visibles,
+    updated_at: new Date().toISOString()
+  });
+  
+  toast('Configuración guardada', 'success');
+  closeModal();
+  navigate('dashboard');
+}
+
+// Modificar dashboard() para usar configuración
+async function renderDashboardKPIs(stats, config) {
+  const visibles = config.kpis_visibles || ['clientes', 'en_progreso', 'hoy', 'creditos'];
+  const kpiRenderers = {
+    clientes: () => `<div class="stat-card" onclick="navigate('clientes')"><div class="stat-value">${stats.total_clientes}</div><div class="stat-label">Clientes</div></div>`,
+    vehiculos: () => `<div class="stat-card" onclick="navigate('vehiculos')"><div class="stat-value">${stats.total_vehiculos}</div><div class="stat-label">Vehículos</div></div>`,
+    en_progreso: () => `<div class="stat-card" onclick="reparaciones({filtro:'en_progreso'})"><div class="stat-value" style="color:var(--accent2)">${stats.en_progreso}</div><div class="stat-label">En progreso</div></div>`,
+    hoy: () => `<div class="stat-card" onclick="reparaciones({filtro:'hoy'})"><div class="stat-value" style="color:var(--success)">${stats.reparaciones_hoy}</div><div class="stat-label">Hoy</div></div>`,
+    creditos: () => `<div class="stat-card" onclick="navigate('creditos')"><div class="stat-value" style="color:var(--danger)">₲${gs(stats.creditos_pendientes)}</div><div class="stat-label">Créditos</div></div>`,
+    ingresos_mes: () => `<div class="stat-card"><div class="stat-value" style="color:var(--success)">₲${gs(stats.ingresos_mes)}</div><div class="stat-label">Ingresos mes</div></div>`,
+    ganancia_neta: () => `<div class="stat-card"><div class="stat-value" style="color:${stats.ganancia_neta >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(stats.ganancia_neta)}</div><div class="stat-label">Ganancia neta</div></div>`,
+    vehiculos_hoy: () => `<div class="stat-card" onclick="reparaciones({filtro:'hoy'})"><div class="stat-value" style="color:var(--accent2)">${stats.vehiculos_hoy}</div><div class="stat-label">Vehículos hoy</div></div>`,
+    stock_bajo: () => `<div class="stat-card" onclick="navigate('inventario')"><div class="stat-value" style="color:var(--warning)">${stats.stock_bajo?.length || 0}</div><div class="stat-label">Stock bajo</div></div>`
+  };
+  
+  let html = '<div class="stats-grid">';
+  for (const kpi of visibles) {
+    if (kpiRenderers[kpi]) html += kpiRenderers[kpi]();
+  }
+  html += '</div>';
+  return html;
 }
