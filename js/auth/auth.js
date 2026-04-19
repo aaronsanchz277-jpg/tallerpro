@@ -293,10 +293,10 @@ function showApp() {
     buildNav();
     if (currentPerfil?.rol !== 'cliente') ia_init();
     if (typeof pushInit === 'function') pushInit();
+    if (typeof realtime_init === 'function') realtime_init();  // <-- AÑADIR ESTA LÍNEA
     navigate('dashboard');
   });
 }
-
 function showAuthError(msg) {
   const el = document.getElementById('auth-error');
   if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
