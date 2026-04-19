@@ -3,6 +3,93 @@ function fechaHoy() { return new Date().toISOString().split('T')[0]; }
 function primerDiaMes() { const h = new Date(); return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}-01`; }
 function formatFecha(f) { if (!f) return ''; const [y,m,d] = f.split('-'); return `${d}/${m}/${y}`; }
 
+// ─── CONFIGURACIÓN DE KPIS DEL DASHBOARD ────────────────────────────────────
+let _dashboardConfig = null;
+
+async function cargarDashboardConfig() {
+  if (_dashboardConfig) return _dashboardConfig;
+  const { data } = await sb.from('dashboard_config').select('*').eq('taller_id', tid()).maybeSingle();
+  if (!data) {
+    _dashboardConfig = {
+      kpis_visibles: ['clientes', 'en_progreso', 'hoy', 'creditos'],
+      orden_kpis: []
+    };
+  } else {
+    _dashboardConfig = data;
+  }
+  return _dashboardConfig;
+}
+
+async function modalConfigurarKPIs() {
+  const config = await cargarDashboardConfig();
+  const kpisDisponibles = [
+    { id: 'clientes', label: 'Total clientes', icon: '👥' },
+    { id: 'vehiculos', label: 'Total vehículos', icon: '🚗' },
+    { id: 'en_progreso', label: 'Trabajos en progreso', icon: '🔧' },
+    { id: 'hoy', label: 'Trabajos hoy', icon: '📅' },
+    { id: 'creditos', label: 'Créditos pendientes', icon: '💰' },
+    { id: 'ingresos_mes', label: 'Ingresos del mes', icon: '📊' },
+    { id: 'ganancia_neta', label: 'Ganancia neta', icon: '💎' },
+    { id: 'vehiculos_hoy', label: 'Vehículos hoy', icon: '🚙' },
+    { id: 'stock_bajo', label: 'Alertas stock bajo', icon: '⚠️' }
+  ];
+  
+  const visibles = config.kpis_visibles || [];
+  
+  openModal(`
+    <div class="modal-title">📊 Configurar KPIs del Dashboard</div>
+    <div style="font-size:.8rem;color:var(--text2);margin-bottom:1rem">Seleccioná qué indicadores querés ver en la pantalla principal</div>
+    <div style="display:grid;gap:.5rem;margin-bottom:1rem">
+      ${kpisDisponibles.map(kpi => `
+        <label style="display:flex;align-items:center;gap:.5rem;padding:.5rem;background:var(--surface2);border-radius:8px;cursor:pointer">
+          <input type="checkbox" value="${kpi.id}" ${visibles.includes(kpi.id) ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent)">
+          <span style="font-size:.9rem">${kpi.icon} ${kpi.label}</span>
+        </label>
+      `).join('')}
+    </div>
+    <button class="btn-primary" onclick="guardarKPIsConfig()">Guardar configuración</button>
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function guardarKPIsConfig() {
+  const checkboxes = document.querySelectorAll('#modal-overlay input[type="checkbox"]');
+  const visibles = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+  
+  await sb.from('dashboard_config').upsert({
+    taller_id: tid(),
+    kpis_visibles: visibles,
+    updated_at: new Date().toISOString()
+  });
+  
+  _dashboardConfig = null; // Invalidar caché
+  toast('Configuración guardada', 'success');
+  closeModal();
+  navigate('dashboard');
+}
+
+function renderDashboardKPIs(stats, config) {
+  const visibles = config.kpis_visibles || ['clientes', 'en_progreso', 'hoy', 'creditos'];
+  const kpiRenderers = {
+    clientes: () => `<div class="stat-card" onclick="navigate('clientes')"><div class="stat-value">${stats.total_clientes}</div><div class="stat-label">Clientes</div></div>`,
+    vehiculos: () => `<div class="stat-card" onclick="navigate('vehiculos')"><div class="stat-value">${stats.total_vehiculos}</div><div class="stat-label">Vehículos</div></div>`,
+    en_progreso: () => `<div class="stat-card" onclick="reparaciones({filtro:'en_progreso'})"><div class="stat-value" style="color:var(--accent2)">${stats.en_progreso}</div><div class="stat-label">En progreso</div></div>`,
+    hoy: () => `<div class="stat-card" onclick="reparaciones({filtro:'hoy'})"><div class="stat-value" style="color:var(--success)">${stats.reparaciones_hoy}</div><div class="stat-label">Hoy</div></div>`,
+    creditos: () => `<div class="stat-card" onclick="navigate('creditos')"><div class="stat-value" style="color:var(--danger)">₲${gs(stats.creditos_pendientes)}</div><div class="stat-label">Créditos</div></div>`,
+    ingresos_mes: () => `<div class="stat-card"><div class="stat-value" style="color:var(--success)">₲${gs(stats.ingresos_mes)}</div><div class="stat-label">Ingresos mes</div></div>`,
+    ganancia_neta: () => `<div class="stat-card"><div class="stat-value" style="color:${stats.ganancia_neta >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(stats.ganancia_neta)}</div><div class="stat-label">Ganancia neta</div></div>`,
+    vehiculos_hoy: () => `<div class="stat-card" onclick="reparaciones({filtro:'hoy'})"><div class="stat-value" style="color:var(--accent2)">${stats.vehiculos_hoy}</div><div class="stat-label">Vehículos hoy</div></div>`,
+    stock_bajo: () => `<div class="stat-card" onclick="navigate('inventario')"><div class="stat-value" style="color:var(--warning)">${stats.stock_bajo?.length || 0}</div><div class="stat-label">Stock bajo</div></div>`
+  };
+  
+  let html = '<div class="stats-grid">';
+  for (const kpi of visibles) {
+    if (kpiRenderers[kpi]) html += kpiRenderers[kpi]();
+  }
+  html += '</div>';
+  return html;
+}
+
 async function dashboard() {
   const rol = currentPerfil?.rol;
   const tallerNombre = currentPerfil?.talleres?.nombre || 'Tu Taller';
@@ -22,6 +109,9 @@ async function dashboard() {
     return;
   }
 
+  // Cargar configuración de KPIs
+  const kpiConfig = await cargarDashboardConfig();
+
   const totalClientes = stats.total_clientes || 0;
   const totalVehiculos = stats.total_vehiculos || 0;
   const enProgreso = stats.en_progreso || 0;
@@ -33,6 +123,9 @@ async function dashboard() {
   const vehiculosHoy = stats.vehiculos_hoy || 0;
   const vehiculosSemana = stats.vehiculos_semana || 0;
   const vehiculosMes = stats.vehiculos_mes || 0;
+  
+  // Calcular ganancia neta (para el KPI)
+  let gananciaNeta = 0;
 
   let totalQSMes = 0, totalPOSMes = 0, totalGastosMes = 0;
   if (currentPerfil?.rol === 'admin') {
@@ -44,7 +137,12 @@ async function dashboard() {
     totalQSMes = (qsMes?.data || []).reduce((s, r) => s + parseFloat(r.total || 0), 0);
     totalPOSMes = (posMes?.data || []).reduce((s, r) => s + parseFloat(r.total || 0), 0);
     totalGastosMes = (gastosMes?.data || []).reduce((s, r) => s + parseFloat(r.monto || 0), 0);
+    gananciaNeta = totalMes + totalQSMes + totalPOSMes - totalGastosMes;
   }
+
+  // Agregar campos calculados para los KPIs
+  stats.ganancia_neta = gananciaNeta;
+  stats.stock_bajo = alertasStock;
 
   // Secciones de deudores y cuentas vencidas (con caché)
   let deudoresHTML = '';
@@ -104,6 +202,7 @@ async function dashboard() {
         <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text)">${h(tallerNombre)}</div>
         <div style="display:flex;gap:.3rem">
           ${typeof getTemaToggle === 'function' ? getTemaToggle() : ''}
+          ${currentPerfil?.rol === 'admin' ? `<button onclick="modalConfigurarKPIs()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem">📊</button>` : ''}
           ${currentPerfil?.rol === 'admin' ? `<button onclick="modalConfigDatos()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem">⚙️</button>` : ''}
         </div>
       </div>
@@ -160,16 +259,12 @@ async function dashboard() {
 
       <div id="patente-results"></div>
 
-      <div class="stats-grid">
-        <div class="stat-card" onclick="navigate('clientes')" style="cursor:pointer"><div class="stat-value">${totalClientes}</div><div class="stat-label">${t('dashClientes')}</div></div>
-        <div class="stat-card" onclick="reparaciones({filtro:'en_progreso'})" style="cursor:pointer"><div class="stat-value" style="color:var(--accent2)">${enProgreso}</div><div class="stat-label">${t('dashEnProgreso')}</div></div>
-        <div class="stat-card" onclick="reparaciones({filtro:'hoy'})" style="cursor:pointer"><div class="stat-value" style="color:var(--success)">${repsHoyCount}</div><div class="stat-label">${t('repHoy2')}</div></div>
-        ${currentPerfil?.rol === 'admin' ? `<div class="stat-card" onclick="navigate('creditos')" style="cursor:pointer"><div class="stat-value" style="color:var(--danger)">₲${gs(totalCrédito)}</div><div class="stat-label">${t('dashCreditos')}</div></div>` : `<div class="stat-card"><div class="stat-value">${totalVehiculos}</div><div class="stat-label">${t('dashVehiculos')}</div></div>`}
-      </div>
+      ${renderDashboardKPIs(stats, kpiConfig)}
+
       <div class="stats-grid" style="grid-template-columns:1fr 1fr 1fr">
-        <div class="stat-card" onclick="reparaciones({filtro:'hoy'})" style="cursor:pointer"><div class="stat-value" style="color:var(--accent2)">${vehiculosHoy}</div><div class="stat-label">Vehículos hoy</div></div>
         <div class="stat-card" onclick="reparaciones({filtro:'semana'})" style="cursor:pointer"><div class="stat-value">${vehiculosSemana}</div><div class="stat-label">Esta semana</div></div>
         <div class="stat-card" onclick="reparaciones({filtro:'mes'})" style="cursor:pointer"><div class="stat-value">${vehiculosMes}</div><div class="stat-label">Este mes</div></div>
+        <div class="stat-card" onclick="navigate('modo-taller')" style="cursor:pointer;background:rgba(0,229,255,.06);border-color:var(--accent)"><div class="stat-value" style="font-size:1.5rem">📺</div><div class="stat-label">Modo Taller</div></div>
       </div>
 
       ${currentPerfil?.rol === 'admin' ? `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
@@ -187,7 +282,7 @@ async function dashboard() {
         </div>
         <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem">
           <div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">GANANCIA NETA</div>
-          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${(totalMes + totalQSMes + totalPOSMes - totalGastosMes) >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(totalMes + totalQSMes + totalPOSMes - totalGastosMes)}</div>
+          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${gananciaNeta >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(gananciaNeta)}</div>
         </div>
       </div>` : ''}` : ''}
 
