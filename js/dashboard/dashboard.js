@@ -37,15 +37,15 @@ async function modalConfigurarKPIs() {
   };
   
   const kpisDisponibles = [
-    { id: 'clientes', label: 'Total clientes' },
-    { id: 'vehiculos', label: 'Total vehículos' },
-    { id: 'en_progreso', label: 'Trabajos en progreso' },
-    { id: 'hoy', label: 'Trabajos hoy' },
-    { id: 'creditos', label: 'Créditos pendientes' },
-    { id: 'ingresos_mes', label: 'Ingresos del mes' },
-    { id: 'ganancia_neta', label: 'Ganancia neta' },
-    { id: 'vehiculos_hoy', label: 'Vehículos hoy' },
-    { id: 'stock_bajo', label: 'Alertas stock bajo' }
+    { id: 'clientes', label: t('kpiClientes') },
+    { id: 'vehiculos', label: t('kpiVehiculos') },
+    { id: 'en_progreso', label: t('kpiEnProgreso') },
+    { id: 'hoy', label: t('kpiHoy') },
+    { id: 'creditos', label: t('kpiCreditos') },
+    { id: 'ingresos_mes', label: t('kpiIngresosMes') },
+    { id: 'ganancia_neta', label: t('kpiGananciaNeta') },
+    { id: 'vehiculos_hoy', label: t('kpiVehiculosHoy') },
+    { id: 'stock_bajo', label: t('kpiStockBajo') }
   ];
   
   const visibles = config.kpis_visibles || [];
@@ -53,9 +53,9 @@ async function modalConfigurarKPIs() {
   openModal(`
     <div class="modal-title" style="display:flex;align-items:center;gap:8px;">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v16h16"/><path d="m9 12 2 2 4-4"/></svg>
-      Configurar KPIs del Dashboard
+      ${t('kpisTitulo')}
     </div>
-    <div style="font-size:.8rem;color:var(--text2);margin-bottom:1rem">Seleccioná qué indicadores querés ver en la pantalla principal</div>
+    <div style="font-size:.8rem;color:var(--text2);margin-bottom:1rem">${t('kpisDesc')}</div>
     <div style="display:grid;gap:.5rem;margin-bottom:1rem">
       ${kpisDisponibles.map(kpi => `
         <label style="display:flex;align-items:center;gap:.75rem;padding:.5rem;background:var(--surface2);border-radius:8px;cursor:pointer">
@@ -64,8 +64,8 @@ async function modalConfigurarKPIs() {
         </label>
       `).join('')}
     </div>
-    <button class="btn-primary" onclick="guardarKPIsConfig()">Guardar configuración</button>
-    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+    <button class="btn-primary" onclick="guardarKPIsConfig()">${t('guardarConfig')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>
   `);
 }
 
@@ -80,7 +80,7 @@ async function guardarKPIsConfig() {
   });
   
   _dashboardConfig = null;
-  toast('Configuración guardada', 'success');
+  toast(t('configGuardada'), 'success');
   closeModal();
   navigate('dashboard');
 }
@@ -88,15 +88,15 @@ async function guardarKPIsConfig() {
 function renderDashboardKPIs(stats, config) {
   const visibles = config.kpis_visibles || ['clientes', 'en_progreso', 'hoy', 'creditos'];
   const kpiRenderers = {
-    clientes: () => `<div class="stat-card" onclick="navigate('clientes')"><div class="stat-value">${stats.total_clientes}</div><div class="stat-label">Clientes</div></div>`,
-    vehiculos: () => `<div class="stat-card" onclick="navigate('vehiculos')"><div class="stat-value">${stats.total_vehiculos}</div><div class="stat-label">Vehículos</div></div>`,
-    en_progreso: () => `<div class="stat-card" onclick="reparaciones({filtro:'en_progreso'})"><div class="stat-value" style="color:var(--accent2)">${stats.en_progreso}</div><div class="stat-label">En progreso</div></div>`,
-    hoy: () => `<div class="stat-card" onclick="reparaciones({filtro:'hoy'})"><div class="stat-value" style="color:var(--success)">${stats.reparaciones_hoy}</div><div class="stat-label">Hoy</div></div>`,
-    creditos: () => `<div class="stat-card" onclick="navigate('creditos')"><div class="stat-value" style="color:var(--danger)">₲${gs(stats.creditos_pendientes)}</div><div class="stat-label">Créditos</div></div>`,
-    ingresos_mes: () => `<div class="stat-card"><div class="stat-value" style="color:var(--success)">₲${gs(stats.ingresos_mes)}</div><div class="stat-label">Ingresos mes</div></div>`,
-    ganancia_neta: () => `<div class="stat-card"><div class="stat-value" style="color:${stats.ganancia_neta >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(stats.ganancia_neta)}</div><div class="stat-label">Ganancia neta</div></div>`,
-    vehiculos_hoy: () => `<div class="stat-card" onclick="reparaciones({filtro:'hoy'})"><div class="stat-value" style="color:var(--accent2)">${stats.vehiculos_hoy}</div><div class="stat-label">Vehículos hoy</div></div>`,
-    stock_bajo: () => `<div class="stat-card" onclick="navigate('inventario')"><div class="stat-value" style="color:var(--warning)">${stats.stock_bajo?.length || 0}</div><div class="stat-label">Stock bajo</div></div>`
+    clientes: () => `<div class="stat-card" onclick="navigate('clientes')"><div class="stat-value">${stats.total_clientes}</div><div class="stat-label">${t('kpiClientes')}</div></div>`,
+    vehiculos: () => `<div class="stat-card" onclick="navigate('vehiculos')"><div class="stat-value">${stats.total_vehiculos}</div><div class="stat-label">${t('kpiVehiculos')}</div></div>`,
+    en_progreso: () => `<div class="stat-card" onclick="reparaciones({filtro:'en_progreso'})"><div class="stat-value" style="color:var(--accent2)">${stats.en_progreso}</div><div class="stat-label">${t('kpiEnProgreso')}</div></div>`,
+    hoy: () => `<div class="stat-card" onclick="reparaciones({filtro:'hoy'})"><div class="stat-value" style="color:var(--success)">${stats.reparaciones_hoy}</div><div class="stat-label">${t('kpiHoy')}</div></div>`,
+    creditos: () => `<div class="stat-card" onclick="navigate('creditos')"><div class="stat-value" style="color:var(--danger)">₲${gs(stats.creditos_pendientes)}</div><div class="stat-label">${t('kpiCreditos')}</div></div>`,
+    ingresos_mes: () => `<div class="stat-card"><div class="stat-value" style="color:var(--success)">₲${gs(stats.ingresos_mes)}</div><div class="stat-label">${t('kpiIngresosMes')}</div></div>`,
+    ganancia_neta: () => `<div class="stat-card"><div class="stat-value" style="color:${stats.ganancia_neta >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(stats.ganancia_neta)}</div><div class="stat-label">${t('kpiGananciaNeta')}</div></div>`,
+    vehiculos_hoy: () => `<div class="stat-card" onclick="reparaciones({filtro:'hoy'})"><div class="stat-value" style="color:var(--accent2)">${stats.vehiculos_hoy}</div><div class="stat-label">${t('kpiVehiculosHoy')}</div></div>`,
+    stock_bajo: () => `<div class="stat-card" onclick="navigate('inventario')"><div class="stat-value" style="color:var(--warning)">${stats.stock_bajo?.length || 0}</div><div class="stat-label">${t('kpiStockBajo')}</div></div>`
   };
   
   let html = '<div class="stats-grid">';
@@ -122,7 +122,7 @@ async function dashboard() {
   
   if (error) {
     console.error('Error cargando dashboard:', error);
-    document.getElementById('main-content').innerHTML = `<div class="empty"><p>Error al cargar el dashboard</p></div>`;
+    document.getElementById('main-content').innerHTML = `<div class="empty"><p>${t('errorCargarDashboard')}</p></div>`;
     return;
   }
 
@@ -180,12 +180,12 @@ async function dashboard() {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
             <div style="font-size:.72rem;color:var(--warning);font-family:var(--font-head);letter-spacing:1px;display:flex;align-items:center;gap:4px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-              PAGOS PARCIALES PENDIENTES
+              ${t('dashPagosParciales')}
             </div>
             <div style="font-family:var(--font-head);color:var(--warning);font-size:1rem">₲${gs(totalDeuda)}</div>
           </div>
-          ${deudores.slice(0, 3).map(d => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(d.clientes?.nombre || 'Sin cliente')} — <span style="color:var(--warning)">debe ₲${gs(d.saldo)}</span></div>`).join('')}
-          ${deudores.length > 3 ? `<div style="font-size:.7rem;color:var(--text2);margin-top:.3rem">y ${deudores.length - 3} más...</div>` : ''}
+          ${deudores.slice(0, 3).map(d => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(d.clientes?.nombre || t('sinCliente'))} — <span style="color:var(--warning)">${t('debe')} ₲${gs(d.saldo)}</span></div>`).join('')}
+          ${deudores.length > 3 ? `<div style="font-size:.7rem;color:var(--text2);margin-top:.3rem">${t('yMas', { count: deudores.length - 3 })}</div>` : ''}
         </div>`;
       }
     }
@@ -206,12 +206,46 @@ async function dashboard() {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
           <div style="font-size:.72rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px;display:flex;align-items:center;gap:4px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-            CUENTAS POR PAGAR
+            ${t('dashCuentasPorPagar')}
           </div>
           <div style="font-family:var(--font-head);color:var(--danger);font-size:1rem">₲${gs(totalUrgente)}</div>
         </div>
-        ${urgentes.slice(0, 3).map(c => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(c.proveedor)} — ₲${gs(c.monto)}${c.fecha_vencimiento < hoyStr ? ' <span style="color:var(--danger)">VENCIDA</span>' : ' vence ' + formatFecha(c.fecha_vencimiento)}</div>`).join('')}
+        ${urgentes.slice(0, 3).map(c => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(c.proveedor)} — ₲${gs(c.monto)}${c.fecha_vencimiento < hoyStr ? ' <span style="color:var(--danger)">' + t('dashVencida') + '</span>' : ' ' + t('dashVence') + ' ' + formatFecha(c.fecha_vencimiento)}</div>`).join('')}
       </div>`;
+    }
+  }
+
+  // ─── ÚLTIMOS MOVIMIENTOS DE CAJA (Vista rápida) ────────────────────────────
+  let ultimosMovimientosHTML = '';
+  if (currentPerfil?.rol === 'admin') {
+    try {
+      const { data: ultimosMovs } = await safeQuery(() =>
+        sb.from('movimientos_financieros')
+          .select('tipo,monto,descripcion,fecha,categorias_financieras(nombre)')
+          .eq('taller_id', tid())
+          .order('created_at', { ascending: false })
+          .limit(3)
+      );
+      if (ultimosMovs && ultimosMovs.length > 0) {
+        ultimosMovimientosHTML = `
+          <div style="margin-top:1rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+              <span style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px">💵 ${t('dashUltimosMovimientos')}</span>
+              <span onclick="navigate('finanzas')" style="font-size:.65rem;color:var(--accent);cursor:pointer;text-decoration:underline">${t('dashVerTodos')} →</span>
+            </div>
+            ${ultimosMovs.map(m => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.78rem">
+                <div style="display:flex;align-items:center;gap:.4rem;max-width:70%">
+                  <span style="color:${m.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'};font-weight:bold">${m.tipo === 'ingreso' ? '↑' : '↓'}</span>
+                  <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.descripcion || m.categorias_financieras?.nombre || t('movimiento'))}</span>
+                </div>
+                <span style="font-family:var(--font-head);color:${m.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'}">${m.tipo === 'ingreso' ? '+' : '-'}₲${gs(m.monto)}</span>
+              </div>
+            `).join('')}
+          </div>`;
+      }
+    } catch (e) {
+      console.warn('Error cargando últimos movimientos:', e);
     }
   }
 
@@ -234,7 +268,7 @@ async function dashboard() {
   if (fromCache) {
     html += `<div id="cache-indicator" style="background:var(--warning);color:#000;padding:2px 8px;border-radius:20px;font-size:.65rem;margin-bottom:.5rem;display:inline-block;display:flex;align-items:center;gap:4px;">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-      Datos en caché
+      ${t('dashDatosEnCache')}
     </div>`;
   }
 
@@ -247,15 +281,15 @@ async function dashboard() {
             <div style="font-size:2.5rem;margin-bottom:5px;">
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
             </div>
-            <div style="font-family:var(--font-head);font-size:1rem;color:var(--accent);margin-top:.3rem">Nuevo trabajo</div>
-            <div style="font-size:.7rem;color:var(--text2)">Registrar ingreso de vehículo</div>
+            <div style="font-family:var(--font-head);font-size:1rem;color:var(--accent);margin-top:.3rem">${t('dashNuevoTrabajo')}</div>
+            <div style="font-size:.7rem;color:var(--text2)">${t('dashRegistrarIngreso')}</div>
           </div>
           <div onclick="navigate('ventas')" style="background:linear-gradient(145deg, var(--surface), var(--surface2));border:2px solid var(--success);border-radius:16px;padding:1.2rem .5rem;text-align:center;cursor:pointer">
             <div style="font-size:2.5rem;margin-bottom:5px;">
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </div>
-            <div style="font-family:var(--font-head);font-size:1rem;color:var(--success);margin-top:.3rem">Cobrar servicio</div>
-            <div style="font-size:.7rem;color:var(--text2)">Venta rápida de productos</div>
+            <div style="font-family:var(--font-head);font-size:1rem;color:var(--success);margin-top:.3rem">${t('dashCobrarServicio')}</div>
+            <div style="font-size:.7rem;color:var(--text2)">${t('dashVentaRapida')}</div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
@@ -263,13 +297,13 @@ async function dashboard() {
             <div style="margin-bottom:8px;">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </div>
-            <div style="font-size:.8rem;color:var(--text)">Turnos de hoy</div>
+            <div style="font-size:.8rem;color:var(--text)">${t('dashTurnosHoy')}</div>
           </div>
           <div onclick="modalCierreCaja()" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.8rem;text-align:center;cursor:pointer">
             <div style="margin-bottom:8px;">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             </div>
-            <div style="font-size:.8rem;color:var(--text)">Cierre de caja</div>
+            <div style="font-size:.8rem;color:var(--text)">${t('dashCierreCaja')}</div>
           </div>
         </div>
       ` : ''}
@@ -278,9 +312,9 @@ async function dashboard() {
       <div style="background:rgba(255,68,68,.1);border-left:4px solid var(--danger);border-radius:8px;padding:.75rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:6px;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/><circle cx="12" cy="12" r="2"/></svg>
-          <span style="font-weight:bold;color:var(--danger)">${alertasStock.length} producto(s) con stock bajo</span>
+          <span style="font-weight:bold;color:var(--danger)">${t('dashboardStockBajo', { count: alertasStock.length })}</span>
         </div>
-        <button onclick="navigate('inventario')" style="background:var(--danger);color:#fff;border:none;border-radius:6px;padding:.3rem .8rem;cursor:pointer;font-size:.75rem">Ver</button>
+        <button onclick="navigate('inventario')" style="background:var(--danger);color:#fff;border:none;border-radius:6px;padding:.3rem .8rem;cursor:pointer;font-size:.75rem">${t('dashboardVer')}</button>
       </div>
       ` : ''}
 
@@ -298,13 +332,13 @@ async function dashboard() {
       ${renderDashboardKPIs(stats, kpiConfig)}
 
       <div class="stats-grid" style="grid-template-columns:1fr 1fr 1fr">
-        <div class="stat-card" onclick="reparaciones({filtro:'semana'})" style="cursor:pointer"><div class="stat-value">${vehiculosSemana}</div><div class="stat-label">Esta semana</div></div>
-        <div class="stat-card" onclick="reparaciones({filtro:'mes'})" style="cursor:pointer"><div class="stat-value">${vehiculosMes}</div><div class="stat-label">Este mes</div></div>
+        <div class="stat-card" onclick="reparaciones({filtro:'semana'})" style="cursor:pointer"><div class="stat-value">${vehiculosSemana}</div><div class="stat-label">${t('dashboardEstaSemana')}</div></div>
+        <div class="stat-card" onclick="reparaciones({filtro:'mes'})" style="cursor:pointer"><div class="stat-value">${vehiculosMes}</div><div class="stat-label">${t('dashboardEsteMes')}</div></div>
         <div class="stat-card" onclick="navigate('modo-taller')" style="cursor:pointer;background:rgba(0,229,255,.06);border-color:var(--accent)">
           <div class="stat-value" style="font-size:1.5rem;">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
           </div>
-          <div class="stat-label">Modo Taller</div>
+          <div class="stat-label">${t('dashboardModoTaller')}</div>
         </div>
       </div>
 
@@ -320,17 +354,18 @@ async function dashboard() {
       </div>
       ${totalGastosMes > 0 ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:.75rem;cursor:pointer" onclick="navigate('gastos')">
-          <div style="font-size:.68rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">GASTOS MES</div>
+          <div style="font-size:.68rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">${t('dashGastosMes')}</div>
           <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--danger)">₲${gs(totalGastosMes)}</div>
         </div>
         <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem">
-          <div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">GANANCIA NETA</div>
+          <div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">${t('dashGananciaNeta')}</div>
           <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${gananciaNeta >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(gananciaNeta)}</div>
         </div>
       </div>` : ''}` : ''}
 
       ${deudoresHTML}
       ${cuentasVencidasHTML}
+      ${ultimosMovimientosHTML}
 
       <div style="font-family:var(--font-head);font-size:.9rem;color:var(--text2);margin-bottom:.6rem;letter-spacing:2px">${t('dashRecientes')}</div>
       ${recientes.length === 0 ? `<div class="empty"><p>${t('dashSinReps')}</p></div>` :
@@ -366,18 +401,35 @@ async function buscarPatente(valor) {
   patenteBusquedaTimer = setTimeout(async () => {
     await safeCall(async () => {
       const { data: vehs, fromCache } = await cachedQuery(`buscar_patente_${patente}`, () =>
-        sb.from('vehiculos').select('*, clientes(nombre,telefono), reparaciones(id,descripcion,estado,costo,fecha)').eq('taller_id', tid()).ilike('patente', `%${patente}%`).limit(3)
+        sb.from('vehiculos').select('*, clientes(nombre,telefono), reparaciones(id,descripcion,estado,costo,fecha,meses_garantia)').eq('taller_id', tid()).ilike('patente', `%${patente}%`).limit(3)
       );
       if (!vehs || vehs.length === 0) {
-        resultsEl.innerHTML = `<div style="background:var(--surface2);border-radius:10px;padding:.75rem;margin-bottom:1rem;font-size:.85rem;color:var(--text2)">No se encontró ningún vehículo con esa patente.</div>`;
+        resultsEl.innerHTML = `<div style="background:var(--surface2);border-radius:10px;padding:.75rem;margin-bottom:1rem;font-size:.85rem;color:var(--text2)">${t('dashPatenteNoEncontrada')}</div>`;
         return;
       }
       let html = fromCache ? `<div style="font-size:.6rem;color:var(--warning);margin-bottom:.3rem;display:flex;align-items:center;gap:4px;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-        Resultados en caché
+        ${t('dashResultadosCache')}
       </div>` : '';
       html += vehs.map(v => {
         const reps = (v.reparaciones || []).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 5);
+        
+        // Lógica de garantía
+        let garantiaHTML = '';
+        const ahora = new Date();
+        const reparacionEnGarantia = reps.find(r => {
+          if (r.estado !== 'finalizado') return false;
+          const mesesGarantia = r.meses_garantia || 3;
+          const fechaRep = new Date(r.fecha);
+          const fechaVencimiento = new Date(fechaRep);
+          fechaVencimiento.setMonth(fechaVencimiento.getMonth() + mesesGarantia);
+          return fechaVencimiento > ahora;
+        });
+        if (reparacionEnGarantia) {
+          const mesesGarantia = reparacionEnGarantia.meses_garantia || 3;
+          garantiaHTML = `<div style="background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.3);border-radius:6px;padding:.25rem .5rem;margin-top:.3rem;font-size:.7rem;color:var(--accent);display:inline-block">⚠️ ${t('enGarantia')} (${mesesGarantia} ${t('meses')})</div>`;
+        }
+        
         return `
           <div style="background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:1rem;margin-bottom:1rem">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
@@ -388,10 +440,11 @@ async function buscarPatente(valor) {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                   ${h(v.clientes.nombre)}
                 </div>` : ''}
+                ${garantiaHTML}
               </div>
-              <button onclick="detalleVehiculo('${v.id}')" style="font-size:.72rem;background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 8px;cursor:pointer">Ver</button>
+              <button onclick="detalleVehiculo('${v.id}')" style="font-size:.72rem;background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 8px;cursor:pointer">${t('dashVer')}</button>
             </div>
-            <div style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">HISTORIAL (${reps.length})</div>
+            <div style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">${t('dashHistorial')} (${reps.length})</div>
             ${reps.length === 0 ? '<div style="font-size:.8rem;color:var(--text2)">${t("vehSinReps")}</div>' :
               reps.map(r => `
               <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.82rem">
@@ -403,143 +456,4 @@ async function buscarPatente(valor) {
       resultsEl.innerHTML = html;
     }, null, 'Error al buscar patente');
   }, 500);
-}
-
-// ─── REPORTES (RESUMEN RÁPIDO) ─────────────────────────────────────────────────
-async function reportes() {
-  const hoy = fechaHoy();
-  const primerMes = primerDiaMes();
-  const primerSemana = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() - d.getDay());
-    return d.toISOString().split('T')[0];
-  })();
-
-  const [
-    { data: repsHoy },
-    { data: repsSemana },
-    { data: repsMes },
-    { data: todasReps },
-    { data: creditosPend },
-    { data: repsPorEmpleado }
-  ] = await Promise.all([
-    cachedQuery('rep_hoy', () => sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').eq('fecha',hoy)),
-    cachedQuery('rep_semana', () => sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerSemana)),
-    cachedQuery('rep_mes', () => sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerMes)),
-    cachedQuery('rep_todas', () => sb.from('reparaciones').select('descripcion,costo').eq('taller_id',tid()).eq('estado','finalizado').gte('fecha',primerMes)),
-    cachedQuery('cred_pend', () => sb.from('fiados').select('monto').eq('taller_id',tid()).eq('pagado',false)),
-    cachedQuery('rep_emp', () => sb.from('reparacion_mecanicos').select('nombre_mecanico, horas, reparaciones(costo, estado, fecha, taller_id)').order('created_at', {ascending: false}))
-  ]);
-
-  const ganHoy = (repsHoy||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
-  const ganSemana = (repsSemana||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
-  const ganMes = (repsMes||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
-  const totalCréditos = (creditosPend||[]).reduce((s,f)=>s+parseFloat(f.monto||0),0);
-
-  let repQSMes=0, repPOSMes=0, repGastosMes=0;
-  const [{data:_qsM},{data:_posM},{data:_gastM}] = await Promise.all([
-    cachedQuery('rep_qs', () => sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', true).gte('created_at',primerMes+'T00:00:00')),
-    cachedQuery('rep_pos', () => sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', false).gte('created_at',primerMes+'T00:00:00')),
-    cachedQuery('rep_gastos', () => sb.from('gastos_taller').select('monto').eq('taller_id',tid()).gte('fecha',primerMes))
-  ]);
-  repQSMes = (_qsM||[]).reduce((s,r)=>s+parseFloat(r.total||0),0);
-  repPOSMes = (_posM||[]).reduce((s,r)=>s+parseFloat(r.total||0),0);
-  repGastosMes = (_gastM||[]).reduce((s,r)=>s+parseFloat(r.monto||0),0);
-  const ingresosTotalMes = ganMes + repQSMes + repPOSMes;
-  const gananciaNeta = ingresosTotalMes - repGastosMes;
-
-  const serviciosCount = {};
-  (todasReps||[]).forEach(r => {
-    const key = r.descripcion || 'Sin descripción';
-    serviciosCount[key] = (serviciosCount[key]||0) + parseFloat(r.costo||0);
-  });
-  const topServicios = Object.entries(serviciosCount).sort((a,b)=>b[1]-a[1]).slice(0,5);
-
-  document.getElementById('main-content').innerHTML = `
-    <div style="padding:.25rem 0">
-      <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.75rem">${t('repGanancias')}</div>
-      <div class="stats-grid" style="margin-bottom:1rem">
-        <div class="stat-card"><div class="stat-value" style="font-size:1.3rem">₲${gs(ganHoy)}</div><div class="stat-label">${t('repHoy2')}</div></div>
-        <div class="stat-card"><div class="stat-value" style="font-size:1.3rem">₲${gs(ganSemana)}</div><div class="stat-label">${t('repSemana')}</div></div>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-size:.72rem;color:var(--text2);letter-spacing:1px;font-family:var(--font-head)">${t('repMes')} — INGRESOS TOTALES</div>
-          <div style="font-family:var(--font-head);font-size:2rem;font-weight:700;color:var(--success)">₲${gs(ingresosTotalMes)}</div>
-          <div style="font-size:.7rem;color:var(--text2);margin-top:.2rem">OTs: ₲${gs(ganMes)} · QS: ₲${gs(repQSMes)} · POS: ₲${gs(repPOSMes)}</div>
-        </div>
-        <div style="font-size:2.5rem;">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        </div>
-      </div>
-      ${repGastosMes>0?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
-        <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:.75rem;cursor:pointer" onclick="navigate('gastos')">
-          <div style="font-size:.68rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">GASTOS MES</div>
-          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--danger)">₲${gs(repGastosMes)}</div>
-        </div>
-        <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem">
-          <div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">GANANCIA NETA</div>
-          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${gananciaNeta>=0?'var(--success)':'var(--danger)'}">₲${gs(gananciaNeta)}</div>
-        </div>
-      </div>`:''}
-      <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-size:.72rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">${t('repFiados')}</div>
-          <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--danger)">₲${gs(totalCréditos)}</div>
-        </div>
-        <button onclick="navigate('creditos')" style="background:rgba(255,68,68,.15);border:1px solid rgba(255,68,68,.3);color:var(--danger);border-radius:8px;padding:.5rem .75rem;font-size:.8rem;cursor:pointer">${t('repVerCreditos')}</button>
-      </div>
-      ${topServicios.length > 0 ? `
-      <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.6rem">${t('repTopServ')}</div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem">
-        ${topServicios.map(([desc,total],i) => `
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border)">
-            <div style="display:flex;gap:.5rem;align-items:center">
-              <span style="font-family:var(--font-head);font-size:.85rem;color:var(--accent2)">#${i+1}</span>
-              <span style="font-size:.85rem">${h(desc)}</span>
-            </div>
-            <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">₲${gs(total)}</span>
-          </div>`).join('')}
-      </div>` : `<div class="empty"><p>${t('repSinReps2')}</p></div>`}
-
-      ${(() => {
-        const empStats = {};
-        (repsPorEmpleado||[]).forEach(r => {
-          if (!r.reparaciones || r.reparaciones.taller_id !== tid()) return;
-          if (r.reparaciones.fecha < primerMes) return;
-          const nombre = r.nombre_mecanico || 'Sin nombre';
-          if (!empStats[nombre]) empStats[nombre] = { total:0, finalizadas:0, ingresos:0, horas:0 };
-          empStats[nombre].total++;
-          empStats[nombre].horas += parseFloat(r.horas||0);
-          if (r.reparaciones.estado === 'finalizado') { empStats[nombre].finalizadas++; empStats[nombre].ingresos += parseFloat(r.reparaciones.costo||0); }
-        });
-        const empArr = Object.entries(empStats).sort((a,b)=>b[1].ingresos-a[1].ingresos);
-        if (empArr.length === 0) return '';
-        return `
-        <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.6rem">PRODUCTIVIDAD POR EMPLEADO (MES)</div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem">
-          ${empArr.map(([nombre, s], i) => {
-            const pct = empArr[0][1].ingresos > 0 ? Math.round(s.ingresos / empArr[0][1].ingresos * 100) : 0;
-            return `
-            <div style="padding:.6rem 0;${i<empArr.length-1?'border-bottom:1px solid var(--border)':''}">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
-                <div style="display:flex;gap:.5rem;align-items:center">
-                  <div style="width:28px;height:28px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:var(--accent)">${h(nombre).charAt(0)}</div>
-                  <span style="font-size:.85rem;font-weight:500">${h(nombre)}</span>
-                </div>
-                <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">₲${gs(s.ingresos)}</span>
-              </div>
-              <div style="display:flex;gap:1rem;font-size:.72rem;color:var(--text2);margin-left:2.3rem">
-                <span>${s.finalizadas} finalizadas</span>
-                <span>${s.total} asignadas</span>
-                <span>${s.horas}h trabajadas</span>
-              </div>
-              <div style="margin-left:2.3rem;margin-top:.3rem;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden">
-                <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:2px"></div>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>`;
-      })()}
-    </div>`;
 }
