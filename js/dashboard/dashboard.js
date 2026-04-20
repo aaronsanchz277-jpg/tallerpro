@@ -216,38 +216,38 @@ async function dashboard() {
   }
 
   // ─── ÚLTIMOS MOVIMIENTOS DE CAJA (Vista rápida) ────────────────────────────
-  let ultimosMovimientosHTML = '';
-  if (currentPerfil?.rol === 'admin') {
-    try {
-      const { data: ultimosMovs } = await safeQuery(() =>
-        sb.from('movimientos_financieros')
-          .select('tipo,monto,descripcion,fecha,categorias_financieras(nombre)')
-          .eq('taller_id', tid())
-          .order('created_at', { ascending: false })
-          .limit(3)
-      );
-      if (ultimosMovs && ultimosMovs.length > 0) {
-        ultimosMovimientosHTML = `
-          <div style="margin-top:1rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
-              <span style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px">💵 ${t('dashUltimosMovimientos')}</span>
-              <span onclick="navigate('finanzas')" style="font-size:.65rem;color:var(--accent);cursor:pointer;text-decoration:underline">${t('dashVerTodos')} →</span>
-            </div>
-            ${ultimosMovs.map(m => `
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.78rem">
-                <div style="display:flex;align-items:center;gap:.4rem;max-width:70%">
-                  <span style="color:${m.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'};font-weight:bold">${m.tipo === 'ingreso' ? '↑' : '↓'}</span>
-                  <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.descripcion || m.categorias_financieras?.nombre || t('movimiento'))}</span>
-                </div>
-                <span style="font-family:var(--font-head);color:${m.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'}">${m.tipo === 'ingreso' ? '+' : '-'}₲${gs(m.monto)}</span>
+let ultimosMovimientosHTML = '';
+if (currentPerfil?.rol === 'admin') {
+  try {
+    const { data: ultimosMovs } = await safeQuery(() =>
+      sb.from('movimientos_financieros')
+        .select('tipo,monto,concepto,fecha,categorias_financieras(nombre)')  // ← 'concepto'
+        .eq('taller_id', tid())
+        .order('created_at', { ascending: false })
+        .limit(3)
+    );
+    if (ultimosMovs && ultimosMovs.length > 0) {
+      ultimosMovimientosHTML = `
+        <div style="margin-top:1rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+            <span style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px">💵 ${t('dashUltimosMovimientos')}</span>
+            <span onclick="navigate('finanzas')" style="font-size:.65rem;color:var(--accent);cursor:pointer;text-decoration:underline">${t('dashVerTodos')} →</span>
+          </div>
+          ${ultimosMovs.map(m => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.78rem">
+              <div style="display:flex;align-items:center;gap:.4rem;max-width:70%">
+                <span style="color:${m.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'};font-weight:bold">${m.tipo === 'ingreso' ? '↑' : '↓'}</span>
+                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.concepto || m.categorias_financieras?.nombre || t('movimiento'))}</span>
               </div>
-            `).join('')}
-          </div>`;
-      }
-    } catch (e) {
-      console.warn('Error cargando últimos movimientos:', e);
+              <span style="font-family:var(--font-head);color:${m.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'}">${m.tipo === 'ingreso' ? '+' : '-'}₲${gs(m.monto)}</span>
+            </div>
+          `).join('')}
+        </div>`;
     }
+  } catch (e) {
+    console.warn('Error cargando últimos movimientos:', e);
   }
+}
 
   let html = `
     <div style="padding:.25rem 0 .75rem">
