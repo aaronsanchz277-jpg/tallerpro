@@ -26,7 +26,7 @@ function aplicarTema() {
       }
     `;
   } else {
-    themeStyles.textContent = '';
+    themeStyles.textContent = ``;
   }
 }
 
@@ -34,7 +34,7 @@ function toggleTema() {
   _temaActual = _temaActual === 'dark' ? 'light' : 'dark';
   localStorage.setItem('tallerpro_theme', _temaActual);
   aplicarTema();
-  toast(_temaActual === 'light' ? 'Modo claro activado' : 'Modo oscuro activado', 'success');
+  toast(_temaActual === 'light' ? '☀️ Modo claro' : '🌙 Modo oscuro', 'success');
 }
 
 function getTemaToggle() {
