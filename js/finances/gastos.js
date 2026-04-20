@@ -112,25 +112,10 @@ async function guardarGasto(id) {
     gastoId = saved?.[0]?.id;
   }
   
-  // ─── INTEGRACIÓN CON FINANZAS ─────────────────────────────────────────────
+  // ─── INTEGRACIÓN CON FINANZAS (MODIFICADO) ─────────────────────────────────
   try {
-    let catFinanciera = categoria || 'Gastos generales';
-    const { data: cats } = await sb.from('categorias_financieras')
-      .select('id')
-      .eq('taller_id', tid())
-      .eq('nombre', catFinanciera)
-      .limit(1);
-    
-    let categoriaId;
-    if (cats?.length) {
-      categoriaId = cats[0].id;
-    } else {
-      const { data: nuevaCat } = await sb.from('categorias_financieras')
-        .insert({ taller_id: tid(), nombre: catFinanciera, tipo: 'egreso', es_fija: false })
-        .select('id')
-        .single();
-      categoriaId = nuevaCat?.id;
-    }
+    const catFinanciera = categoria || 'Gastos generales';
+    const categoriaId = await obtenerCategoriaFinanciera(catFinanciera, 'egreso');
     
     if (categoriaId) {
       const movimientoData = {
