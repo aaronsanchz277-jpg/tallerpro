@@ -39,6 +39,17 @@ async function repMecanicos_modal(repId) {
       todosMap.set(e.id, { id: e.id, nombre: e.nombre?.trim() || 'Sin nombre', source: 'empleado' });
     }
   });
+
+  // Asegurar que el usuario actual (si es empleado) esté disponible para asignarse a sí mismo
+  if (currentPerfil?.rol === 'empleado' && currentUser?.id) {
+    if (!todosMap.has(currentUser.id)) {
+      todosMap.set(currentUser.id, {
+        id: currentUser.id,
+        nombre: currentPerfil.nombre || 'Yo (usuario actual)',
+        source: 'perfil'
+      });
+    }
+  }
   
   const todos = Array.from(todosMap.values());
   
@@ -86,47 +97,60 @@ async function repMecanicos_agregarConSafeCall(repId) {
 
 async function repMecanicos_agregar(repId) {
   const sel = document.getElementById('f-mec-add');
-  if (!sel) return;
-  
-  const mecId = sel.value;
-  if (!mecId) {
+  if (!sel || !sel.value) {
     toast('Seleccioná un mecánico', 'error');
     return;
   }
-  
+
+  const mecId = sel.value;
   const selectedOption = sel.options[sel.selectedIndex];
   const source = selectedOption?.dataset?.source || 'perfil';
-  const nombre = selectedOption?.textContent?.replace(' (manual)', '').trim() || 'Sin nombre';
-  
+  const nombre = selectedOption?.textContent?.replace(' (manual)', '').replace(' (usuario actual)', '').trim() || 'Sin nombre';
+
+  // Verificar si ya está asignado (doble check)
+  const { data: existente } = await sb
+    .from('reparacion_mecanicos')
+    .select('id')
+    .eq('reparacion_id', repId)
+    .or(`mecanico_id.eq.${mecId},empleado_id.eq.${mecId}`)
+    .maybeSingle();
+
+  if (existente) {
+    toast('Este mecánico ya está asignado a este trabajo', 'error');
+    return;
+  }
+
   const insertData = {
     reparacion_id: repId,
     nombre_mecanico: nombre,
     horas: 0,
     pago: 0
   };
-  
+
   if (source === 'perfil') {
     insertData.mecanico_id = mecId;
   } else {
     insertData.empleado_id = mecId;
   }
-  
+
   console.log('Intentando agregar mecánico:', insertData);
-  
+
   const { error } = await sb.from('reparacion_mecanicos').insert(insertData);
-  
+
   if (error) {
     console.error('Error al agregar mecánico:', error);
     if (error.message.includes('duplicate')) {
       toast('Este mecánico ya está asignado a este trabajo', 'error');
     } else if (error.code === '42501' || error.message.includes('permission')) {
       toast('No tenés permiso para asignar mecánicos. Verificá tu rol.', 'error');
+    } else if (error.message.includes('violates row-level security')) {
+      toast('Error de seguridad: contactá al administrador para revisar permisos.', 'error');
     } else {
       toast('Error al agregar: ' + error.message, 'error');
     }
     return;
   }
-  
+
   toast('Mecánico asignado', 'success');
   repMecanicos_modal(repId);
 }
