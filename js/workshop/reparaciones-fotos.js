@@ -1,5 +1,5 @@
 // ─── FOTOS POR ETAPA ─────────────────────────────────────────────────────────
-export function modalFotosEtapa(repId, etapa) {
+function modalFotosEtapa(repId, etapa) {
   const labels = { recepcion:'Recepción', proceso:'En Proceso', entrega:'Entrega' };
   const colors = { recepcion:'var(--text2)', proceso:'var(--accent2)', entrega:'var(--success)' };
   openModal(`
@@ -22,7 +22,7 @@ export function modalFotosEtapa(repId, etapa) {
   });
 }
 
-export async function subirFotosEtapa(repId, etapa) {
+async function subirFotosEtapa(repId, etapa) {
   if (!requireOnline('subir fotos')) return;
   const input = document.getElementById('f-fotos-etapa');
   if (!input.files.length) { toast('Seleccioná al menos una foto','error'); return; }
