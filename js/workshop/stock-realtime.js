@@ -29,7 +29,6 @@ function stockRealtime_verificarBajo(item) {
   const minimo = parseFloat(item.stock_minimo) || 5;
 
   if (cantidad <= minimo) {
-    // Evitar notificaciones duplicadas en corto tiempo (30 segundos)
     const now = Date.now();
     const lastNotif = _stockNotificadosCache[item.id];
     if (lastNotif && (now - lastNotif) < 30000) return;
@@ -37,18 +36,33 @@ function stockRealtime_verificarBajo(item) {
     _stockNotificadosCache[item.id] = now;
 
     const mensaje = `⚠️ Stock bajo: ${item.nombre} (${cantidad} ${item.unidad || 'unid.'})`;
-    toast(mensaje, 'warning', 5000);
+    if (typeof toast === 'function') toast(mensaje, 'warning', 5000);
 
-    // También push si está habilitado
     if (typeof pushNotify === 'function' && Notification.permission === 'granted') {
-      pushNotify('Stock bajo', mensaje, 'stock-bajo-' + item.id, () => navigate('inventario'));
+      pushNotify('Stock bajo', mensaje, 'stock-bajo-' + item.id, () => {
+        if (typeof navigate === 'function') navigate('inventario');
+      });
     }
   }
 }
 
-// Llamar a stockRealtime_init después de que realtime_init se ejecute
-const originalRealtimeInit = realtime_init;
-realtime_init = function() {
-  originalRealtimeInit();
-  stockRealtime_init();
-};
+// Enganche seguro con realtime_init (si existe)
+(function() {
+  if (typeof realtime_init === 'function') {
+    const originalRealtimeInit = realtime_init;
+    realtime_init = function() {
+      originalRealtimeInit();
+      stockRealtime_init();
+    };
+  } else {
+    // Si realtime_init no existe aún, esperar a que el canal de Supabase esté disponible
+    console.warn('realtime_init no definido, stock-realtime se inicializará bajo demanda');
+    // Intentar inicializar cuando haya usuario
+    const checkInterval = setInterval(() => {
+      if (typeof sb !== 'undefined' && tid() && currentUser) {
+        stockRealtime_init();
+        clearInterval(checkInterval);
+      }
+    }, 1000);
+  }
+})();
