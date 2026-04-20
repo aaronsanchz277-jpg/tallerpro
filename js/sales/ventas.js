@@ -276,28 +276,12 @@ async function guardarVenta(esServicioRapido = false) {
   };
   
   const { data: saved, error } = await offlineInsert('ventas', data);
-  if (error) { toast('Error: '+error.message, 'error'); return; }
+  if (error) { toast('Error: '+error.message,'error'); return; }
   
-  // Integración con Finanzas
+  // ─── INTEGRACIÓN CON FINANZAS (MODIFICADO) ─────────────────────────────────
   if (totalFinal > 0) {
     try {
-      let categoriaId;
-      const { data: cats } = await sb.from('categorias_financieras')
-        .select('id')
-        .eq('taller_id', tid())
-        .eq('nombre', 'Servicios')
-        .limit(1);
-      
-      if (cats?.length) {
-        categoriaId = cats[0].id;
-      } else {
-        const { data: nuevaCat } = await sb.from('categorias_financieras')
-          .insert({ taller_id: tid(), nombre: 'Servicios', tipo: 'ingreso', es_fija: true })
-          .select('id')
-          .single();
-        categoriaId = nuevaCat?.id;
-      }
-      
+      const categoriaId = await obtenerCategoriaFinanciera('Servicios', 'ingreso');
       if (categoriaId) {
         await sb.from('movimientos_financieros').insert({
           taller_id: tid(),
