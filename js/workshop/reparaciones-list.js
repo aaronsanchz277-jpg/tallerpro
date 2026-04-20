@@ -1,7 +1,5 @@
 // ─── LISTADO DE REPARACIONES ─────────────────────────────────────────────────
-import { TIPOS_TRABAJO, TIPO_ICONS, inicioSemana } from './reparaciones-core.js';
-
-export async function reparaciones({ filtro='todos', search='', offset=0, tipo='' }={}) {
+async function reparaciones({ filtro='todos', search='', offset=0, tipo='' }={}) {
   const cacheKey = `reparaciones_${filtro}_${search}_${offset}_${tipo}`;
   const { data, count } = await cachedQuery(cacheKey, () => {
     let q = sb.from('reparaciones').select('*, vehiculos(patente,marca), clientes(nombre)', {count:'exact'}).eq('taller_id',tid()).order('created_at',{ascending:false});
@@ -52,4 +50,4 @@ export async function reparaciones({ filtro='todos', search='', offset=0, tipo='
     ${renderPagination(count||0, offset, '_navRep')}`;
 }
 
-export function _navRep(o) { reparaciones({offset:o}); }
+function _navRep(o) { reparaciones({offset:o}); }
