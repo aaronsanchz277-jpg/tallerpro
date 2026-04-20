@@ -44,7 +44,7 @@ async function marcarPagadoConSafeCall(id) {
 async function marcarPagado(id) {
   await offlineUpdate('fiados', { pagado: true }, 'id', id);
   
-  // ─── INTEGRACIÓN CON FINANZAS (MODIFICADO) ─────────────────────────────────
+  // Integración con Finanzas (MODIFICADO)
   const { data: credito } = await sb.from('fiados').select('monto, cliente_id, descripcion').eq('id', id).single();
   if (credito) {
     const categoriaId = await obtenerCategoriaFinanciera('Otros ingresos', 'ingreso');
