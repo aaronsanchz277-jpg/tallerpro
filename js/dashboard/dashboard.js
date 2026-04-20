@@ -62,7 +62,7 @@ async function guardarKPIsConfig() {
     updated_at: new Date().toISOString()
   });
   
-  _dashboardConfig = null; // Invalidar caché
+  _dashboardConfig = null;
   toast('Configuración guardada', 'success');
   closeModal();
   navigate('dashboard');
@@ -124,7 +124,6 @@ async function dashboard() {
   const vehiculosSemana = stats.vehiculos_semana || 0;
   const vehiculosMes = stats.vehiculos_mes || 0;
   
-  // Calcular ganancia neta (para el KPI)
   let gananciaNeta = 0;
 
   let totalQSMes = 0, totalPOSMes = 0, totalGastosMes = 0;
@@ -140,11 +139,9 @@ async function dashboard() {
     gananciaNeta = totalMes + totalQSMes + totalPOSMes - totalGastosMes;
   }
 
-  // Agregar campos calculados para los KPIs
   stats.ganancia_neta = gananciaNeta;
   stats.stock_bajo = alertasStock;
 
-  // Secciones de deudores y cuentas vencidas (con caché)
   let deudoresHTML = '';
   if (currentPerfil?.rol === 'admin') {
     const { data: repsConDeuda } = await cachedQuery('dash_deudores', () => 
@@ -195,7 +192,6 @@ async function dashboard() {
     }
   }
 
-  // Construir el HTML del dashboard
   let html = `
     <div style="padding:.25rem 0 .75rem">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.15rem">
@@ -208,7 +204,6 @@ async function dashboard() {
       </div>
       <div style="font-size:.75rem;color:var(--text2);margin-bottom:1rem">${t('bienvenido')}, ${h(currentPerfil?.nombre || '')}</div>`;
 
-  // Indicador de caché
   if (fromCache) {
     html += `<div id="cache-indicator" style="background:var(--warning);color:#000;padding:2px 8px;border-radius:20px;font-size:.65rem;margin-bottom:.5rem;display:inline-block">📦 Datos en caché</div>`;
   }
@@ -219,7 +214,7 @@ async function dashboard() {
       ${typeof esModoSimple === 'function' && esModoSimple() ? `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
           <div onclick="modalNuevaReparacionSimple()" style="background:linear-gradient(145deg, var(--surface), var(--surface2));border:2px solid var(--accent);border-radius:16px;padding:1.2rem .5rem;text-align:center;cursor:pointer">
-            <div style="margin-bottom:8px">${iconoSVG('nuevoTrabajo', 'var(--accent)', 32)}</div>
+            <div style="font-size:2.5rem">🔧</div>
             <div style="font-family:var(--font-head);font-size:1rem;color:var(--accent);margin-top:.3rem">Nuevo trabajo</div>
             <div style="font-size:.7rem;color:var(--text2)">Registrar ingreso de vehículo</div>
           </div>
@@ -306,7 +301,6 @@ async function dashboard() {
 
   document.getElementById('main-content').innerHTML = html;
   
-  // Iniciar tutorial si es la primera vez en modo simple
   if (typeof esModoSimple === 'function' && esModoSimple() && typeof iniciarTutorial === 'function') {
     setTimeout(iniciarTutorial, 500);
   }
