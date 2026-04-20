@@ -1,4 +1,4 @@
-  // ─── MEJORA #7: GESTIÓN DE SUELDOS ──────────────────────────────────────────
+// ─── MEJORA #7: GESTIÓN DE SUELDOS ──────────────────────────────────────────
 
 async function sueldos() {
   const { data: periodos } = await sb.from('periodos_sueldo').select('*').eq('taller_id', tid()).order('fecha_inicio', {ascending:false});
@@ -137,14 +137,8 @@ async function registrarPagoSueldo(liquidacionId) {
   const fechaPago = new Date().toISOString().split('T')[0];
   await sb.from('liquidaciones').update({ estado:'pagado', fecha_pago: fechaPago }).eq('id', liquidacionId);
 
-  const { data: cats } = await sb.from('categorias_financieras')
-    .select('id').eq('taller_id', tid()).eq('nombre', 'Sueldos').limit(1);
-  let catId = cats?.[0]?.id;
-  if (!catId) {
-    const { data: newCat } = await sb.from('categorias_financieras')
-      .insert({ taller_id: tid(), nombre: 'Sueldos', tipo: 'egreso', es_fija: true }).select().single();
-    if (newCat) catId = newCat.id;
-  }
+  // ─── INTEGRACIÓN CON FINANZAS (MODIFICADO) ─────────────────────────────────
+  const catId = await obtenerCategoriaFinanciera('Sueldos', 'egreso');
   if (catId) {
     const descripcion = `Pago de sueldo a ${liq.empleados?.nombre || 'empleado'} (período ${formatFecha(liq.periodos_sueldo?.fecha_inicio)} - ${formatFecha(liq.periodos_sueldo?.fecha_fin)})`;
     await sb.from('movimientos_financieros').insert({
