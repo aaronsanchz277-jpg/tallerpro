@@ -1,5 +1,5 @@
 // ─── MOD-1: FINANZAS (Ingresos y Egresos) ──────────────────────────────────
-// Versión mejorada con agrupación por día y corrección de columna 'concepto'
+// Versión mejorada con agrupación por día y corrección de columna 'concepto' y ordenamiento
 
 const CATEGORIAS_FIJAS = {
   ingreso: ['Reparaciones', 'Servicios', 'Otros ingresos'],
@@ -27,7 +27,13 @@ async function finanzas() {
   const fin = hoy.toISOString().split('T')[0];
 
   const [{ data: movimientos }, { data: categorias }, balanceRes] = await Promise.all([
-    sb.from('movimientos_financieros').select('*, categorias_financieras(nombre)').eq('taller_id', tid()).gte('fecha', primerMes).lte('fecha', fin).order('fecha', {ascending: false}).order('created_at', {ascending: false}),
+    sb.from('movimientos_financieros')
+      .select('*, categorias_financieras(nombre)')
+      .eq('taller_id', tid())
+      .gte('fecha', primerMes)
+      .lte('fecha', fin)
+      .order('fecha', { ascending: false })
+      .order('id', { ascending: false }), // ← CORREGIDO: se usa 'id' en lugar de 'created_at'
     sb.from('categorias_financieras').select('*').eq('taller_id', tid()).order('nombre'),
     sb.rpc('get_balance', { p_taller_id: tid(), p_fecha_inicio: primerMes, p_fecha_fin: fin })
   ]);
