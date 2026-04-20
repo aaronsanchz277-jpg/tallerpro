@@ -3,7 +3,7 @@ let _categoriasCache = null;
 let _cacheTimestamp = 0;
 const CACHE_TTL = 60000;
 
-export async function obtenerCategoriaFinanciera(nombre, tipo = 'egreso') {
+async function obtenerCategoriaFinanciera(nombre, tipo = 'egreso') {
   if (!tid()) return null;
 
   const now = Date.now();
@@ -36,7 +36,8 @@ export async function obtenerCategoriaFinanciera(nombre, tipo = 'egreso') {
   return nueva.id;
 }
 
-export async function inicializarCategoriasFijas() {
+async function inicializarCategoriasFijas() {
+  if (!tid()) return;
   const categorias = [
     { nombre: 'Reparaciones', tipo: 'ingreso', es_fija: true },
     { nombre: 'Servicios', tipo: 'ingreso', es_fija: true },
