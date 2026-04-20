@@ -1,10 +1,24 @@
-// ─── MOD-1: FINANZAS (Ingresos y Egresos) ──────────────────────────────────
-// Versión mejorada con agrupación por día y corrección de columna 'concepto' y ordenamiento
+// ─── FINANZAS (VERSIÓN AVANZADA: RANGO DE FECHAS + AGRUPACIÓN DIARIA) ────────
+// Incluye: selector de fechas, resumen diario, botones +Ingreso/+Egreso y Conciliador.
+// Corrección definitiva: columna 'concepto' y ordenamiento correcto.
 
 const CATEGORIAS_FIJAS = {
   ingreso: ['Reparaciones', 'Servicios', 'Otros ingresos'],
   egreso: ['Repuestos', 'Sueldos', 'Alquiler', 'Servicios básicos', 'Gastos personales', 'Vales/Adelantos', 'Otros egresos']
 };
+
+// Variables para el rango de fechas (compartidas con common.js si se usa, pero aquí las manejamos localmente)
+let _finanzasFechaInicio = null;
+let _finanzasFechaFin = null;
+
+function finanzas_initFechas() {
+  if (!_finanzasFechaInicio) {
+    const hoy = new Date();
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    _finanzasFechaInicio = inicioMes.toISOString().split('T')[0];
+    _finanzasFechaFin = hoy.toISOString().split('T')[0];
+  }
+}
 
 async function finanzas_initCategorias() {
   const { data: existing } = await sb.from('categorias_financieras').select('nombre').eq('taller_id', tid()).eq('es_fija', true);
@@ -20,48 +34,83 @@ async function finanzas_initCategorias() {
   if (toInsert.length > 0) await sb.from('categorias_financieras').insert(toInsert);
 }
 
+// Función principal
 async function finanzas() {
   await finanzas_initCategorias();
-  const hoy = new Date();
-  const primerMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
-  const fin = hoy.toISOString().split('T')[0];
+  finanzas_initFechas();
 
-  const [{ data: movimientos }, { data: categorias }, balanceRes] = await Promise.all([
-    sb.from('movimientos_financieros')
-      .select('*, categorias_financieras(nombre)')
-      .eq('taller_id', tid())
-      .gte('fecha', primerMes)
-      .lte('fecha', fin)
-      .order('fecha', { ascending: false })
-      .order('id', { ascending: false }), // ← CORREGIDO: se usa 'id' en lugar de 'created_at'
-    sb.from('categorias_financieras').select('*').eq('taller_id', tid()).order('nombre'),
-    sb.rpc('get_balance', { p_taller_id: tid(), p_fecha_inicio: primerMes, p_fecha_fin: fin })
-  ]);
-
-  const balance = balanceRes.data || { total_ingresos: 0, total_egresos: 0, balance_neto: 0 };
-
-  // Agrupar movimientos por fecha
-  const movsPorFecha = {};
-  (movimientos||[]).forEach(m => {
-    const fecha = m.fecha;
-    if (!movsPorFecha[fecha]) movsPorFecha[fecha] = { ingresos: 0, egresos: 0, items: [] };
-    if (m.tipo === 'ingreso') movsPorFecha[fecha].ingresos += parseFloat(m.monto||0);
-    else movsPorFecha[fecha].egresos += parseFloat(m.monto||0);
-    movsPorFecha[fecha].items.push(m);
-  });
-
-  const fechasOrdenadas = Object.keys(movsPorFecha).sort((a,b) => b.localeCompare(a));
-
-  document.getElementById('main-content').innerHTML = `
+  const contenido = document.getElementById('main-content');
+  contenido.innerHTML = `
     <div style="padding:.25rem 0">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-        <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px">FINANZAS DEL MES</div>
-        <div style="display:flex;gap:.4rem">
-          <button class="btn-add" style="font-size:.75rem;padding:.4rem .7rem" onclick="finanzas_modalNuevo('ingreso')">+ Ingreso</button>
-          <button onclick="finanzas_modalNuevo('egreso')" style="background:var(--danger);color:#fff;border:none;border-radius:8px;padding:.4rem .7rem;font-family:var(--font-head);font-size:.75rem;cursor:pointer;letter-spacing:.5px">+ Egreso</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+        <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text)">Finanzas</div>
+        <div style="display:flex;gap:.3rem">
+          <button class="btn-add" onclick="finanzas_modalNuevo('ingreso')">+ Ingreso</button>
+          <button class="btn-add" style="background:var(--danger)" onclick="finanzas_modalNuevo('egreso')">+ Egreso</button>
         </div>
       </div>
+      
+      <!-- Selector de fechas -->
+      <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;background:var(--surface);padding:.5rem;border-radius:10px;border:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:.3rem;flex:1">
+          <input type="date" id="finanzas-fecha-inicio" value="${_finanzasFechaInicio}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:.4rem;color:var(--text);font-size:.8rem;width:100%">
+        </div>
+        <span style="color:var(--text2)">→</span>
+        <div style="display:flex;align-items:center;gap:.3rem;flex:1">
+          <input type="date" id="finanzas-fecha-fin" value="${_finanzasFechaFin}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:.4rem;color:var(--text);font-size:.8rem;width:100%">
+        </div>
+        <button onclick="finanzas_aplicarRango()" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:.4rem .8rem;font-size:.8rem;cursor:pointer;font-family:var(--font-head)">Aplicar</button>
+      </div>
+      <div style="display:flex;gap:.3rem;margin-bottom:.75rem;flex-wrap:wrap">
+        <button onclick="finanzas_setRangoRapido('este_mes')" class="tab" style="font-size:.7rem;padding:.3rem .6rem">Este mes</button>
+        <button onclick="finanzas_setRangoRapido('mes_anterior')" class="tab" style="font-size:.7rem;padding:.3rem .6rem">Mes anterior</button>
+        <button onclick="finanzas_setRangoRapido('ultimos_30')" class="tab" style="font-size:.7rem;padding:.3rem .6rem">Últ. 30 días</button>
+        <button onclick="finanzas_setRangoRapido('este_anio')" class="tab" style="font-size:.7rem;padding:.3rem .6rem">Este año</button>
+      </div>
+      
+      <div id="finanzas-contenido-dinamico">
+        <div style="text-align:center;padding:2rem;color:var(--text2)">Cargando datos financieros...</div>
+      </div>
+    </div>
+  `;
 
+  await finanzas_cargarDatos();
+}
+
+async function finanzas_cargarDatos() {
+  const contenedor = document.getElementById('finanzas-contenido-dinamico');
+  if (!contenedor) return;
+
+  const inicio = _finanzasFechaInicio;
+  const fin = _finanzasFechaFin;
+
+  try {
+    const [{ data: movimientos }, balanceRes] = await Promise.all([
+      sb.from('movimientos_financieros')
+        .select('*, categorias_financieras(nombre)')
+        .eq('taller_id', tid())
+        .gte('fecha', inicio)
+        .lte('fecha', fin)
+        .order('fecha', { ascending: false })
+        .order('id', { ascending: false }),   // ← Orden correcto
+      sb.rpc('get_balance', { p_taller_id: tid(), p_fecha_inicio: inicio, p_fecha_fin: fin })
+    ]);
+
+    const balance = balanceRes.data || { total_ingresos: 0, total_egresos: 0, balance_neto: 0 };
+
+    // Agrupar por fecha
+    const movsPorFecha = {};
+    (movimientos||[]).forEach(m => {
+      const fecha = m.fecha;
+      if (!movsPorFecha[fecha]) movsPorFecha[fecha] = { ingresos: 0, egresos: 0, items: [] };
+      if (m.tipo === 'ingreso') movsPorFecha[fecha].ingresos += parseFloat(m.monto||0);
+      else movsPorFecha[fecha].egresos += parseFloat(m.monto||0);
+      movsPorFecha[fecha].items.push(m);
+    });
+
+    const fechasOrdenadas = Object.keys(movsPorFecha).sort((a,b) => b.localeCompare(a));
+
+    let html = `
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:12px;padding:.75rem;text-align:center">
           <div style="font-size:.6rem;color:var(--success);letter-spacing:1px;font-family:var(--font-head)">INGRESOS</div>
@@ -82,18 +131,20 @@ async function finanzas() {
         <button onclick="modalCierreCaja()" style="background:rgba(255,204,0,.1);border:1px solid rgba(255,204,0,.25);color:var(--warning);border-radius:8px;padding:.4rem .6rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">💵 Cierre de caja</button>
         <button onclick="conciliador_modalConciliacion()" style="background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.25);color:var(--accent);border-radius:8px;padding:.4rem .6rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">🔍 Conciliar</button>
       </div>
+    `;
 
-      ${fechasOrdenadas.length > 0 ? fechasOrdenadas.map(fecha => {
+    if (fechasOrdenadas.length > 0) {
+      html += fechasOrdenadas.map(fecha => {
         const grupo = movsPorFecha[fecha];
         const netoDia = grupo.ingresos - grupo.egresos;
         return `
-        <div style="margin-bottom:1.25rem">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
-            <div style="font-family:var(--font-head);font-size:.8rem;color:var(--accent);letter-spacing:1px">${formatFecha(fecha)}</div>
-            <div style="display:flex;gap:.75rem;font-size:.7rem">
+        <div style="margin-bottom:1.5rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;background:var(--surface2);padding:.4rem .6rem;border-radius:8px">
+            <div style="font-family:var(--font-head);font-size:.9rem;color:var(--accent);letter-spacing:1px">${formatFecha(fecha)}</div>
+            <div style="display:flex;gap:1rem;font-size:.75rem">
               <span style="color:var(--success)">+₲${gs(grupo.ingresos)}</span>
               <span style="color:var(--danger)">-₲${gs(grupo.egresos)}</span>
-              <span style="color:${netoDia >= 0 ? 'var(--accent)' : 'var(--danger)'}">=₲${gs(netoDia)}</span>
+              <span style="color:${netoDia >= 0 ? 'var(--accent)' : 'var(--danger)'};font-weight:bold">=₲${gs(netoDia)}</span>
             </div>
           </div>
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
@@ -111,10 +162,54 @@ async function finanzas() {
             }).join('')}
           </div>
         </div>`;
-      }).join('') : '<div class="empty"><p>No hay movimientos este mes</p></div>'}
-    </div>`;
+      }).join('');
+    } else {
+      html += '<div class="empty"><p>No hay movimientos en este período</p></div>';
+    }
+
+    contenedor.innerHTML = html;
+  } catch (error) {
+    contenedor.innerHTML = `<div class="empty"><p>Error al cargar los datos: ${error.message}</p></div>`;
+  }
 }
 
+// Funciones para el selector de fechas
+function finanzas_aplicarRango() {
+  _finanzasFechaInicio = document.getElementById('finanzas-fecha-inicio').value;
+  _finanzasFechaFin = document.getElementById('finanzas-fecha-fin').value;
+  finanzas_cargarDatos();
+}
+
+function finanzas_setRangoRapido(tipo) {
+  const hoy = new Date();
+  let inicio, fin;
+  switch(tipo) {
+    case 'este_mes':
+      inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+      fin = hoy;
+      break;
+    case 'mes_anterior':
+      inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+      fin = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+      break;
+    case 'ultimos_30':
+      fin = hoy;
+      inicio = new Date(hoy);
+      inicio.setDate(hoy.getDate() - 30);
+      break;
+    case 'este_anio':
+      inicio = new Date(hoy.getFullYear(), 0, 1);
+      fin = hoy;
+      break;
+  }
+  _finanzasFechaInicio = inicio.toISOString().split('T')[0];
+  _finanzasFechaFin = fin.toISOString().split('T')[0];
+  document.getElementById('finanzas-fecha-inicio').value = _finanzasFechaInicio;
+  document.getElementById('finanzas-fecha-fin').value = _finanzasFechaFin;
+  finanzas_cargarDatos();
+}
+
+// ─── MODALES (NUEVO/EDITAR) ─────────────────────────────────────────────────
 async function finanzas_modalNuevo(tipo) {
   const { data: cats } = await sb.from('categorias_financieras').select('id,nombre').eq('taller_id', tid()).or(`tipo.eq.${tipo},tipo.eq.ambos`).order('nombre');
   openModal(`
@@ -151,7 +246,7 @@ async function finanzas_guardar(id=null) {
   
   const data = {
     tipo: document.getElementById('f-fin-tipo').value,
-    concepto,
+    concepto,                          // ← CORRECTO: 'concepto' en lugar de 'descripcion'
     monto,
     fecha: document.getElementById('f-fin-fecha').value,
     categoria_id: document.getElementById('f-fin-cat').value || null,
@@ -167,8 +262,8 @@ async function finanzas_guardar(id=null) {
   
   toast('Movimiento guardado', 'success');
   clearCache('finanzas');
-  closeModal(); 
-  finanzas();
+  closeModal();
+  finanzas_cargarDatos(); // Refrescar solo los datos, sin recargar toda la página
 }
 
 async function finanzas_modalEditar(id) {
@@ -201,12 +296,13 @@ async function finanzas_eliminarConSafeCall(id) {
       await sb.from('movimientos_financieros').delete().eq('id', id);
       toast('Eliminado', 'success');
       clearCache('finanzas');
-      closeModal(); 
-      finanzas();
+      closeModal();
+      finanzas_cargarDatos();
     }, null, 'No se pudo eliminar el movimiento');
   });
 }
 
+// ─── CATEGORÍAS ─────────────────────────────────────────────────────────────
 async function finanzas_modalCategorias() {
   const { data: cats } = await sb.from('categorias_financieras').select('*').eq('taller_id', tid()).order('tipo').order('nombre');
   openModal(`
