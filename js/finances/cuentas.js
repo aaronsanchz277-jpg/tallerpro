@@ -133,12 +133,13 @@ async function marcarCuentaPagada(id) {
   const { data:c } = await sb.from('cuentas_pagar').select('proveedor,monto').eq('id',id).single();
   await sb.from('cuentas_pagar').update({ pagada:true, fecha_pago:new Date().toISOString().split('T')[0] }).eq('id',id);
   
-  const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id',tid()).eq('nombre','Repuestos').limit(1);
-  if (cats?.length && c) {
+  // ─── INTEGRACIÓN CON FINANZAS (MODIFICADO) ─────────────────────────────────
+  const categoriaId = await obtenerCategoriaFinanciera('Repuestos', 'egreso');
+  if (categoriaId && c) {
     await sb.from('movimientos_financieros').insert({
       taller_id: tid(),
       tipo: 'egreso',
-      categoria_id: cats[0].id,
+      categoria_id: categoriaId,
       monto: c.monto,
       descripcion: 'Pago proveedor: ' + c.proveedor,
       fecha: new Date().toISOString().split('T')[0],
