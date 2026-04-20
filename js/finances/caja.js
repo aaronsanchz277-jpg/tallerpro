@@ -82,4 +82,3 @@ async function cargarDatosCierreCaja(fecha) {
     contenido.innerHTML = `<div style="color:var(--danger);text-align:center;padding:1rem">Error al cargar los datos: ${error.message}</div>`;
   }
 }
-    
