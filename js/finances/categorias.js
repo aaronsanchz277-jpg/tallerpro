@@ -1,12 +1,13 @@
 // ─── CATEGORÍAS FINANCIERAS CENTRALIZADAS ─────────────────────────────────────
 let _categoriasCache = null;
-let _cacheTimestampCat = 0;  // renombrado también
+let _cacheTimestamp = 0;
+const CAT_FIN_CACHE_TTL = 60000;
 
 async function obtenerCategoriaFinanciera(nombre, tipo = 'egreso') {
   if (!tid()) return null;
 
   const now = Date.now();
-  if (_categoriasCache && (now - _cacheTimestampCat) < 60000) {
+  if (_categoriasCache && (now - _cacheTimestamp) < CAT_FIN_CACHE_TTL) {
     const encontrada = _categoriasCache.find(c => c.nombre === nombre);
     if (encontrada) return encontrada.id;
   }
@@ -35,4 +36,31 @@ async function obtenerCategoriaFinanciera(nombre, tipo = 'egreso') {
   return nueva.id;
 }
 
-// (resto del archivo igual, sin CACHE_TTL ni inicializarCategoriasFijas si no se usa)
+async function inicializarCategoriasFijas() {
+  if (!tid()) return;
+  const categorias = [
+    { nombre: 'Reparaciones', tipo: 'ingreso', es_fija: true },
+    { nombre: 'Servicios', tipo: 'ingreso', es_fija: true },
+    { nombre: 'Otros ingresos', tipo: 'ingreso', es_fija: true },
+    { nombre: 'Repuestos', tipo: 'egreso', es_fija: true },
+    { nombre: 'Sueldos', tipo: 'egreso', es_fija: true },
+    { nombre: 'Alquiler', tipo: 'egreso', es_fija: true },
+    { nombre: 'Servicios básicos', tipo: 'egreso', es_fija: true },
+    { nombre: 'Gastos personales', tipo: 'egreso', es_fija: true },
+    { nombre: 'Vales/Adelantos', tipo: 'egreso', es_fija: true },
+    { nombre: 'Otros egresos', tipo: 'egreso', es_fija: true }
+  ];
+
+  for (const cat of categorias) {
+    const { data: existe } = await sb
+      .from('categorias_financieras')
+      .select('id')
+      .eq('taller_id', tid())
+      .eq('nombre', cat.nombre)
+      .maybeSingle();
+    if (!existe) {
+      await sb.from('categorias_financieras').insert({ ...cat, taller_id: tid() });
+    }
+  }
+  _categoriasCache = null;
+}
