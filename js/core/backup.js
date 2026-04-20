@@ -1,25 +1,22 @@
 // ─── BACKUP AUTOMÁTICO DE COLA OFFLINE ──────────────────────────────────────
-// Guarda una copia de seguridad de la cola offline antes de sincronizar.
-// Se ejecuta en segundo plano, sin intervención del usuario.
-
 const BACKUP_KEY = 'tallerpro_queue_backup';
 const BACKUP_TIMESTAMP_KEY = 'tallerpro_queue_backup_ts';
 
 async function backup_crearSnapshot() {
   try {
+    if (typeof getAllQueue !== 'function') return;
     const queue = await getAllQueue();
     if (!queue || queue.length === 0) return;
 
     const snapshot = {
       queue: queue,
       fecha: new Date().toISOString(),
-      usuario: currentUser?.id || 'desconocido',
-      taller: tid() || 'desconocido'
+      usuario: (typeof currentUser !== 'undefined' && currentUser?.id) || 'desconocido',
+      taller: (typeof tid === 'function' && tid()) || 'desconocido'
     };
 
     localStorage.setItem(BACKUP_KEY, JSON.stringify(snapshot));
     localStorage.setItem(BACKUP_TIMESTAMP_KEY, Date.now().toString());
-
     console.log('✅ Backup de cola offline creado:', queue.length, 'items');
   } catch (e) {
     console.warn('Error creando backup offline:', e);
@@ -41,6 +38,7 @@ function backup_obtenerTimestamp() {
 }
 
 async function backup_restaurarDesdeSnapshot() {
+  if (typeof openOfflineDB !== 'function') return { restaurado: 0 };
   const snapshot = backup_obtenerSnapshot();
   if (!snapshot || !snapshot.queue || snapshot.queue.length === 0) {
     return { restaurado: 0 };
@@ -53,7 +51,6 @@ async function backup_restaurarDesdeSnapshot() {
   let restaurado = 0;
   for (const item of snapshot.queue) {
     try {
-      // Evitar duplicados
       const all = await new Promise(resolve => {
         const req = store.getAll();
         req.onsuccess = () => resolve(req.result);
@@ -79,7 +76,6 @@ async function backup_restaurarDesdeSnapshot() {
     }
   }
 
-  // No borramos el backup automáticamente; el usuario puede decidir limpiarlo
   return { restaurado };
 }
 
@@ -89,8 +85,10 @@ function backup_limpiarSnapshot() {
 }
 
 // Interceptar processOfflineQueue para hacer backup antes de sincronizar
-const originalProcessOfflineQueue = processOfflineQueue;
-processOfflineQueue = async function() {
-  await backup_crearSnapshot();
-  return await originalProcessOfflineQueue.apply(this, arguments);
-};
+if (typeof processOfflineQueue === 'function') {
+  const originalProcessOfflineQueue = processOfflineQueue;
+  processOfflineQueue = async function() {
+    await backup_crearSnapshot();
+    return await originalProcessOfflineQueue.apply(this, arguments);
+  };
+}
