@@ -1,10 +1,10 @@
 // ─── ÍTEMS DE REPARACIÓN ────────────────────────────────────────────────────
-export async function cargarItemsReparacion(repId) {
+async function cargarItemsReparacion(repId) {
   const { data } = await sb.from('reparacion_items').select('*').eq('reparacion_id', repId).order('created_at');
   return data || [];
 }
 
-export function renderItemsReparacion(items) {
+function renderItemsReparacion(items) {
   if (!items || items.length === 0) return '<p style="color:var(--text2);font-size:.85rem">Sin ítems registrados</p>';
   return items.map(i => `
     <div class="factura-item">
@@ -14,7 +14,7 @@ export function renderItemsReparacion(items) {
   `).join('');
 }
 
-export async function modalAgregarItemReparacion(repId) {
+async function modalAgregarItemReparacion(repId) {
   const { data: inv } = await sb.from('inventario').select('id,nombre,precio_unitario,cantidad').eq('taller_id',tid()).order('nombre');
   openModal(`
     <div class="modal-title">Agregar ítem a la reparación</div>
@@ -40,7 +40,7 @@ export async function modalAgregarItemReparacion(repId) {
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
-export function llenarDesdeInventario() {
+function llenarDesdeInventario() {
   const sel = document.getElementById('item-inv');
   const opt = sel.options[sel.selectedIndex];
   if (opt && opt.value) {
@@ -50,7 +50,7 @@ export function llenarDesdeInventario() {
   }
 }
 
-export async function guardarItemReparacion(repId) {
+async function guardarItemReparacion(repId) {
   await safeCall(async () => {
     const tipo = document.getElementById('item-tipo').value;
     const desc = document.getElementById('item-desc').value.trim();
