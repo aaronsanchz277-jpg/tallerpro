@@ -79,7 +79,7 @@ function updateWizardDots(step) {
   });
 }
 
-export async function modalNuevaReparacionSimple() {
+async function modalNuevaReparacionSimple() {
   window._wizardStep = 1;
   window._wizardData = { cliente_id: null, vehiculo_id: null, patente_nueva: '', descripcion: '', costo: 0 };
 
@@ -101,7 +101,7 @@ export async function modalNuevaReparacionSimple() {
   }
 }
 
-export function wizardToggleNuevoCliente() {
+function wizardToggleNuevoCliente() {
   const div = document.getElementById('wizard-nuevo-cliente');
   if (div) {
     div.style.display = div.style.display === 'none' ? 'block' : 'none';
@@ -110,7 +110,7 @@ export function wizardToggleNuevoCliente() {
   }
 }
 
-export function wizardToggleNuevoVehiculo() {
+function wizardToggleNuevoVehiculo() {
   const div = document.getElementById('wizard-nuevo-vehiculo');
   if (div) {
     div.style.display = div.style.display === 'none' ? 'block' : 'none';
@@ -119,7 +119,7 @@ export function wizardToggleNuevoVehiculo() {
   }
 }
 
-export async function wizardNextStep() {
+async function wizardNextStep() {
   const step = window._wizardStep;
   
   if (step === 1) {
@@ -192,7 +192,7 @@ export async function wizardNextStep() {
   }
 }
 
-export function wizardPrevStep() {
+function wizardPrevStep() {
   if (window._wizardStep === 2) {
     window._wizardStep = 1;
     const content = document.getElementById('wizard-content');
@@ -206,7 +206,7 @@ export function wizardPrevStep() {
   }
 }
 
-export async function wizardGuardar() {
+async function wizardGuardar() {
   const descInput = document.getElementById('wizard-desc');
   const desc = descInput ? descInput.value.trim() : '';
   if (!desc) {
