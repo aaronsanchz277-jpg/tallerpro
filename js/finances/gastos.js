@@ -112,7 +112,7 @@ async function guardarGasto(id) {
     gastoId = saved?.[0]?.id;
   }
   
-  // ─── INTEGRACIÓN CON FINANZAS (MODIFICADO) ─────────────────────────────────
+  // Integración con Finanzas (MODIFICADO)
   try {
     const catFinanciera = categoria || 'Gastos generales';
     const categoriaId = await obtenerCategoriaFinanciera(catFinanciera, 'egreso');
