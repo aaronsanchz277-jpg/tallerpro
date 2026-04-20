@@ -1,5 +1,5 @@
 // ─── PAGOS DE REPARACIÓN ────────────────────────────────────────────────────
-export async function modalPagosReparacion(repId, montoSugerido = null) {
+async function modalPagosReparacion(repId, montoSugerido = null) {
   const [{ data: rep }, { data: pagos }] = await Promise.all([
     sb.from('reparaciones').select('costo,descripcion').eq('id', repId).single(),
     sb.from('pagos_reparacion').select('*').eq('reparacion_id', repId).order('fecha', {ascending:false})
@@ -53,7 +53,7 @@ export async function modalPagosReparacion(repId, montoSugerido = null) {
     <button class="btn-secondary" onclick="closeModal()">Cerrar</button>`);
 }
 
-export async function guardarPagoReparacion(repId) {
+async function guardarPagoReparacion(repId) {
   await safeCall(async () => {
     const monto = parseFloat(document.getElementById('f-pago-monto').value);
     if (!validatePositiveNumber(monto, 'Monto')) return;
