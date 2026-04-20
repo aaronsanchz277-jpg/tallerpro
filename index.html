@@ -210,7 +210,8 @@
 </div>
 
 <!-- ==================== SCRIPTS ==================== -->
-<!-- Núcleo -->
+<!-- ==================== SCRIPTS ==================== -->
+<!-- Núcleo (DEBE ir primero) -->
 <script src="./js/core/config.js"></script>
 <script src="./js/core/pwa.js"></script>
 <script src="./js/core/offline.js"></script>
@@ -219,7 +220,7 @@
 <script src="./js/core/core.js"></script>
 <script src="./js/core/components.js"></script>
 <script src="./js/core/validators.js"></script>
-<script src="./js/core/backup.js"></script>        
+<script src="./js/core/backup.js"></script>
 <script src="./js/core/debug.js"></script>
 
 <!-- Autenticación -->
@@ -227,10 +228,7 @@
 <script src="./js/auth/plan.js"></script>
 <script src="./js/auth/admin.js"></script>
 
-<!-- Navegación -->
-<script src="./js/navigation/navigation.js"></script>
-
-<!-- Dashboard -->
+<!-- Dashboard y vistas principales (DEBEN ir antes de navigation) -->
 <script src="./js/dashboard/dashboard.js"></script>
 <script src="./js/dashboard/simple-mode.js?v=2"></script>
 <script src="./js/dashboard/modo-taller.js"></script>
@@ -240,7 +238,7 @@
 <script src="./js/crm/vehiculos.js"></script>
 <script src="./js/crm/cliente-view.js"></script>
 
-<!-- Taller (Reparaciones modularizado - Orden importante) -->
+<!-- Taller (Reparaciones modularizado) -->
 <script src="./js/workshop/reparaciones-core.js"></script>
 <script src="./js/workshop/reparaciones-list.js"></script>
 <script src="./js/workshop/reparaciones-detalle.js"></script>
@@ -250,8 +248,7 @@
 <script src="./js/workshop/reparaciones-fotos.js"></script>
 <script src="./js/workshop/reparaciones-modales.js"></script>
 <script src="./js/workshop/reparaciones-wizard.js"></script>
-<script src="./js/workshop/stock-realtime.js"></script>   <!-- NUEVO -->
-<script src="./js/workshop/reparaciones.js"></script>   <!-- Índice opcional -->
+<script src="./js/workshop/reparaciones.js"></script>
 
 <!-- Otros módulos de taller -->
 <script src="./js/workshop/inventario.js"></script>
@@ -295,8 +292,14 @@
 <script src="./js/integrations/ocr.js"></script>
 <script src="./js/integrations/google-calendar.js"></script>
 <script src="./js/integrations/recordatorios.js"></script>
-<script src="./js/integrations/realtime.js"></script>
+<script src="./js/integrations/realtime.js"></script>          <!-- ← realtime_init definido aquí -->
 <script src="./js/integrations/integrations-wizard.js"></script>
+
+<!-- Stock en tiempo real (después de realtime.js) -->
+<script src="./js/workshop/stock-realtime.js"></script>
+
+<!-- Navegación (DEBE ir DESPUÉS de todas las definiciones de página) -->
+<script src="./js/navigation/navigation.js"></script>
 
 <!-- UX -->
 <script src="./js/ux/tutorial.js"></script>
