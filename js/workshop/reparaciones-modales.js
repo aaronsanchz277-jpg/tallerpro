@@ -1,7 +1,5 @@
 // ─── MODALES DE NUEVA/EDITAR REPARACIÓN ─────────────────────────────────────
-import { TIPOS_TRABAJO, TIPO_ICONS } from './reparaciones-core.js';
-
-export async function modalNuevaReparacion() {
+async function modalNuevaReparacion() {
   const clienteSelect = await renderClienteSelect('f-cliente', null, true);
   const vehiculoSelect = await renderVehiculoSelect('f-vehiculo', null, null, true);
   const estadoSelect = renderEstadoSelect('f-estado', 'pendiente');
@@ -54,7 +52,7 @@ export async function modalNuevaReparacion() {
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
 }
 
-export function toggleNuevoVehRep() {
+function toggleNuevoVehRep() {
   const el = document.getElementById('nuevo-veh-rep');
   const btn = document.getElementById('btn-toggle-nv');
   if (el.style.display === 'none') {
@@ -66,13 +64,13 @@ export function toggleNuevoVehRep() {
   }
 }
 
-export async function guardarReparacionConSafeCall() {
+async function guardarReparacionConSafeCall() {
   await safeCall(async () => {
     await guardarReparacion();
   }, null, 'No se pudo guardar el trabajo');
 }
 
-export async function guardarReparacion(id=null) {
+async function guardarReparacion(id=null) {
   const desc = document.getElementById('f-desc').value.trim();
   if (!validateRequired(desc, 'Descripción')) return;
   
@@ -135,7 +133,7 @@ export async function guardarReparacion(id=null) {
   reparaciones();
 }
 
-export async function modalEditarReparacion(id) {
+async function modalEditarReparacion(id) {
   const [{ data:r }] = await Promise.all([sb.from('reparaciones').select('*').eq('id',id).single()]);
   const clienteSelect = await renderClienteSelect('f-cliente', r.cliente_id, true);
   const vehiculoSelect = await renderVehiculoSelect('f-vehiculo', r.vehiculo_id, null, true);
@@ -162,7 +160,7 @@ export async function modalEditarReparacion(id) {
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
 }
 
-export async function eliminarReparacion(id) {
+async function eliminarReparacion(id) {
   confirmar('Esta acción eliminará el trabajo permanentemente.', async () => {
     await safeCall(async () => {
       await offlineDelete('reparaciones', 'id', id);
