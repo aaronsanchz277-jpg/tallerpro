@@ -1,5 +1,5 @@
 // ─── CHECKLIST DE RECEPCIÓN Y FICHA ──────────────────────────────────────────
-export async function modalChecklistRecepcion(repId) {
+async function modalChecklistRecepcion(repId) {
   const { data:r } = await sb.from('reparaciones').select('checklist_recepcion').eq('id',repId).single();
   const checklist = r?.checklist_recepcion || {};
   const items = [
@@ -25,7 +25,7 @@ export async function modalChecklistRecepcion(repId) {
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
 }
 
-export async function guardarChecklist(repId) {
+async function guardarChecklist(repId) {
   const items = document.querySelectorAll('#modal-overlay .modal-content > div[style*="border-bottom"]');
   const checklist = {};
   items.forEach(row => {
@@ -47,7 +47,7 @@ export async function guardarChecklist(repId) {
   }, null, 'No se pudo guardar el checklist');
 }
 
-export async function modalFichaRecepcion(repId) {
+async function modalFichaRecepcion(repId) {
   const { data:rep } = await sb.from('reparaciones').select('*, vehiculos(patente,marca,modelo,color), clientes(nombre,telefono)').eq('id',repId).single();
   if(!rep) return;
   openModal(`
@@ -84,7 +84,7 @@ export async function modalFichaRecepcion(repId) {
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
-export async function confirmarIngreso(repId) {
+async function confirmarIngreso(repId) {
   await safeCall(async () => {
     const accesorios = [...document.querySelectorAll('.fr-acc:checked')].map(c=>c.value);
     const estadoInterior = {};
@@ -100,7 +100,7 @@ export async function confirmarIngreso(repId) {
   }, null, 'Error al confirmar ingreso');
 }
 
-export function verFichaRecepcion(repId) {
+function verFichaRecepcion(repId) {
   sb.from('reparaciones').select('ficha_recepcion, vehiculos(patente,marca), clientes(nombre)').eq('id',repId).single().then(({data:rep})=>{
     if(!rep||!rep.ficha_recepcion){toast('No hay ficha de recepción','error');return;}
     const f=rep.ficha_recepcion;
@@ -124,7 +124,7 @@ export function verFichaRecepcion(repId) {
   });
 }
 
-export async function generarCartaConformidad(repId) {
+async function generarCartaConformidad(repId) {
   const { data:rep } = await sb.from('reparaciones').select('*, vehiculos(patente,marca,modelo), clientes(nombre)').eq('id',repId).single();
   if(!rep) return;
   const tallerNombre = currentPerfil?.talleres?.nombre || 'TallerPro';
@@ -152,7 +152,7 @@ export async function generarCartaConformidad(repId) {
     </div>`);
 }
 
-export async function marcarEntregado(repId) {
+async function marcarEntregado(repId) {
   await safeCall(async () => {
     await sb.from('reparaciones').update({ estado:'finalizado', fecha_entrega:new Date().toISOString() }).eq('id',repId);
     clearCache('reparaciones');toast('✓ Vehículo entregado','success');closeModal();navigate('reparaciones');
