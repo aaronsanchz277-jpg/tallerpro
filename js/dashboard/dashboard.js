@@ -23,7 +23,6 @@ async function cargarDashboardConfig() {
 async function modalConfigurarKPIs() {
   const config = await cargarDashboardConfig();
   
-  // Iconos SVG para los KPIs disponibles
   const iconMap = {
     clientes: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
     vehiculos: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14v-5H5v5zm0 0v3h3v-3h8v3h3v-3M5 12V7h14v5"/><path d="M7 7l2-3h6l2 3"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>`,
@@ -115,7 +114,6 @@ async function dashboard() {
   const hoy = fechaHoy();
   const primerMes = primerDiaMes();
 
-  // Obtener estadísticas consolidadas vía RPC con caché
   const { data: stats, error, fromCache } = await cachedQuery('dash_stats', () => 
     sb.rpc('get_dashboard_stats', { p_taller_id: tid() })
   );
@@ -126,7 +124,6 @@ async function dashboard() {
     return;
   }
 
-  // Cargar configuración de KPIs
   const kpiConfig = await cargarDashboardConfig();
 
   const totalClientes = stats.total_clientes || 0;
@@ -215,7 +212,6 @@ async function dashboard() {
     }
   }
 
-  // ─── ÚLTIMOS MOVIMIENTOS DE CAJA (Vista rápida) ────────────────────────────
   let ultimosMovimientosHTML = '';
   if (currentPerfil?.rol === 'admin') {
     try {
@@ -410,7 +406,6 @@ async function buscarPatente(valor) {
       html += vehs.map(v => {
         const reps = (v.reparaciones || []).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 5);
         
-        // Lógica de garantía
         let garantiaHTML = '';
         const ahora = new Date();
         const reparacionEnGarantia = reps.find(r => {
@@ -523,11 +518,11 @@ async function reportes() {
       </div>
       ${repGastosMes>0?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:.75rem;cursor:pointer" onclick="navigate('gastos')">
-          <div style="font-size:.68rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">GASTOS MES</div>
+          <div style="font-size:.68rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">${t('dashGastosMes')}</div>
           <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--danger)">₲${gs(repGastosMes)}</div>
         </div>
         <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem">
-          <div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">GANANCIA NETA</div>
+          <div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">${t('dashGananciaNeta')}</div>
           <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${gananciaNeta>=0?'var(--success)':'var(--danger)'}">₲${gs(gananciaNeta)}</div>
         </div>
       </div>`:''}
