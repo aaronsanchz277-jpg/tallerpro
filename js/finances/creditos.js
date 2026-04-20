@@ -44,15 +44,15 @@ async function marcarPagadoConSafeCall(id) {
 async function marcarPagado(id) {
   await offlineUpdate('fiados', { pagado: true }, 'id', id);
   
-  // Registrar ingreso en finanzas
+  // ─── INTEGRACIÓN CON FINANZAS (MODIFICADO) ─────────────────────────────────
   const { data: credito } = await sb.from('fiados').select('monto, cliente_id, descripcion').eq('id', id).single();
   if (credito) {
-    const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id', tid()).eq('nombre', 'Otros ingresos').limit(1);
-    if (cats?.length) {
+    const categoriaId = await obtenerCategoriaFinanciera('Otros ingresos', 'ingreso');
+    if (categoriaId) {
       await sb.from('movimientos_financieros').insert({
         taller_id: tid(),
         tipo: 'ingreso',
-        categoria_id: cats[0].id,
+        categoria_id: categoriaId,
         monto: credito.monto,
         descripcion: 'Cobro de crédito: ' + (credito.descripcion || ''),
         fecha: new Date().toISOString().split('T')[0],
