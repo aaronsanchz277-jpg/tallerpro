@@ -16,8 +16,7 @@ function getModoSimpleToggle() {
   return `
     <div style="display:flex;justify-content:flex-end;margin-bottom:.5rem">
       <button onclick="toggleModoSimple()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:20px;padding:.3rem .8rem;font-size:.7rem;cursor:pointer;display:flex;align-items:center;gap:.3rem">
-        ${_modoSimple ? iconoSVG('config', 'var(--text2)', 14) : iconoSVG('config', 'var(--accent)', 14)}
-        ${_modoSimple ? 'Modo avanzado' : 'Modo simple'}
+        <span>${_modoSimple ? '📋' : '🔧'}</span> ${_modoSimple ? 'Modo avanzado' : 'Modo simple'}
       </button>
     </div>
   `;
