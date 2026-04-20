@@ -1,4 +1,5 @@
 // ─── MOD-1: FINANZAS (Ingresos y Egresos) ──────────────────────────────────
+// Versión mejorada con agrupación por día y corrección de columna 'concepto'
 
 const CATEGORIAS_FIJAS = {
   ingreso: ['Reparaciones', 'Servicios', 'Otros ingresos'],
@@ -26,12 +27,24 @@ async function finanzas() {
   const fin = hoy.toISOString().split('T')[0];
 
   const [{ data: movimientos }, { data: categorias }, balanceRes] = await Promise.all([
-    sb.from('movimientos_financieros').select('*, categorias_financieras(nombre)').eq('taller_id', tid()).gte('fecha', primerMes).lte('fecha', fin).order('fecha', {ascending:false}),
+    sb.from('movimientos_financieros').select('*, categorias_financieras(nombre)').eq('taller_id', tid()).gte('fecha', primerMes).lte('fecha', fin).order('fecha', {ascending: false}).order('created_at', {ascending: false}),
     sb.from('categorias_financieras').select('*').eq('taller_id', tid()).order('nombre'),
     sb.rpc('get_balance', { p_taller_id: tid(), p_fecha_inicio: primerMes, p_fecha_fin: fin })
   ]);
 
   const balance = balanceRes.data || { total_ingresos: 0, total_egresos: 0, balance_neto: 0 };
+
+  // Agrupar movimientos por fecha
+  const movsPorFecha = {};
+  (movimientos||[]).forEach(m => {
+    const fecha = m.fecha;
+    if (!movsPorFecha[fecha]) movsPorFecha[fecha] = { ingresos: 0, egresos: 0, items: [] };
+    if (m.tipo === 'ingreso') movsPorFecha[fecha].ingresos += parseFloat(m.monto||0);
+    else movsPorFecha[fecha].egresos += parseFloat(m.monto||0);
+    movsPorFecha[fecha].items.push(m);
+  });
+
+  const fechasOrdenadas = Object.keys(movsPorFecha).sort((a,b) => b.localeCompare(a));
 
   document.getElementById('main-content').innerHTML = `
     <div style="padding:.25rem 0">
@@ -59,25 +72,40 @@ async function finanzas() {
       </div>
 
       <div style="display:flex;gap:.4rem;margin-bottom:1rem">
-        <button class="btn-secondary" style="margin:0;font-size:.75rem;padding:.4rem .6rem" onclick="finanzas_modalCategorias()">⚙ Categorías</button>
+        <button class="btn-secondary" style="margin:0;font-size:.75rem;padding:.4rem .6rem" onclick="finanzas_modalCategorias()">📌 Categorías</button>
         <button onclick="modalCierreCaja()" style="background:rgba(255,204,0,.1);border:1px solid rgba(255,204,0,.25);color:var(--warning);border-radius:8px;padding:.4rem .6rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">💵 Cierre de caja</button>
+        <button onclick="conciliador_modalConciliacion()" style="background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.25);color:var(--accent);border-radius:8px;padding:.4rem .6rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">🔍 Conciliar</button>
       </div>
 
-      ${(movimientos||[]).length > 0 ? `
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
-        ${(movimientos||[]).map((m, i) => {
-          const esIngreso = m.tipo === 'ingreso';
-          return `
-          <div style="display:flex;align-items:center;padding:.65rem .75rem;${i > 0 ? 'border-top:1px solid var(--border)' : ''};gap:.6rem" onclick="finanzas_modalEditar('${m.id}')">
-            <div style="width:32px;height:32px;border-radius:8px;background:${esIngreso ? 'rgba(0,255,136,.1)' : 'rgba(255,68,68,.1)'};display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0">${esIngreso ? '↑' : '↓'}</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.concepto)}</div>
-              <div style="font-size:.68rem;color:var(--text2)">${formatFecha(m.fecha)} · ${h(m.categorias_financieras?.nombre || 'Sin categoría')}</div>
+      ${fechasOrdenadas.length > 0 ? fechasOrdenadas.map(fecha => {
+        const grupo = movsPorFecha[fecha];
+        const netoDia = grupo.ingresos - grupo.egresos;
+        return `
+        <div style="margin-bottom:1.25rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+            <div style="font-family:var(--font-head);font-size:.8rem;color:var(--accent);letter-spacing:1px">${formatFecha(fecha)}</div>
+            <div style="display:flex;gap:.75rem;font-size:.7rem">
+              <span style="color:var(--success)">+₲${gs(grupo.ingresos)}</span>
+              <span style="color:var(--danger)">-₲${gs(grupo.egresos)}</span>
+              <span style="color:${netoDia >= 0 ? 'var(--accent)' : 'var(--danger)'}">=₲${gs(netoDia)}</span>
             </div>
-            <div style="font-family:var(--font-head);font-size:.95rem;color:${esIngreso ? 'var(--success)' : 'var(--danger)'};flex-shrink:0">${esIngreso ? '+' : '-'}₲${gs(m.monto)}</div>
-          </div>`;
-        }).join('')}
-      </div>` : '<div class="empty"><p>No hay movimientos este mes</p></div>'}
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+            ${grupo.items.map((m, i) => {
+              const esIngreso = m.tipo === 'ingreso';
+              return `
+              <div style="display:flex;align-items:center;padding:.65rem .75rem;${i > 0 ? 'border-top:1px solid var(--border)' : ''};gap:.6rem;cursor:pointer" onclick="finanzas_modalEditar('${m.id}')">
+                <div style="width:32px;height:32px;border-radius:8px;background:${esIngreso ? 'rgba(0,255,136,.1)' : 'rgba(255,68,68,.1)'};display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0">${esIngreso ? '↑' : '↓'}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.concepto)}</div>
+                  <div style="font-size:.68rem;color:var(--text2)">${h(m.categorias_financieras?.nombre || 'Sin categoría')}</div>
+                </div>
+                <div style="font-family:var(--font-head);font-size:.95rem;color:${esIngreso ? 'var(--success)' : 'var(--danger)'};flex-shrink:0">${esIngreso ? '+' : '-'}₲${gs(m.monto)}</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }).join('') : '<div class="empty"><p>No hay movimientos este mes</p></div>'}
     </div>`;
 }
 
@@ -86,7 +114,7 @@ async function finanzas_modalNuevo(tipo) {
   openModal(`
     <div class="modal-title">${tipo === 'ingreso' ? 'Nuevo Ingreso' : 'Nuevo Egreso'}</div>
     <input type="hidden" id="f-fin-tipo" value="${tipo}">
-    <div class="form-group"><label class="form-label">Concepto *</label><input class="form-input" id="f-fin-concepto" placeholder="${tipo === 'ingreso' ? 'Pago reparación motor' : 'Compra de filtros'}"></div>
+    <div class="form-group"><label class="form-label">Concepto *</label><input class="form-input" id="f-fin-concepto" placeholder="${tipo === 'ingreso' ? 'Pago reparación motor' : 'Compra de filtros'}" autocomplete="off"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Monto (₲) *</label>${renderMontoInput('f-fin-monto', '', '0')}</div>
       <div class="form-group"><label class="form-label">Fecha</label>${renderFechaInput('f-fin-fecha')}</div>
