@@ -1,14 +1,16 @@
 // ─── MODALES DE NUEVA/EDITAR REPARACIÓN ─────────────────────────────────────
+// Con protección de formularios (form-guard)
+
 async function modalNuevaReparacion() {
   const clienteSelect = await renderClienteSelect('f-cliente', null, true);
   const vehiculoSelect = await renderVehiculoSelect('f-vehiculo', null, null, true);
   const estadoSelect = renderEstadoSelect('f-estado', 'pendiente');
-  
+
   openModal(`
     <div class="modal-title">Nuevo Trabajo</div>
     <div class="form-group"><label class="form-label">Tipo de trabajo</label>
       <select class="form-input" id="f-tipo-trabajo">
-        ${TIPOS_TRABAJO.map(t => `<option value="${t}">${TIPO_ICONS[t]||'📋'} ${t}</option>`).join('')}
+        ${TIPOS_TRABAJO.map(t => `<option value="${t}">${TIPO_ICONS[t] || '📋'} ${t}</option>`).join('')}
       </select>
     </div>
     <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="f-desc" placeholder="Cambio de pastillas delanteras"></div>
@@ -50,6 +52,9 @@ async function modalNuevaReparacion() {
     <div class="form-group"><label class="form-label">${t("lblNotas")}</label>${renderNotasTextarea('f-notas')}</div>
     <button class="btn-primary" onclick="guardarReparacionConSafeCall()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+
+  // Activar protección de formulario
+  formGuard_vigilarFormulario();
 }
 
 function toggleNuevoVehRep() {
@@ -70,10 +75,10 @@ async function guardarReparacionConSafeCall() {
   }, null, 'No se pudo guardar el trabajo');
 }
 
-async function guardarReparacion(id=null) {
+async function guardarReparacion(id = null) {
   const desc = document.getElementById('f-desc').value.trim();
   if (!validateRequired(desc, 'Descripción')) return;
-  
+
   let vid = document.getElementById('f-vehiculo').value;
   const cid = document.getElementById('f-cliente').value;
 
@@ -88,34 +93,34 @@ async function guardarReparacion(id=null) {
       cliente_id: cid || null,
       taller_id: tid()
     }).select('id').single();
-    if (vErr) { toast('Error creando vehículo: '+vErr.message,'error'); return; }
+    if (vErr) { toast('Error creando vehículo: ' + vErr.message, 'error'); return; }
     vid = nuevoVeh.id;
-    toast('Vehículo '+nvPatente+' creado','success');
+    toast('Vehículo ' + nvPatente + ' creado', 'success');
     invalidateComponentCache();
   }
 
   const costoRep = parseFloat(document.getElementById('f-costo-rep')?.value) || 0;
   const tipoTrabajo = document.getElementById('f-tipo-trabajo')?.value || 'Mecánica general';
-  const data = { 
-    descripcion:desc, 
-    tipo_trabajo:tipoTrabajo, 
-    costo:parseFloat(document.getElementById('f-costo').value)||0, 
-    costo_repuestos:costoRep, 
-    fecha:document.getElementById('f-fecha').value, 
-    estado:document.getElementById('f-estado').value, 
-    vehiculo_id:vid||null, 
-    cliente_id:cid||null, 
-    notas:document.getElementById('f-notas').value, 
-    taller_id:tid(), 
-    kilometraje_ingreso:parseInt(document.getElementById('f-km')?.value)||null, 
-    combustible_ingreso:document.getElementById('f-combustible')?.value||null 
+  const data = {
+    descripcion: desc,
+    tipo_trabajo: tipoTrabajo,
+    costo: parseFloat(document.getElementById('f-costo').value) || 0,
+    costo_repuestos: costoRep,
+    fecha: document.getElementById('f-fecha').value,
+    estado: document.getElementById('f-estado').value,
+    vehiculo_id: vid || null,
+    cliente_id: cid || null,
+    notas: document.getElementById('f-notas').value,
+    taller_id: tid(),
+    kilometraje_ingreso: parseInt(document.getElementById('f-km')?.value) || null,
+    combustible_ingreso: document.getElementById('f-combustible')?.value || null
   };
-  
-  const { data: saved, error } = id 
-    ? await sb.from('reparaciones').update(data).eq('id',id).select('id').single() 
+
+  const { data: saved, error } = id
+    ? await sb.from('reparaciones').update(data).eq('id', id).select('id').single()
     : await sb.from('reparaciones').insert(data).select('id').single();
-    
-  if (error) { toast('Error: '+error.message,'error'); return; }
+
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
 
   if (!id && saved?.id && currentPerfil?.rol === 'empleado') {
     await sb.from('reparacion_mecanicos').insert({
@@ -128,28 +133,32 @@ async function guardarReparacion(id=null) {
   }
 
   clearCache('reparaciones');
-  toast('Trabajo guardado','success');
+  toast('Trabajo guardado', 'success');
+
+  // Desactivar protección de formulario (guardado exitoso)
+  formGuard_reset();
+
   closeModal();
   reparaciones();
 }
 
 async function modalEditarReparacion(id) {
-  const [{ data:r }] = await Promise.all([sb.from('reparaciones').select('*').eq('id',id).single()]);
+  const [{ data: r }] = await Promise.all([sb.from('reparaciones').select('*').eq('id', id).single()]);
   const clienteSelect = await renderClienteSelect('f-cliente', r.cliente_id, true);
   const vehiculoSelect = await renderVehiculoSelect('f-vehiculo', r.vehiculo_id, null, true);
   const estadoSelect = renderEstadoSelect('f-estado', r.estado);
-  
+
   openModal(`
     <div class="modal-title">Editar Trabajo</div>
     <div class="form-group"><label class="form-label">Tipo de trabajo</label>
       <select class="form-input" id="f-tipo-trabajo">
-        ${TIPOS_TRABAJO.map(t => `<option value="${t}" ${t===(r.tipo_trabajo||'Mecánica general')?'selected':''}>${TIPO_ICONS[t]||'📋'} ${t}</option>`).join('')}
+        ${TIPOS_TRABAJO.map(t => `<option value="${t}" ${t === (r.tipo_trabajo || 'Mecánica general') ? 'selected' : ''}>${TIPO_ICONS[t] || '📋'} ${t}</option>`).join('')}
       </select>
     </div>
-    <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="f-desc" value="${h(r.descripcion||'')}"></div>
+    <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="f-desc" value="${h(r.descripcion || '')}"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">${t("lblCosto")}</label>${renderMontoInput('f-costo', r.costo||0)}</div>
-      <div class="form-group"><label class="form-label">Costo repuestos</label>${renderMontoInput('f-costo-rep', r.costo_repuestos||0)}</div>
+      <div class="form-group"><label class="form-label">${t("lblCosto")}</label>${renderMontoInput('f-costo', r.costo || 0)}</div>
+      <div class="form-group"><label class="form-label">Costo repuestos</label>${renderMontoInput('f-costo-rep', r.costo_repuestos || 0)}</div>
     </div>
     <div class="form-group"><label class="form-label">${t("lblFecha")}</label>${renderFechaInput('f-fecha', r.fecha)}</div>
     <div class="form-group"><label class="form-label">${t("lblEstado")}</label>${estadoSelect}</div>
@@ -158,6 +167,9 @@ async function modalEditarReparacion(id) {
     <div class="form-group"><label class="form-label">${t("lblNotas")}</label>${renderNotasTextarea('f-notas', r.notas)}</div>
     <button class="btn-primary" onclick="guardarReparacionConSafeCall('${id}')">${t('actualizar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+
+  // Activar protección de formulario
+  formGuard_vigilarFormulario();
 }
 
 async function eliminarReparacion(id) {
