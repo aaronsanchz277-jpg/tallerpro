@@ -7,13 +7,22 @@ async function modalCierreCaja(fechaSeleccionada = null) {
     <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:1rem">
       <label style="font-size:.8rem;color:var(--text2)">Fecha:</label>
       <input type="date" id="cierre-fecha" value="${fecha}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:.4rem;color:var(--text);font-size:.8rem;flex:1">
-      <button onclick="modalCierreCaja(document.getElementById('cierre-fecha').value)" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:.4rem .8rem;font-size:.8rem;cursor:pointer;font-family:var(--font-head)">Ver</button>
+      <button id="cierre-ver-btn" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:.4rem .8rem;font-size:.8rem;cursor:pointer;font-family:var(--font-head)">Ver</button>
     </div>
     <div id="cierre-contenido">
       <div style="text-align:center;padding:1rem;color:var(--text2)">Cargando datos del ${formatFecha(fecha)}...</div>
     </div>
     <button class="btn-secondary" style="margin-top:1rem" onclick="closeModal()">Cerrar</button>
   `);
+
+  // Asignar evento al botón "Ver" después de que el modal esté en el DOM
+  setTimeout(() => {
+    const verBtn = document.getElementById('cierre-ver-btn');
+    const fechaInput = document.getElementById('cierre-fecha');
+    if (verBtn && fechaInput) {
+      verBtn.onclick = () => modalCierreCaja(fechaInput.value);
+    }
+  }, 50);
 
   await cargarDatosCierreCaja(fecha);
 }
@@ -128,3 +137,4 @@ async function cargarDatosCierreCaja(fecha) {
     contenido.innerHTML = `<div style="color:var(--danger);text-align:center;padding:1rem">Error al cargar los datos: ${error.message}</div>`;
   }
 }
+    
