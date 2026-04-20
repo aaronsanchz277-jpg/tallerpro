@@ -17,13 +17,20 @@ function formGuard_iniciarProteccion() {
 }
 
 // Interceptar cierre de modal
-const originalCloseModal = closeModal;
+const originalCloseModal = typeof closeModal === 'function' ? closeModal : function(){};
 closeModal = function() {
   if (_formularioModalAbierto && _formularioModificado) {
-    confirmar('Tenés cambios sin guardar. ¿Salir igual?', () => {
-      formGuard_reset();
-      originalCloseModal();
-    });
+    if (typeof confirmar === 'function') {
+      confirmar(t('cambiosSinGuardar') || 'Tenés cambios sin guardar. ¿Salir igual?', () => {
+        formGuard_reset();
+        originalCloseModal();
+      });
+    } else {
+      if (confirm(t('cambiosSinGuardar') || 'Tenés cambios sin guardar. ¿Salir igual?')) {
+        formGuard_reset();
+        originalCloseModal();
+      }
+    }
   } else {
     formGuard_reset();
     originalCloseModal();
@@ -31,20 +38,26 @@ closeModal = function() {
 };
 
 // Interceptar navegación cuando hay modal abierto con cambios
-const originalNavigate = navigate;
+const originalNavigate = typeof navigate === 'function' ? navigate : function(){};
 navigate = function(page, params) {
   if (_formularioModalAbierto && _formularioModificado) {
-    confirmar('Tenés cambios sin guardar. ¿Salir de la página igual?', () => {
-      formGuard_reset();
-      originalNavigate(page, params);
-    });
+    if (typeof confirmar === 'function') {
+      confirmar(t('salirPaginaConCambios') || 'Tenés cambios sin guardar. ¿Salir de la página igual?', () => {
+        formGuard_reset();
+        originalNavigate(page, params);
+      });
+    } else {
+      if (confirm(t('salirPaginaConCambios') || 'Tenés cambios sin guardar. ¿Salir de la página igual?')) {
+        formGuard_reset();
+        originalNavigate(page, params);
+      }
+    }
   } else {
     formGuard_reset();
     originalNavigate(page, params);
   }
 };
 
-// Helper para agregar listeners de cambio a inputs de formularios modales
 function formGuard_vigilarFormulario(prefix = 'f-') {
   formGuard_iniciarProteccion();
   setTimeout(() => {
