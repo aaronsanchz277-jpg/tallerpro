@@ -137,7 +137,7 @@ async function registrarPagoSueldo(liquidacionId) {
   const fechaPago = new Date().toISOString().split('T')[0];
   await sb.from('liquidaciones').update({ estado:'pagado', fecha_pago: fechaPago }).eq('id', liquidacionId);
 
-  // ─── INTEGRACIÓN CON FINANZAS (MODIFICADO) ─────────────────────────────────
+  // Integración con Finanzas (MODIFICADO)
   const catId = await obtenerCategoriaFinanciera('Sueldos', 'egreso');
   if (catId) {
     const descripcion = `Pago de sueldo a ${liq.empleados?.nombre || 'empleado'} (período ${formatFecha(liq.periodos_sueldo?.fecha_inicio)} - ${formatFecha(liq.periodos_sueldo?.fecha_fin)})`;
