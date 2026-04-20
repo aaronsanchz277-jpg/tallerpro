@@ -278,7 +278,7 @@ async function guardarVenta(esServicioRapido = false) {
   const { data: saved, error } = await offlineInsert('ventas', data);
   if (error) { toast('Error: '+error.message,'error'); return; }
   
-  // ─── INTEGRACIÓN CON FINANZAS (MODIFICADO) ─────────────────────────────────
+  // Integración con Finanzas (MODIFICADO)
   if (totalFinal > 0) {
     try {
       const categoriaId = await obtenerCategoriaFinanciera('Servicios', 'ingreso');
