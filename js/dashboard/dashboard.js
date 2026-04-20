@@ -22,28 +22,45 @@ async function cargarDashboardConfig() {
 
 async function modalConfigurarKPIs() {
   const config = await cargarDashboardConfig();
+  
+  // Iconos SVG para los KPIs disponibles
+  const iconMap = {
+    clientes: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+    vehiculos: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14v-5H5v5zm0 0v3h3v-3h8v3h3v-3M5 12V7h14v5"/><path d="M7 7l2-3h6l2 3"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>`,
+    en_progreso: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`,
+    hoy: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="15" r="1"/><circle cx="16" cy="15" r="1"/><circle cx="8" cy="15" r="1"/></svg>`,
+    creditos: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`,
+    ingresos_mes: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6"/><path d="M15 6h6v6"/><path d="M21 3l-9 9"/></svg>`,
+    ganancia_neta: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M6 8l-4 4 4 4M18 8l4 4-4 4"/></svg>`,
+    vehiculos_hoy: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14v-5H5v5zm0 0v3h3v-3h8v3h3v-3M5 12V7h14v5"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M12 7v5"/></svg>`,
+    stock_bajo: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/><circle cx="12" cy="12" r="2"/></svg>`
+  };
+  
   const kpisDisponibles = [
-    { id: 'clientes', label: 'Total clientes', icon: '👥' },
-    { id: 'vehiculos', label: 'Total vehículos', icon: '🚗' },
-    { id: 'en_progreso', label: 'Trabajos en progreso', icon: '🔧' },
-    { id: 'hoy', label: 'Trabajos hoy', icon: '📅' },
-    { id: 'creditos', label: 'Créditos pendientes', icon: '💰' },
-    { id: 'ingresos_mes', label: 'Ingresos del mes', icon: '📊' },
-    { id: 'ganancia_neta', label: 'Ganancia neta', icon: '💎' },
-    { id: 'vehiculos_hoy', label: 'Vehículos hoy', icon: '🚙' },
-    { id: 'stock_bajo', label: 'Alertas stock bajo', icon: '⚠️' }
+    { id: 'clientes', label: 'Total clientes' },
+    { id: 'vehiculos', label: 'Total vehículos' },
+    { id: 'en_progreso', label: 'Trabajos en progreso' },
+    { id: 'hoy', label: 'Trabajos hoy' },
+    { id: 'creditos', label: 'Créditos pendientes' },
+    { id: 'ingresos_mes', label: 'Ingresos del mes' },
+    { id: 'ganancia_neta', label: 'Ganancia neta' },
+    { id: 'vehiculos_hoy', label: 'Vehículos hoy' },
+    { id: 'stock_bajo', label: 'Alertas stock bajo' }
   ];
   
   const visibles = config.kpis_visibles || [];
   
   openModal(`
-    <div class="modal-title">📊 Configurar KPIs del Dashboard</div>
+    <div class="modal-title" style="display:flex;align-items:center;gap:8px;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v16h16"/><path d="m9 12 2 2 4-4"/></svg>
+      Configurar KPIs del Dashboard
+    </div>
     <div style="font-size:.8rem;color:var(--text2);margin-bottom:1rem">Seleccioná qué indicadores querés ver en la pantalla principal</div>
     <div style="display:grid;gap:.5rem;margin-bottom:1rem">
       ${kpisDisponibles.map(kpi => `
-        <label style="display:flex;align-items:center;gap:.5rem;padding:.5rem;background:var(--surface2);border-radius:8px;cursor:pointer">
+        <label style="display:flex;align-items:center;gap:.75rem;padding:.5rem;background:var(--surface2);border-radius:8px;cursor:pointer">
           <input type="checkbox" value="${kpi.id}" ${visibles.includes(kpi.id) ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent)">
-          <span style="font-size:.9rem">${kpi.icon} ${kpi.label}</span>
+          <span style="display:flex;align-items:center;gap:6px;">${iconMap[kpi.id] || ''} ${kpi.label}</span>
         </label>
       `).join('')}
     </div>
@@ -161,7 +178,10 @@ async function dashboard() {
         const totalDeuda = deudores.reduce((s, d) => s + d.saldo, 0);
         deudoresHTML = `<div style="background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.3);border-radius:10px;padding:.75rem;margin-bottom:1rem;cursor:pointer" onclick="navigate('reparaciones')">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
-            <div style="font-size:.72rem;color:var(--warning);font-family:var(--font-head);letter-spacing:1px">💸 PAGOS PARCIALES PENDIENTES</div>
+            <div style="font-size:.72rem;color:var(--warning);font-family:var(--font-head);letter-spacing:1px;display:flex;align-items:center;gap:4px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              PAGOS PARCIALES PENDIENTES
+            </div>
             <div style="font-family:var(--font-head);color:var(--warning);font-size:1rem">₲${gs(totalDeuda)}</div>
           </div>
           ${deudores.slice(0, 3).map(d => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(d.clientes?.nombre || 'Sin cliente')} — <span style="color:var(--warning)">debe ₲${gs(d.saldo)}</span></div>`).join('')}
@@ -184,7 +204,10 @@ async function dashboard() {
       const totalUrgente = urgentes.reduce((s, c) => s + parseFloat(c.monto || 0), 0);
       cuentasVencidasHTML = `<div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:.75rem;margin-bottom:1rem;cursor:pointer" onclick="navigate('cuentas-pagar')">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
-          <div style="font-size:.72rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">📋 CUENTAS POR PAGAR</div>
+          <div style="font-size:.72rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px;display:flex;align-items:center;gap:4px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            CUENTAS POR PAGAR
+          </div>
           <div style="font-family:var(--font-head);color:var(--danger);font-size:1rem">₲${gs(totalUrgente)}</div>
         </div>
         ${urgentes.slice(0, 3).map(c => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(c.proveedor)} — ₲${gs(c.monto)}${c.fecha_vencimiento < hoyStr ? ' <span style="color:var(--danger)">VENCIDA</span>' : ' vence ' + formatFecha(c.fecha_vencimiento)}</div>`).join('')}
@@ -198,14 +221,21 @@ async function dashboard() {
         <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text)">${h(tallerNombre)}</div>
         <div style="display:flex;gap:.3rem">
           ${typeof getTemaToggle === 'function' ? getTemaToggle() : ''}
-          ${currentPerfil?.rol === 'admin' ? `<button onclick="modalConfigurarKPIs()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem">📊</button>` : ''}
-          ${currentPerfil?.rol === 'admin' ? `<button onclick="modalConfigDatos()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem">⚙️</button>` : ''}
+          ${currentPerfil?.rol === 'admin' ? `<button onclick="modalConfigurarKPIs()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v16h16"/><path d="m9 12 2 2 4-4"/></svg>
+          </button>` : ''}
+          ${currentPerfil?.rol === 'admin' ? `<button onclick="modalConfigDatos()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>` : ''}
         </div>
       </div>
       <div style="font-size:.75rem;color:var(--text2);margin-bottom:1rem">${t('bienvenido')}, ${h(currentPerfil?.nombre || '')}</div>`;
 
   if (fromCache) {
-    html += `<div id="cache-indicator" style="background:var(--warning);color:#000;padding:2px 8px;border-radius:20px;font-size:.65rem;margin-bottom:.5rem;display:inline-block">📦 Datos en caché</div>`;
+    html += `<div id="cache-indicator" style="background:var(--warning);color:#000;padding:2px 8px;border-radius:20px;font-size:.65rem;margin-bottom:.5rem;display:inline-block;display:flex;align-items:center;gap:4px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+      Datos en caché
+    </div>`;
   }
 
   html += `
@@ -214,23 +244,31 @@ async function dashboard() {
       ${typeof esModoSimple === 'function' && esModoSimple() ? `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
           <div onclick="modalNuevaReparacionSimple()" style="background:linear-gradient(145deg, var(--surface), var(--surface2));border:2px solid var(--accent);border-radius:16px;padding:1.2rem .5rem;text-align:center;cursor:pointer">
-            <div style="font-size:2.5rem">🔧</div>
+            <div style="font-size:2.5rem;margin-bottom:5px;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            </div>
             <div style="font-family:var(--font-head);font-size:1rem;color:var(--accent);margin-top:.3rem">Nuevo trabajo</div>
             <div style="font-size:.7rem;color:var(--text2)">Registrar ingreso de vehículo</div>
           </div>
           <div onclick="navigate('ventas')" style="background:linear-gradient(145deg, var(--surface), var(--surface2));border:2px solid var(--success);border-radius:16px;padding:1.2rem .5rem;text-align:center;cursor:pointer">
-            <div style="font-size:2.5rem">💰</div>
+            <div style="font-size:2.5rem;margin-bottom:5px;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
             <div style="font-family:var(--font-head);font-size:1rem;color:var(--success);margin-top:.3rem">Cobrar servicio</div>
             <div style="font-size:.7rem;color:var(--text2)">Venta rápida de productos</div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
           <div onclick="navigate('agenda')" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.8rem;text-align:center;cursor:pointer">
-            <div style="font-size:1.5rem">📅</div>
+            <div style="margin-bottom:8px;">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
             <div style="font-size:.8rem;color:var(--text)">Turnos de hoy</div>
           </div>
           <div onclick="modalCierreCaja()" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.8rem;text-align:center;cursor:pointer">
-            <div style="font-size:1.5rem">🔐</div>
+            <div style="margin-bottom:8px;">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
             <div style="font-size:.8rem;color:var(--text)">Cierre de caja</div>
           </div>
         </div>
@@ -238,7 +276,10 @@ async function dashboard() {
 
       ${alertasStock.length > 0 ? `
       <div style="background:rgba(255,68,68,.1);border-left:4px solid var(--danger);border-radius:8px;padding:.75rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between">
-        <div><span style="font-weight:bold;color:var(--danger)">⚠️ ${alertasStock.length} producto(s) con stock bajo</span><br><span style="font-size:.75rem;color:var(--text2)">Revisá el inventario para reponer</span></div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/><circle cx="12" cy="12" r="2"/></svg>
+          <span style="font-weight:bold;color:var(--danger)">${alertasStock.length} producto(s) con stock bajo</span>
+        </div>
         <button onclick="navigate('inventario')" style="background:var(--danger);color:#fff;border:none;border-radius:6px;padding:.3rem .8rem;cursor:pointer;font-size:.75rem">Ver</button>
       </div>
       ` : ''}
@@ -259,7 +300,12 @@ async function dashboard() {
       <div class="stats-grid" style="grid-template-columns:1fr 1fr 1fr">
         <div class="stat-card" onclick="reparaciones({filtro:'semana'})" style="cursor:pointer"><div class="stat-value">${vehiculosSemana}</div><div class="stat-label">Esta semana</div></div>
         <div class="stat-card" onclick="reparaciones({filtro:'mes'})" style="cursor:pointer"><div class="stat-value">${vehiculosMes}</div><div class="stat-label">Este mes</div></div>
-        <div class="stat-card" onclick="navigate('modo-taller')" style="cursor:pointer;background:rgba(0,229,255,.06);border-color:var(--accent)"><div class="stat-value" style="font-size:1.5rem">📺</div><div class="stat-label">Modo Taller</div></div>
+        <div class="stat-card" onclick="navigate('modo-taller')" style="cursor:pointer;background:rgba(0,229,255,.06);border-color:var(--accent)">
+          <div class="stat-value" style="font-size:1.5rem;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <div class="stat-label">Modo Taller</div>
+        </div>
       </div>
 
       ${currentPerfil?.rol === 'admin' ? `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
@@ -268,7 +314,9 @@ async function dashboard() {
           <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--success)">₲${gs(totalMes + totalQSMes + totalPOSMes)}</div>
           <div style="font-size:.7rem;color:var(--text2);margin-top:.2rem">OTs: ₲${gs(totalMes)} · QS: ₲${gs(totalQSMes)} · POS: ₲${gs(totalPOSMes)}</div>
         </div>
-        <div style="font-size:2rem">💰</div>
+        <div style="font-size:2rem;">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
       </div>
       ${totalGastosMes > 0 ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:.75rem;cursor:pointer" onclick="navigate('gastos')">
@@ -289,7 +337,9 @@ async function dashboard() {
         recientes.map(r => `
         <div class="card" onclick="detalleReparacion('${r.id}')">
           <div class="card-header">
-            <div class="card-avatar">🔧</div>
+            <div class="card-avatar">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            </div>
             <div class="card-info">
               <div class="card-name">${h(r.descripcion)}</div>
               <div class="card-sub">${r.vehiculos ? h(r.vehiculos.marca) + ' ' + h(r.vehiculos.patente) : t('sinVehiculo')} · ${formatFecha(r.fecha)}</div>
@@ -322,7 +372,10 @@ async function buscarPatente(valor) {
         resultsEl.innerHTML = `<div style="background:var(--surface2);border-radius:10px;padding:.75rem;margin-bottom:1rem;font-size:.85rem;color:var(--text2)">No se encontró ningún vehículo con esa patente.</div>`;
         return;
       }
-      let html = fromCache ? '<div style="font-size:.6rem;color:var(--warning);margin-bottom:.3rem">📦 Resultados en caché</div>' : '';
+      let html = fromCache ? `<div style="font-size:.6rem;color:var(--warning);margin-bottom:.3rem;display:flex;align-items:center;gap:4px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        Resultados en caché
+      </div>` : '';
       html += vehs.map(v => {
         const reps = (v.reparaciones || []).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 5);
         return `
@@ -331,7 +384,10 @@ async function buscarPatente(valor) {
               <div>
                 <div style="font-family:var(--font-head);font-size:1.2rem;color:var(--accent);letter-spacing:2px">${h(v.patente)}</div>
                 <div style="font-size:.82rem;color:var(--text2)">${h(v.marca || '')} ${h(v.modelo || '')} ${v.anio ? '· ' + v.anio : ''}</div>
-                ${v.clientes ? `<div style="font-size:.8rem;color:var(--text2)">👤 ${h(v.clientes.nombre)}</div>` : ''}
+                ${v.clientes ? `<div style="font-size:.8rem;color:var(--text2);display:flex;align-items:center;gap:4px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  ${h(v.clientes.nombre)}
+                </div>` : ''}
               </div>
               <button onclick="detalleVehiculo('${v.id}')" style="font-size:.72rem;background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 8px;cursor:pointer">Ver</button>
             </div>
@@ -412,7 +468,9 @@ async function reportes() {
           <div style="font-family:var(--font-head);font-size:2rem;font-weight:700;color:var(--success)">₲${gs(ingresosTotalMes)}</div>
           <div style="font-size:.7rem;color:var(--text2);margin-top:.2rem">OTs: ₲${gs(ganMes)} · QS: ₲${gs(repQSMes)} · POS: ₲${gs(repPOSMes)}</div>
         </div>
-        <div style="font-size:2.5rem">💰</div>
+        <div style="font-size:2.5rem;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
       </div>
       ${repGastosMes>0?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:.75rem;cursor:pointer" onclick="navigate('gastos')">
