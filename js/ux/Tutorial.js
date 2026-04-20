@@ -1,33 +1,16 @@
-// ─── TUTORIAL INTERACTIVO (Primera vez en Modo Simple) ──────────────────────
+   // ─── TUTORIAL INTERACTIVO (Primera vez en Modo Simple) ──────────────────────
 let _tutorialVisto = localStorage.getItem('tallerpro_tutorial_visto');
 
 function iniciarTutorial() {
-  // Solo ejecutar si NO se ha visto y estamos en modo simple
   if (_tutorialVisto) return;
   if (typeof esModoSimple !== 'function' || !esModoSimple()) return;
 
-  // Esperar a que el DOM del dashboard esté completamente renderizado
   setTimeout(() => {
-    // Selectores actualizados para coincidir con los botones reales del dashboard
     const pasos = [
-      {
-        selector: '[onclick="modalNuevaReparacionSimple()"]',
-        texto: 'Acá registrás un vehículo nuevo en 3 pasos fáciles'
-      },
-      {
-        selector: '[onclick="navigate(\'ventas\')"]',
-        fallback: '[onclick*="ventas"]',
-        texto: 'Cobrá rápido productos o servicios'
-      },
-      {
-        selector: '[onclick="navigate(\'agenda\')"]',
-        fallback: '[onclick*="agenda"]',
-        texto: 'Mirá los turnos de hoy'
-      },
-      {
-        selector: '[onclick="modalCierreCaja()"]',
-        texto: 'Al final del día, cerrá la caja y sabé cuánto ganaste'
-      }
+      { selector: '[onclick="modalNuevaReparacionSimple()"]', texto: 'Acá registrás un vehículo nuevo en 3 pasos fáciles' },
+      { selector: '[onclick="navigate(\'ventas\')"]', fallback: '[onclick*="ventas"]', texto: 'Cobrá rápido productos o servicios' },
+      { selector: '[onclick="navigate(\'agenda\')"]', fallback: '[onclick*="agenda"]', texto: 'Mirá los turnos de hoy' },
+      { selector: '[onclick="modalCierreCaja()"]', texto: 'Al final del día, cerrá la caja y sabé cuánto ganaste' }
     ];
 
     let overlay = document.createElement('div');
@@ -39,31 +22,17 @@ function iniciarTutorial() {
     function mostrarPaso() {
       const paso = pasos[pasoActual];
       let el = document.querySelector(paso.selector);
-      if (!el && paso.fallback) {
-        el = document.querySelector(paso.fallback);
-      }
+      if (!el && paso.fallback) el = document.querySelector(paso.fallback);
 
       if (!el) {
-        console.warn(`Tutorial: No se encontró el elemento para el paso ${pasoActual + 1}`);
+        console.warn(`Tutorial: elemento no encontrado paso ${pasoActual + 1}`);
         siguientePaso();
         return;
       }
 
       const rect = el.getBoundingClientRect();
       const tooltip = document.createElement('div');
-      tooltip.style.cssText = `
-        position:fixed;
-        top:${rect.bottom + 10}px;
-        left:${Math.max(10, rect.left)}px;
-        background:var(--accent);
-        color:#000;
-        padding:1rem;
-        border-radius:12px;
-        max-width:250px;
-        z-index:10000;
-        font-weight:bold;
-        box-shadow:0 4px 20px rgba(0,0,0,.5);
-      `;
+      tooltip.style.cssText = `position:fixed;top:${rect.bottom + 10}px;left:${Math.max(10, rect.left)}px;background:var(--accent);color:#000;padding:1rem;border-radius:12px;max-width:250px;z-index:10000;font-weight:bold;box-shadow:0 4px 20px rgba(0,0,0,.5);`;
       tooltip.innerHTML = `
         ${paso.texto}
         <div style="margin-top:.5rem;display:flex;justify-content:space-between">
@@ -73,7 +42,6 @@ function iniciarTutorial() {
       `;
       document.body.appendChild(tooltip);
       window._tutorialTooltip = tooltip;
-
       document.getElementById('tutorial-siguiente').addEventListener('click', siguientePaso);
     }
 
@@ -93,5 +61,5 @@ function iniciarTutorial() {
     };
 
     mostrarPaso();
-  }, 800); // Delay para asegurar que el dashboard se haya renderizado
-}
+  }, 800);
+}   
