@@ -126,3 +126,11 @@ function formatearPorcentaje(valor, total) {
   if (total === 0) return '0%';
   return ((valor / total) * 100).toFixed(1) + '%';
 }
+
+// Fallback para reportes en caso de que no esté definida (robustez)
+if (typeof window.reportes !== 'function') {
+  window.reportes = async function() {
+    console.warn('reportes no está completamente implementado');
+    if (typeof navigate === 'function') navigate('dashboard');
+  };
+}
