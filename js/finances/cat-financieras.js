@@ -1,13 +1,13 @@
 // ─── CATEGORÍAS FINANCIERAS CENTRALIZADAS ─────────────────────────────────────
 let _categoriasCache = null;
-let _cacheTimestampCat = 0;
+let _cacheTimestamp = 0;
 const CAT_FIN_CACHE_TTL = 60000;
 
 async function obtenerCategoriaFinanciera(nombre, tipo = 'egreso') {
   if (!tid()) return null;
 
   const now = Date.now();
-  if (_categoriasCache && (now - _cacheTimestampCat) < CAT_FIN_CACHE_TTL) {
+  if (_categoriasCache && (now - _cacheTimestamp) < CAT_FIN_CACHE_TTL) {
     const encontrada = _categoriasCache.find(c => c.nombre === nombre);
     if (encontrada) return encontrada.id;
   }
