@@ -42,7 +42,7 @@ async function panelTrabajo() {
       </div>`;
     }
 
-    // Iconos SVG simples en lugar de emojis
+    // Iconos SVG definidos dentro de la función
     const iconoPendiente = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r="0.5" fill="var(--warning)" stroke="none"/></svg>`;
     const iconoProgreso = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent2)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`;
     const iconoEspera = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
