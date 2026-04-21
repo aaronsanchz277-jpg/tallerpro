@@ -35,7 +35,6 @@ async function detalleEmpleado(id) {
     emp = results[0].data; trabajos = results[1].data;
   } catch(e) { toast('Error al cargar empleado','error'); navigate('empleados'); return; }
   if (!emp) { toast('Empleado no encontrado','error'); navigate('empleados'); return; }
-  
   const porFecha = {};
   (trabajos||[]).forEach(t => { const f=t.fecha||'sinFecha'; if(!porFecha[f]) porFecha[f]=[]; porFecha[f].push(t); });
   const totalHoras = (trabajos||[]).reduce((s,t)=>s+parseFloat(t.horas||0),0);
@@ -92,7 +91,7 @@ async function detalleEmpleado(id) {
   cargarVales(id);
 }
 
-// NUEVA FUNCIÓN: Modal para que admin vea trabajos asignados al empleado (vista similar a "Mis Trabajos")
+// Modal para que admin vea trabajos asignados al empleado
 async function modalVerTrabajosAsignados(empleadoId, nombreEmpleado) {
   // Buscar el usuario (perfil) asociado a este empleado (si existe)
   const { data: perfil } = await sb.from('perfiles')
@@ -104,7 +103,7 @@ async function modalVerTrabajosAsignados(empleadoId, nombreEmpleado) {
 
   const { data: asignaciones } = await sb
     .from('reparacion_mecanicos')
-    .select('reparacion_id, reparaciones(id,descripcion,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
+    .select('reparacion_id, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
     .eq('mecanico_id', mecanicoId)
     .order('created_at', { ascending: false })
     .limit(50);
