@@ -3,23 +3,32 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
   if (currentPerfil?.rol !== 'empleado') { dashboard(); return; }
 
   const userId = currentUser.id;
+  const DEBUG = localStorage.getItem('tallerpro_debug') === 'true';
+
+  if (DEBUG) console.log('🔍 [misTrabajos] userId:', userId);
 
   // Consulta 1: por mecanico_id
-  const { data: porMecanico } = await sb
+  const { data: porMecanico, error: err1 } = await sb
     .from('reparacion_mecanicos')
     .select('reparacion_id')
     .eq('mecanico_id', userId);
 
   // Consulta 2: por empleado_id
-  const { data: porEmpleado } = await sb
+  const { data: porEmpleado, error: err2 } = await sb
     .from('reparacion_mecanicos')
     .select('reparacion_id')
     .eq('empleado_id', userId);
 
-  // Unir IDs sin duplicados
+  if (DEBUG) {
+    console.log('🔍 [misTrabajos] porMecanico:', porMecanico, 'err:', err1);
+    console.log('🔍 [misTrabajos] porEmpleado:', porEmpleado, 'err:', err2);
+  }
+
   const idsMec = (porMecanico || []).map(a => a.reparacion_id);
   const idsEmp = (porEmpleado || []).map(a => a.reparacion_id);
   const misRepIds = [...new Set([...idsMec, ...idsEmp])];
+
+  if (DEBUG) console.log('🔍 [misTrabajos] misRepIds:', misRepIds);
 
   let data = [];
   if (misRepIds.length > 0) {
@@ -28,12 +37,11 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
       .in('id', misRepIds)
       .order('created_at', { ascending: false });
 
-    if (filtro !== 'todos') {
-      q = q.eq('estado', filtro);
-    }
+    if (filtro !== 'todos') q = q.eq('estado', filtro);
 
     const res = await q;
     data = res.data || [];
+    if (DEBUG) console.log('🔍 [misTrabajos] reparaciones encontradas:', data.length, 'error:', res.error);
   }
 
   const hoy = fechaHoy();
@@ -237,3 +245,32 @@ async function guardarConfigDatos() {
   closeModal();
   navigate('dashboard');
 }
+
+// ─── DIAGNÓSTICO (ejecutar desde consola como admin) ─────────────────────────
+window.diagnosticarEmpleado = async function(idEmpleado) {
+  if (!idEmpleado) {
+    console.error('Debes proporcionar el ID del empleado. Ej: diagnosticarEmpleado("ec01f067-...")');
+    return;
+  }
+  console.log('🔍 Diagnosticando empleado:', idEmpleado);
+  
+  const { data: emp } = await sb.from('empleados').select('*').eq('id', idEmpleado).single();
+  console.log('📋 Empleado:', emp);
+  
+  const { data: perfil } = await sb.from('perfiles').select('id, nombre, rol').eq('empleado_id', idEmpleado).maybeSingle();
+  console.log('👤 Perfil asociado:', perfil);
+  
+  const mecanicoId = perfil?.id || idEmpleado;
+  console.log('🆔 ID usado para buscar asignaciones:', mecanicoId);
+  
+  const { data: manuales } = await sb.from('trabajos_empleado').select('*').eq('empleado_id', idEmpleado);
+  console.log('🛠️ Trabajos manuales:', manuales?.length || 0, manuales);
+  
+  const { data: porMecanico } = await sb.from('reparacion_mecanicos').select('*, reparaciones(descripcion, estado)').eq('mecanico_id', mecanicoId);
+  console.log('🔧 Asignaciones por mecanico_id:', porMecanico?.length || 0, porMecanico);
+  
+  const { data: porEmpleado } = await sb.from('reparacion_mecanicos').select('*, reparaciones(descripcion, estado)').eq('empleado_id', mecanicoId);
+  console.log('👷 Asignaciones por empleado_id:', porEmpleado?.length || 0, porEmpleado);
+  
+  console.log('✅ Diagnóstico completado.');
+};
