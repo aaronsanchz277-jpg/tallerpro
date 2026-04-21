@@ -28,11 +28,9 @@ async function empleados() {
 async function detalleEmpleado(id) {
   let emp, trabajosManuales, asignacionesMecanico;
   try {
-    // 1. Datos del empleado
     const empRes = await sb.from('empleados').select('*').eq('id',id).single();
     emp = empRes.data;
 
-    // 2. Trabajos manuales registrados (trabajos_empleado)
     const trabajosRes = await sb.from('trabajos_empleado')
       .select('*, vehiculos(patente,marca,modelo)')
       .eq('empleado_id', id)
@@ -40,7 +38,6 @@ async function detalleEmpleado(id) {
       .limit(50);
     trabajosManuales = trabajosRes.data || [];
 
-    // 3. Buscar perfil asociado (si existe) para obtener reparaciones asignadas
     const { data: perfil } = await sb.from('perfiles')
       .select('id')
       .eq('empleado_id', id)
@@ -48,21 +45,27 @@ async function detalleEmpleado(id) {
 
     const mecanicoId = perfil?.id || id;
 
-    // 4. Reparaciones asignadas como mecánico (reparacion_mecanicos)
-    const asignacionesRes = await sb.from('reparacion_mecanicos')
+    // Doble consulta para asignaciones
+    const { data: porMecanico } = await sb.from('reparacion_mecanicos')
       .select('reparacion_id, horas, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
-      .or(`mecanico_id.eq.${mecanicoId},empleado_id.eq.${mecanicoId}`)
+      .eq('mecanico_id', mecanicoId)
       .order('created_at', { ascending: false })
       .limit(50);
-    asignacionesMecanico = asignacionesRes.data || [];
+
+    const { data: porEmpleado } = await sb.from('reparacion_mecanicos')
+      .select('reparacion_id, horas, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
+      .eq('empleado_id', mecanicoId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    asignacionesMecanico = [...(porMecanico || []), ...(porEmpleado || [])];
 
   } catch(e) { toast('Error al cargar empleado','error'); navigate('empleados'); return; }
   if (!emp) { toast('Empleado no encontrado','error'); navigate('empleados'); return; }
 
-  // ─── UNIFICAR AMBAS FUENTES EN UN SOLO ARRAY DE "TRABAJOS" ─────────────────
+  // Unificar trabajos
   const trabajosUnificados = [];
 
-  // Agregar trabajos manuales
   trabajosManuales.forEach(t => {
     trabajosUnificados.push({
       fecha: t.fecha,
@@ -80,10 +83,11 @@ async function detalleEmpleado(id) {
     });
   });
 
-  // Agregar asignaciones de mecánico
+  const idsVistos = new Set();
   asignacionesMecanico.forEach(a => {
     const r = a.reparaciones;
-    if (!r) return;
+    if (!r || idsVistos.has(r.id)) return;
+    idsVistos.add(r.id);
     trabajosUnificados.push({
       fecha: r.fecha,
       tipo: 'reparacion',
@@ -100,10 +104,8 @@ async function detalleEmpleado(id) {
     });
   });
 
-  // Ordenar por fecha descendente
   trabajosUnificados.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
 
-  // Agrupar por fecha
   const porFecha = {};
   trabajosUnificados.forEach(t => {
     const f = t.fecha || 'sinFecha';
@@ -111,7 +113,6 @@ async function detalleEmpleado(id) {
     porFecha[f].push(t);
   });
 
-  // Calcular total de horas (sumando ambas fuentes)
   const totalHoras = trabajosUnificados.reduce((s, t) => s + parseFloat(t.horas || 0), 0);
 
   document.getElementById('main-content').innerHTML = `
@@ -169,7 +170,7 @@ async function detalleEmpleado(id) {
   cargarVales(id);
 }
 
-// ─── VALES Y ADELANTOS (sin cambios) ────────────────────────────────────────
+// ─── VALES Y ADELANTOS ──────────────────────────────────────────────────────
 async function cargarVales(empleadoId) {
   const mesActual = new Date();
   const primerDia = new Date(mesActual.getFullYear(), mesActual.getMonth(), 1).toISOString().split('T')[0];
@@ -349,7 +350,6 @@ async function eliminarTrabajo(trabajoId, empleadoId) {
   });
 }
 
-// Las funciones modalNuevoEmpleado, guardarEmpleado, modalEditarEmpleado se mantienen igual que antes
 function modalNuevoEmpleado() {
   openModal(`
     <div class="modal-title">${t("modNuevoEmpleado")}</div>
