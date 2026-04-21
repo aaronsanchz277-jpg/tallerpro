@@ -26,10 +26,13 @@ async function empleados() {
 }
 
 async function detalleEmpleado(id) {
+  const DEBUG = localStorage.getItem('tallerpro_debug') === 'true';
   let emp, trabajosManuales, asignacionesMecanico;
+  
   try {
     const empRes = await sb.from('empleados').select('*').eq('id',id).single();
     emp = empRes.data;
+    if (DEBUG) console.log('📋 detalleEmpleado - emp:', emp);
 
     const trabajosRes = await sb.from('trabajos_empleado')
       .select('*, vehiculos(patente,marca,modelo)')
@@ -37,30 +40,36 @@ async function detalleEmpleado(id) {
       .order('fecha',{ascending:false})
       .limit(50);
     trabajosManuales = trabajosRes.data || [];
+    if (DEBUG) console.log('🛠️ detalleEmpleado - manuales:', trabajosManuales.length);
 
     const { data: perfil } = await sb.from('perfiles')
       .select('id')
       .eq('empleado_id', id)
       .maybeSingle();
-
     const mecanicoId = perfil?.id || id;
+    if (DEBUG) console.log('🆔 detalleEmpleado - mecanicoId:', mecanicoId);
 
-    // Doble consulta para asignaciones
     const { data: porMecanico } = await sb.from('reparacion_mecanicos')
       .select('reparacion_id, horas, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
       .eq('mecanico_id', mecanicoId)
       .order('created_at', { ascending: false })
       .limit(50);
+    if (DEBUG) console.log('🔧 detalleEmpleado - porMecanico:', porMecanico?.length);
 
     const { data: porEmpleado } = await sb.from('reparacion_mecanicos')
       .select('reparacion_id, horas, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
       .eq('empleado_id', mecanicoId)
       .order('created_at', { ascending: false })
       .limit(50);
+    if (DEBUG) console.log('👷 detalleEmpleado - porEmpleado:', porEmpleado?.length);
 
     asignacionesMecanico = [...(porMecanico || []), ...(porEmpleado || [])];
-
-  } catch(e) { toast('Error al cargar empleado','error'); navigate('empleados'); return; }
+  } catch(e) {
+    toast('Error al cargar empleado','error');
+    navigate('empleados');
+    return;
+  }
+  
   if (!emp) { toast('Empleado no encontrado','error'); navigate('empleados'); return; }
 
   // Unificar trabajos
