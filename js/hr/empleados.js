@@ -35,8 +35,9 @@ async function detalleEmpleado(id) {
     emp = results[0].data; trabajos = results[1].data;
   } catch(e) { toast('Error al cargar empleado','error'); navigate('empleados'); return; }
   if (!emp) { toast('Empleado no encontrado','error'); navigate('empleados'); return; }
+  
   const porFecha = {};
-  (trabajos||[]).forEach(t => { const f=t.fecha||t('sinFecha'); if(!porFecha[f]) porFecha[f]=[]; porFecha[f].push(t); });
+  (trabajos||[]).forEach(t => { const f=t.fecha||'sinFecha'; if(!porFecha[f]) porFecha[f]=[]; porFecha[f].push(t); });
   const totalHoras = (trabajos||[]).reduce((s,t)=>s+parseFloat(t.horas||0),0);
 
   document.getElementById('main-content').innerHTML = `
@@ -57,6 +58,10 @@ async function detalleEmpleado(id) {
       <button class="btn-add" style="flex:1;justify-content:center" onclick="modalNuevoTrabajo('${id}')">+ Registrar trabajo</button>
       <button onclick="modalNuevoVale('${id}')" style="flex:1;background:rgba(255,204,0,.12);color:var(--warning);border:1px solid rgba(255,204,0,.3);border-radius:10px;padding:.5rem;font-family:var(--font-head);font-size:.8rem;cursor:pointer;text-align:center">+ Vale / Adelanto</button>
     </div>
+    ${currentPerfil?.rol === 'admin' ? `
+    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
+      <button class="btn-secondary" style="margin:0;flex:1" onclick="modalVerTrabajosAsignados('${id}','${h(emp.nombre)}')">🔧 Ver trabajos asignados</button>
+    </div>` : ''}
     <div style="display:flex;gap:.5rem;margin-bottom:1.25rem">
       <button class="btn-secondary" style="margin:0;flex:1" onclick="modalEditarEmpleado('${id}')">${t('editarBtn')}</button>
       <button class="btn-danger" style="margin:0" onclick="eliminarEmpleado('${id}')">✕</button>
@@ -85,6 +90,46 @@ async function detalleEmpleado(id) {
           </div>`).join('')}
     </div>`;
   cargarVales(id);
+}
+
+// NUEVA FUNCIÓN: Modal para que admin vea trabajos asignados al empleado (vista similar a "Mis Trabajos")
+async function modalVerTrabajosAsignados(empleadoId, nombreEmpleado) {
+  // Buscar el usuario (perfil) asociado a este empleado (si existe)
+  const { data: perfil } = await sb.from('perfiles')
+    .select('id')
+    .eq('empleado_id', empleadoId)
+    .maybeSingle();
+
+  const mecanicoId = perfil?.id || empleadoId;
+
+  const { data: asignaciones } = await sb
+    .from('reparacion_mecanicos')
+    .select('reparacion_id, reparaciones(id,descripcion,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
+    .eq('mecanico_id', mecanicoId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  const trabajos = (asignaciones || []).map(a => a.reparaciones).filter(r => r);
+
+  openModal(`
+    <div class="modal-title">🔧 Trabajos asignados a ${h(nombreEmpleado)}</div>
+    <div style="max-height:60vh;overflow-y:auto">
+      ${trabajos.length === 0 ? '<div class="empty"><p>No tiene trabajos asignados</p></div>' :
+        trabajos.map(r => `
+        <div class="card" onclick="closeModal();detalleReparacion('${r.id}')">
+          <div class="card-header">
+            <div class="card-avatar">${TIPO_ICONS[r.tipo_trabajo] || '🔧'}</div>
+            <div class="card-info">
+              <div class="card-name">${h(r.descripcion)}</div>
+              <div class="card-sub">${r.vehiculos ? h(r.vehiculos.patente)+' · '+h(r.vehiculos.marca) : t('sinVehiculo')} · ${r.clientes ? h(r.clientes.nombre) : ''}</div>
+              <div class="card-sub">${formatFecha(r.fecha)} ${r.costo ? '· ₲'+gs(r.costo) : ''}</div>
+            </div>
+            <span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span>
+          </div>
+        </div>`).join('')}
+    </div>
+    <button class="btn-secondary" onclick="closeModal()">Cerrar</button>
+  `);
 }
 
 function modalNuevoEmpleado() {
@@ -214,14 +259,14 @@ async function guardarVale(empleadoId) {
   if (error) { toast('Error: '+error.message,'error'); return; }
   
   const { data: emp } = await sb.from('empleados').select('nombre').eq('id', empleadoId).single();
-  const { data: cats } = await sb.from('categorias_financieras').select('id').eq('taller_id',tid()).eq('nombre','Vales/Adelantos').limit(1);
-  if (cats?.length) {
+  const categoriaId = await obtenerCategoriaFinanciera('Vales/Adelantos', 'egreso');
+  if (categoriaId) {
     await sb.from('movimientos_financieros').insert({
       taller_id: tid(),
       tipo: 'egreso',
-      categoria_id: cats[0].id,
+      categoria_id: categoriaId,
       monto,
-      descripcion: 'Vale: ' + (emp?.nombre||'') + ' — ' + concepto,
+      concepto: 'Vale: ' + (emp?.nombre||'') + ' — ' + concepto,
       fecha
     });
   }
