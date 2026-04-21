@@ -157,33 +157,25 @@ async function navigate(page, params = {}) {
   if (navEl) navEl.classList.add('active');
   
   document.getElementById('main-content').innerHTML = getSkeleton(page);
-  const pages = { 
-    dashboard, clientes, vehiculos, reparaciones, inventario, creditos, empleados, 
-    presupuestos, reportes, usuarios, mantenimientos, agenda, finanzas, 
-    'cuentas-pagar': cuentasPagar, 
-    'mis-vehiculos': misVehiculos, 
-    'mis-reparaciones': misReparaciones, 
-    'mis-mantenimientos': misMantenimientos, 
-    'mis-citas': misCitas, 
-    'mi-plan': miPlan, 
-    'super-admin': superAdminPanel, 
-    'mis-trabajos': misTrabajos, 
-    'mi-perfil': miPerfil, 
-    ventas, 
-    gastos, 
-    'panel-trabajo': panelTrabajo,
-    sueldos,
-    'reporte-rentabilidad': reporteRentabilidad,
-    'reporte-flujo-caja': reporteFlujoCaja,
-    'reporte-comparativas': reporteComparativas,
-    'reporte-tendencias': reporteTendencias,
-    'modo-taller': modoTaller
-  };
-  if (pages[page]) {
-    try { await pages[page](params); }
-    catch(err) { 
-      console.error(`Error en ${page}:`, err); 
-      document.getElementById('main-content').innerHTML = `<div class="empty"><p>Error al cargar. <button onclick="navigate('${page}')" style="color:var(--accent);background:none;border:none;cursor:pointer;text-decoration:underline">Reintentar</button></p></div>`; 
-    }
-  }
-}
+ const pages = { 
+  dashboard, clientes, vehiculos, reparaciones, inventario, creditos, empleados, 
+  presupuestos, reportes, usuarios, mantenimientos, agenda, finanzas, 
+  'cuentas-pagar': cuentasPagar, 
+  'mis-vehiculos': misVehiculos, 
+  'mis-reparaciones': misReparaciones, 
+  'mis-mantenimientos': misMantenimientos, 
+  'mis-citas': misCitas, 
+  'mi-plan': miPlan, 
+  'super-admin': superAdminPanel, 
+  'mis-trabajos': misTrabajos,    // ← DEBE ESTAR PRESENTE
+  'mi-perfil': miPerfil, 
+  ventas, 
+  gastos, 
+  'panel-trabajo': panelTrabajo,
+  sueldos,
+  'reporte-rentabilidad': reporteRentabilidad,
+  'reporte-flujo-caja': reporteFlujoCaja,
+  'reporte-comparativas': reporteComparativas,
+  'reporte-tendencias': reporteTendencias,
+  'modo-taller': modoTaller
+};
