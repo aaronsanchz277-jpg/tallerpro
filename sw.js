@@ -1,11 +1,14 @@
 // Service Worker para TallerPro
-const CACHE_NAME = 'tallerpro-v3';
+const CACHE_NAME = 'tallerpro-v4'; // Nueva versión para forzar actualización limpia
+
+// Rutas verificadas una por una contra la estructura real
 const urlsToCache = [
   './',
   './index.html',
   './css/styles.css',
   './manifest.json',
-  // Núcleo
+
+  // === Núcleo ===
   './js/core/config.js',
   './js/core/pwa.js',
   './js/core/offline.js',
@@ -16,19 +19,23 @@ const urlsToCache = [
   './js/core/validators.js',
   './js/core/backup.js',
   './js/core/debug.js',
-  // Auth
+
+  // === Auth ===
   './js/auth/auth.js',
   './js/auth/plan.js',
   './js/auth/admin.js',
-  // Dashboard
+
+  // === Dashboard ===
   './js/dashboard/dashboard.js',
   './js/dashboard/simple-mode.js',
   './js/dashboard/modo-taller.js',
-  // CRM
+
+  // === CRM ===
   './js/crm/clientes.js',
   './js/crm/vehiculos.js',
   './js/crm/cliente-view.js',
-  // Workshop (modularizado)
+
+  // === Workshop (Reparaciones modularizado) ===
   './js/workshop/reparaciones-core.js',
   './js/workshop/reparaciones-list.js',
   './js/workshop/reparaciones-detalle.js',
@@ -39,6 +46,8 @@ const urlsToCache = [
   './js/workshop/reparaciones-modales.js',
   './js/workshop/reparaciones-wizard.js',
   './js/workshop/reparaciones.js',
+
+  // === Otros módulos de taller ===
   './js/workshop/inventario.js',
   './js/workshop/barcode.js',
   './js/workshop/agenda.js',
@@ -46,31 +55,36 @@ const urlsToCache = [
   './js/workshop/kanban.js',
   './js/workshop/checklist-templates.js',
   './js/workshop/stock-realtime.js',
-  // Finances
+
+  // === Finanzas ===
   './js/finances/finanzas.js',
   './js/finances/creditos.js',
   './js/finances/cuentas.js',
   './js/finances/gastos.js',
   './js/finances/caja.js',
   './js/finances/sueldos.js',
-  './js/finances/categorias.js',
+  './js/finances/Categorias.js',          // ← CORREGIDO: con mayúscula inicial
   './js/finances/conciliador.js',
-  // HR
+
+  // === RRHH ===
   './js/hr/empleados.js',
   './js/hr/usuarios.js',
   './js/hr/mecanicos.js',
   './js/hr/perfil.js',
-  // Sales
+
+  // === Ventas ===
   './js/sales/ventas.js',
   './js/sales/presupuestos.js',
-  // Reports
+
+  // === Reportes ===
   './js/reports/common.js',
   './js/reports/rentabilidad.js',
   './js/reports/flujo-caja.js',
   './js/reports/comparativas.js',
   './js/reports/tendencias.js',
   './js/reports/export-excel.js',
-  // Integrations
+
+  // === Integraciones ===
   './js/integrations/ia.js',
   './js/integrations/push.js',
   './js/integrations/ocr.js',
@@ -78,28 +92,42 @@ const urlsToCache = [
   './js/integrations/recordatorios.js',
   './js/integrations/realtime.js',
   './js/integrations/integrations-wizard.js',
-  // Navigation
+
+  // === Navegación ===
   './js/navigation/navigation.js',
-  // UX
+
+  // === UX ===
   './js/ux/theme.js',
   './js/ux/optimize-images.js',
   './js/ux/ubicaciones.js',
   './js/ux/form-guard.js',
-  // Dev
+
+  // === Dev ===
   './js/dev/tests.js'
 ];
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async cache => {
-      console.log('Intentando cachear recursos...');
-      const promises = urlsToCache.map(url => {
-        return cache.add(url).catch(err => {
-          console.warn(`No se pudo cachear: ${url}`, err);
-        });
-      });
-      await Promise.all(promises);
-      console.log('Instalación completada (con posibles fallos individuales).');
+      console.log('📦 Instalando Service Worker...');
+      const resultados = { exitos: 0, fallos: 0, fallosDetalle: [] };
+
+      for (const url of urlsToCache) {
+        try {
+          await cache.add(url);
+          resultados.exitos++;
+        } catch (err) {
+          resultados.fallos++;
+          resultados.fallosDetalle.push({ url, error: err.message });
+          console.error(`❌ Falló cacheo: ${url} — ${err.message}`);
+        }
+      }
+
+      console.log(`✅ Instalación completada: ${resultados.exitos} recursos cacheados.`);
+      if (resultados.fallos > 0) {
+        console.warn(`⚠️ ${resultados.fallos} recursos no se pudieron cachear.`);
+        console.table(resultados.fallosDetalle);
+      }
     })
   );
 });
@@ -118,4 +146,6 @@ self.addEventListener('activate', event => {
       keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
     ))
   );
+  // Tomar control inmediato de los clientes
+  event.waitUntil(clients.claim());
 });
