@@ -1,5 +1,5 @@
 // Service Worker para TallerPro
-const CACHE_NAME = 'tallerpro-v3'; // Incrementamos versión para forzar actualización
+const CACHE_NAME = 'tallerpro-v3';
 const urlsToCache = [
   './',
   './index.html',
@@ -91,11 +91,15 @@ const urlsToCache = [
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
+    caches.open(CACHE_NAME).then(async cache => {
       console.log('Intentando cachear recursos...');
-      return cache.addAll(urlsToCache).catch(err => {
-        console.warn('Algunos recursos no se pudieron cachear:', err);
+      const promises = urlsToCache.map(url => {
+        return cache.add(url).catch(err => {
+          console.warn(`No se pudo cachear: ${url}`, err);
+        });
       });
+      await Promise.all(promises);
+      console.log('Instalación completada (con posibles fallos individuales).');
     })
   );
 });
