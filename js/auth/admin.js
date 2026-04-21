@@ -16,7 +16,10 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
       .in('id', misRepIds)
       .order('created_at', { ascending: false });
 
-    if (filtro !== 'todos') q = q.eq('estado', filtro);
+    if (filtro !== 'todos') {
+      q = q.eq('estado', filtro);
+    }
+
     const res = await q;
     data = res.data || [];
   }
@@ -29,6 +32,7 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
     <div style="padding:.25rem 0">
       <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text);margin-bottom:.25rem">Mis Trabajos</div>
       <div style="font-size:.8rem;color:var(--text2);margin-bottom:1rem">${total} reparaciones · ${misRepsHoy.length} hoy</div>
+
       <div class="tabs">
         <button class="tab ${filtro==='en_progreso'?'active':''}" onclick="misTrabajos({filtro:'en_progreso'})">En Progreso</button>
         <button class="tab ${filtro==='pendiente'?'active':''}" onclick="misTrabajos({filtro:'pendiente'})">Pendientes</button>
@@ -36,6 +40,7 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
         <button class="tab ${filtro==='finalizado'?'active':''}" onclick="misTrabajos({filtro:'finalizado'})">Finalizados</button>
         <button class="tab ${filtro==='todos'?'active':''}" onclick="misTrabajos({filtro:'todos'})">Todos</button>
       </div>
+
       ${data.length === 0 ? `<div class="empty"><p>No hay reparaciones ${filtro !== 'todos' ? 'con estado "' + estadoLabel(filtro) + '"' : ''}</p></div>` :
         data.map(r => `
         <div class="card" onclick="detalleReparacion('${r.id}')">
@@ -80,12 +85,14 @@ async function superAdminPanel() {
     <div style="padding:.25rem 0">
       <div style="font-family:var(--font-head);font-size:1.5rem;color:var(--accent);margin-bottom:.25rem">🔑 SUPER ADMIN</div>
       <div style="font-size:.8rem;color:var(--text2);margin-bottom:1rem">${(talleres||[]).length} talleres registrados</div>
+
       <div class="stats-grid" style="margin-bottom:1rem">
         <div class="stat-card"><div class="stat-value">${(talleres||[]).length}</div><div class="stat-label">TALLERES</div></div>
         <div class="stat-card"><div class="stat-value" style="color:var(--success)">${(suscripciones||[]).filter(s=>s.estado==='activa').length}</div><div class="stat-label">ACTIVAS</div></div>
         <div class="stat-card"><div class="stat-value" style="color:var(--warning)">${(suscripciones||[]).filter(s=>s.estado==='trial').length}</div><div class="stat-label">TRIAL</div></div>
         <div class="stat-card"><div class="stat-value" style="color:var(--danger)">${(suscripciones||[]).filter(s=>s.estado==='vencida').length}</div><div class="stat-label">VENCIDAS</div></div>
       </div>
+
       ${(talleres||[]).map(taller => {
         const sub = subMap[taller.id];
         const plan = sub ? planMap[sub.plan_id] : null;
@@ -219,5 +226,5 @@ async function guardarConfigDatos() {
   navigate('dashboard');
 }
 
-// ✅ Asegurar disponibilidad global
+// ✅ EXPONER GLOBALMENTE (SOLUCIÓN DURADERA)
 window.misTrabajos = misTrabajos;
