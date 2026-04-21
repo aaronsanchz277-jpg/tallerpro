@@ -1,4 +1,5 @@
 // ─── MOD-2: MECÁNICOS POR REPARACIÓN (multi-asignación con horas) ───────────
+// Versión unificada: solo se usa empleado_id
 
 async function repMecanicos_cargar(repId) {
   const { data } = await sb.from('reparacion_mecanicos')
@@ -73,7 +74,7 @@ async function repMecanicos_agregar(repId) {
   }
 
   const empleadoId = sel.value;
-  const nombre = sel.options[sel.selectedIndex].textContent;
+  const nombre = sel.options[sel.selectedIndex].textContent.trim();
 
   // Verificar si ya está asignado
   const { data: existente } = await sb
@@ -88,16 +89,26 @@ async function repMecanicos_agregar(repId) {
     return;
   }
 
-  const { error } = await sb.from('reparacion_mecanicos').insert({
+  const insertData = {
     reparacion_id: repId,
     empleado_id: empleadoId,
     horas: 0,
     pago: 0
-  });
+  };
+
+  const { error } = await sb.from('reparacion_mecanicos').insert(insertData);
 
   if (error) {
     console.error('Error al agregar mecánico:', error);
-    toast('Error al agregar: ' + error.message, 'error');
+    if (error.message.includes('duplicate')) {
+      toast('Este mecánico ya está asignado a este trabajo', 'error');
+    } else if (error.code === '42501' || error.message.includes('permission')) {
+      toast('No tenés permiso para asignar mecánicos. Verificá tu rol.', 'error');
+    } else if (error.message.includes('violates row-level security')) {
+      toast('Error de seguridad: contactá al administrador para revisar permisos.', 'error');
+    } else {
+      toast('Error al agregar: ' + error.message, 'error');
+    }
     return;
   }
 
@@ -132,5 +143,10 @@ async function repMecanicos_actualizarConSafeCall(id, campo, valor, repId) {
 async function repMecanicos_actualizar(id, campo, valor) {
   const update = {};
   update[campo] = campo === 'horas' || campo === 'pago' ? parseFloat(valor) || 0 : valor;
-  await sb.from('reparacion_mecanicos').update(update).eq('id', id);
+  
+  const { error } = await sb.from('reparacion_mecanicos').update(update).eq('id', id);
+  if (error) {
+    console.error('Error al actualizar mecánico:', error);
+    toast('Error al actualizar: ' + error.message, 'error');
+  }
 }
