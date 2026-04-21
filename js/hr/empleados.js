@@ -91,7 +91,7 @@ async function detalleEmpleado(id) {
   cargarVales(id);
 }
 
-// Modal para que admin vea trabajos asignados al empleado
+// Modal para que admin vea trabajos asignados al empleado (AMBOS TIPOS)
 async function modalVerTrabajosAsignados(empleadoId, nombreEmpleado) {
   // Buscar el usuario (perfil) asociado a este empleado (si existe)
   const { data: perfil } = await sb.from('perfiles')
@@ -101,7 +101,7 @@ async function modalVerTrabajosAsignados(empleadoId, nombreEmpleado) {
 
   const mecanicoId = perfil?.id || empleadoId;
 
-  // CORRECCIÓN: Buscar tanto por mecanico_id como por empleado_id
+  // Buscar asignaciones por mecanico_id (usuario) O empleado_id (manual)
   const { data: asignaciones } = await sb
     .from('reparacion_mecanicos')
     .select('reparacion_id, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
