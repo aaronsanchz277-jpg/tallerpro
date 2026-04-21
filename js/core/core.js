@@ -46,23 +46,6 @@ async function forceSyncNow() {
   else { toast(`Quedan ${count} elementos por sincronizar`, 'warning'); }
 }
 
-function validateRequired(value, fieldName) {
-  if (!value || (typeof value === 'string' && !value.trim())) {
-    toast(`El campo "${fieldName}" es obligatorio`, 'error');
-    return false;
-  }
-  return true;
-}
-
-function validatePositiveNumber(value, fieldName) {
-  const num = parseFloat(value);
-  if (isNaN(num) || num <= 0) {
-    toast(`El campo "${fieldName}" debe ser un número mayor a 0`, 'error');
-    return false;
-  }
-  return true;
-}
-
 function formatMoneda(valor) { return '₲ ' + gs(valor); }
 function formatNumero(valor) { return new Intl.NumberFormat('es-PY').format(valor || 0); }
 function capitalize(str) { return str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : ''; }
