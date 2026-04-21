@@ -42,28 +42,13 @@ async function detalleEmpleado(id) {
     trabajosManuales = trabajosRes.data || [];
     if (DEBUG) console.log('🛠️ detalleEmpleado - manuales:', trabajosManuales.length);
 
-    const { data: perfil } = await sb.from('perfiles')
-      .select('id')
+    const asignacionesRes = await sb.from('reparacion_mecanicos')
+      .select('reparacion_id, horas, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
       .eq('empleado_id', id)
-      .maybeSingle();
-    const mecanicoId = perfil?.id || id;
-    if (DEBUG) console.log('🆔 detalleEmpleado - mecanicoId:', mecanicoId);
-
-    const { data: porMecanico } = await sb.from('reparacion_mecanicos')
-      .select('reparacion_id, horas, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
-      .eq('mecanico_id', mecanicoId)
       .order('created_at', { ascending: false })
       .limit(50);
-    if (DEBUG) console.log('🔧 detalleEmpleado - porMecanico:', porMecanico?.length);
-
-    const { data: porEmpleado } = await sb.from('reparacion_mecanicos')
-      .select('reparacion_id, horas, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
-      .eq('empleado_id', mecanicoId)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (DEBUG) console.log('👷 detalleEmpleado - porEmpleado:', porEmpleado?.length);
-
-    asignacionesMecanico = [...(porMecanico || []), ...(porEmpleado || [])];
+    asignacionesMecanico = asignacionesRes.data || [];
+    if (DEBUG) console.log('🔧 detalleEmpleado - asignaciones:', asignacionesMecanico.length);
   } catch(e) {
     toast('Error al cargar empleado','error');
     navigate('empleados');
