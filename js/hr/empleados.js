@@ -26,18 +26,93 @@ async function empleados() {
 }
 
 async function detalleEmpleado(id) {
-  let emp, trabajos;
+  let emp, trabajosManuales, asignacionesMecanico;
   try {
-    const results = await Promise.all([
-      sb.from('empleados').select('*').eq('id',id).single(),
-      sb.from('trabajos_empleado').select('*, vehiculos(patente,marca,modelo)').eq('empleado_id',id).order('fecha',{ascending:false}).limit(30)
-    ]);
-    emp = results[0].data; trabajos = results[1].data;
+    // 1. Datos del empleado
+    const empRes = await sb.from('empleados').select('*').eq('id',id).single();
+    emp = empRes.data;
+
+    // 2. Trabajos manuales registrados (trabajos_empleado)
+    const trabajosRes = await sb.from('trabajos_empleado')
+      .select('*, vehiculos(patente,marca,modelo)')
+      .eq('empleado_id', id)
+      .order('fecha',{ascending:false})
+      .limit(50);
+    trabajosManuales = trabajosRes.data || [];
+
+    // 3. Buscar perfil asociado (si existe) para obtener reparaciones asignadas
+    const { data: perfil } = await sb.from('perfiles')
+      .select('id')
+      .eq('empleado_id', id)
+      .maybeSingle();
+
+    const mecanicoId = perfil?.id || id;
+
+    // 4. Reparaciones asignadas como mecánico (reparacion_mecanicos)
+    const asignacionesRes = await sb.from('reparacion_mecanicos')
+      .select('reparacion_id, horas, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
+      .or(`mecanico_id.eq.${mecanicoId},empleado_id.eq.${mecanicoId}`)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    asignacionesMecanico = asignacionesRes.data || [];
+
   } catch(e) { toast('Error al cargar empleado','error'); navigate('empleados'); return; }
   if (!emp) { toast('Empleado no encontrado','error'); navigate('empleados'); return; }
+
+  // ─── UNIFICAR AMBAS FUENTES EN UN SOLO ARRAY DE "TRABAJOS" ─────────────────
+  const trabajosUnificados = [];
+
+  // Agregar trabajos manuales
+  trabajosManuales.forEach(t => {
+    trabajosUnificados.push({
+      fecha: t.fecha,
+      tipo: 'manual',
+      descripcion: t.tipo_trabajo || 'Trabajo general',
+      horas: t.horas || 0,
+      vehiculo: t.vehiculos ? `${t.vehiculos.patente} · ${t.vehiculos.marca} ${t.vehiculos.modelo||''}` : null,
+      comentario: t.comentario,
+      foto_url: t.foto_vehiculo_url,
+      origen: 'manual',
+      id: t.id,
+      estado: null,
+      costo: null,
+      cliente: null
+    });
+  });
+
+  // Agregar asignaciones de mecánico
+  asignacionesMecanico.forEach(a => {
+    const r = a.reparaciones;
+    if (!r) return;
+    trabajosUnificados.push({
+      fecha: r.fecha,
+      tipo: 'reparacion',
+      descripcion: r.descripcion,
+      horas: a.horas || 0,
+      vehiculo: r.vehiculos ? `${r.vehiculos.patente} · ${r.vehiculos.marca}` : null,
+      comentario: null,
+      foto_url: null,
+      origen: 'reparacion',
+      id: r.id,
+      estado: r.estado,
+      costo: r.costo,
+      cliente: r.clientes?.nombre
+    });
+  });
+
+  // Ordenar por fecha descendente
+  trabajosUnificados.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+
+  // Agrupar por fecha
   const porFecha = {};
-  (trabajos||[]).forEach(t => { const f=t.fecha||'sinFecha'; if(!porFecha[f]) porFecha[f]=[]; porFecha[f].push(t); });
-  const totalHoras = (trabajos||[]).reduce((s,t)=>s+parseFloat(t.horas||0),0);
+  trabajosUnificados.forEach(t => {
+    const f = t.fecha || 'sinFecha';
+    if (!porFecha[f]) porFecha[f] = [];
+    porFecha[f].push(t);
+  });
+
+  // Calcular total de horas (sumando ambas fuentes)
+  const totalHoras = trabajosUnificados.reduce((s, t) => s + parseFloat(t.horas || 0), 0);
 
   document.getElementById('main-content').innerHTML = `
     <div class="detail-header">
@@ -57,32 +132,35 @@ async function detalleEmpleado(id) {
       <button class="btn-add" style="flex:1;justify-content:center" onclick="modalNuevoTrabajo('${id}')">+ Registrar trabajo</button>
       <button onclick="modalNuevoVale('${id}')" style="flex:1;background:rgba(255,204,0,.12);color:var(--warning);border:1px solid rgba(255,204,0,.3);border-radius:10px;padding:.5rem;font-family:var(--font-head);font-size:.8rem;cursor:pointer;text-align:center">+ Vale / Adelanto</button>
     </div>
-    ${currentPerfil?.rol === 'admin' ? `
-    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
-      <button class="btn-secondary" style="margin:0;flex:1" onclick="modalVerTrabajosAsignados('${id}','${h(emp.nombre)}')">🔧 Ver trabajos asignados</button>
-    </div>` : ''}
     <div style="display:flex;gap:.5rem;margin-bottom:1.25rem">
       <button class="btn-secondary" style="margin:0;flex:1" onclick="modalEditarEmpleado('${id}')">${t('editarBtn')}</button>
       <button class="btn-danger" style="margin:0" onclick="eliminarEmpleado('${id}')">✕</button>
     </div>
     <div class="sub-section">
-      <div class="sub-section-title">${t('empTrabajosReg')}</div>
+      <div class="sub-section-title">${t('empTrabajosReg')} (${trabajosUnificados.length})</div>
       ${Object.keys(porFecha).length===0 ? `<p style="color:var(--text2);font-size:.85rem">${t('empSinTrabajos')}</p>` :
-        Object.entries(porFecha).map(([fecha,ts]) => `
+        Object.entries(porFecha).map(([fecha, ts]) => `
           <div style="margin-bottom:1rem">
             <div style="font-size:.75rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">${fecha}</div>
             ${ts.map(t => `
-            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.4rem">
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.4rem;cursor:pointer" onclick="${t.origen === 'reparacion' ? `detalleReparacion('${t.id}')` : ''}">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
                 <div style="flex:1">
-                  <div style="font-weight:500;font-size:.9rem">${h(t.tipo_trabajo)||'Trabajo general'}</div>
-                  <div style="font-size:.75rem;color:var(--text2);margin-top:2px">${t.vehiculos?h(t.vehiculos.patente)+' · '+h(t.vehiculos.marca)+' '+(h(t.vehiculos.modelo)||''):t('sinVehiculo')}</div>
+                  <div style="font-weight:500;font-size:.9rem">
+                    ${h(t.descripcion)}
+                    ${t.origen === 'reparacion' ? `<span class="card-badge ${estadoBadge(t.estado)}" style="margin-left:.5rem;font-size:.65rem">${estadoLabel(t.estado)}</span>` : ''}
+                  </div>
+                  <div style="font-size:.75rem;color:var(--text2);margin-top:2px">
+                    ${t.vehiculo ? h(t.vehiculo) : ''}
+                    ${t.cliente ? ` · ${h(t.cliente)}` : ''}
+                    ${t.costo ? ` · ₲${gs(t.costo)}` : ''}
+                  </div>
                   ${t.comentario?`<div style="font-size:.8rem;color:var(--text2);margin-top:.4rem;font-style:italic">"${h(t.comentario)}"</div>`:''}
-                  ${t.foto_vehiculo_url?`<img src="${safeFotoUrl(t.foto_vehiculo_url)}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-top:.5rem;border:1px solid var(--border)">`:''}
+                  ${t.foto_url?`<img src="${safeFotoUrl(t.foto_url)}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-top:.5rem;border:1px solid var(--border)">`:''}
                 </div>
                 <div style="text-align:right;flex-shrink:0">
                   <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--accent)">${t.horas}hs</div>
-                  <button onclick="eliminarTrabajo('${t.id}','${id}')" style="font-size:.65rem;background:none;border:none;color:var(--text2);cursor:pointer;margin-top:4px">✕ borrar</button>
+                  ${t.origen === 'manual' ? `<button onclick="event.stopPropagation();eliminarTrabajo('${t.id}','${id}')" style="font-size:.65rem;background:none;border:none;color:var(--text2);cursor:pointer;margin-top:4px">✕ borrar</button>` : ''}
                 </div>
               </div>
             </div>`).join('')}
@@ -91,98 +169,7 @@ async function detalleEmpleado(id) {
   cargarVales(id);
 }
 
-// Modal para que admin vea trabajos asignados al empleado (AMBOS TIPOS)
-async function modalVerTrabajosAsignados(empleadoId, nombreEmpleado) {
-  // Buscar el usuario (perfil) asociado a este empleado (si existe)
-  const { data: perfil } = await sb.from('perfiles')
-    .select('id')
-    .eq('empleado_id', empleadoId)
-    .maybeSingle();
-
-  const mecanicoId = perfil?.id || empleadoId;
-
-  // Buscar asignaciones por mecanico_id (usuario) O empleado_id (manual)
-  const { data: asignaciones } = await sb
-    .from('reparacion_mecanicos')
-    .select('reparacion_id, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
-    .or(`mecanico_id.eq.${mecanicoId},empleado_id.eq.${mecanicoId}`)
-    .order('created_at', { ascending: false })
-    .limit(50);
-
-  const trabajos = (asignaciones || []).map(a => a.reparaciones).filter(r => r);
-
-  openModal(`
-    <div class="modal-title">🔧 Trabajos asignados a ${h(nombreEmpleado)}</div>
-    <div style="max-height:60vh;overflow-y:auto">
-      ${trabajos.length === 0 ? '<div class="empty"><p>No tiene trabajos asignados</p></div>' :
-        trabajos.map(r => `
-        <div class="card" onclick="closeModal();detalleReparacion('${r.id}')">
-          <div class="card-header">
-            <div class="card-avatar">${TIPO_ICONS[r.tipo_trabajo] || '🔧'}</div>
-            <div class="card-info">
-              <div class="card-name">${h(r.descripcion)}</div>
-              <div class="card-sub">${r.vehiculos ? h(r.vehiculos.patente)+' · '+h(r.vehiculos.marca) : t('sinVehiculo')} · ${r.clientes ? h(r.clientes.nombre) : ''}</div>
-              <div class="card-sub">${formatFecha(r.fecha)} ${r.costo ? '· ₲'+gs(r.costo) : ''}</div>
-            </div>
-            <span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span>
-          </div>
-        </div>`).join('')}
-    </div>
-    <button class="btn-secondary" onclick="closeModal()">Cerrar</button>
-  `);
-}
-
-function modalNuevoEmpleado() {
-  openModal(`
-    <div class="modal-title">${t("modNuevoEmpleado")}</div>
-    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" placeholder="Carlos Rodríguez"></div>
-    <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" placeholder="Mecánico, Electricista..."></div>
-    <div class="form-group"><label class="form-label">Sueldo mensual ₲</label>${renderMontoInput('f-sueldo', '', '0')}</div>
-    <div class="form-group"><label class="form-label">Teléfono</label>${phoneInput('f-tel','','0981 123 456')}</div>
-    <button class="btn-primary" onclick="guardarEmpleadoConSafeCall()">${t('guardar')}</button>
-    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
-}
-
-async function guardarEmpleadoConSafeCall() {
-  await safeCall(async () => {
-    await guardarEmpleado();
-  }, null, 'No se pudo guardar el empleado');
-}
-
-async function guardarEmpleado(id=null) {
-  const nombre = document.getElementById('f-nombre').value.trim();
-  if (!validateRequired(nombre, 'Nombre')) return;
-  
-  const data = {
-    nombre,
-    rol: document.getElementById('f-rol').value,
-    sueldo: parseFloat(document.getElementById('f-sueldo')?.value)||0,
-    telefono: document.getElementById('f-tel').value,
-    taller_id: tid()
-  };
-  
-  const { error } = id ? await offlineUpdate('empleados', data, 'id', id) : await offlineInsert('empleados', data);
-  if (error) { toast('Error: '+error.message,'error'); return; }
-  
-  clearCache('empleados');
-  toast(id ? 'Empleado actualizado' : 'Empleado guardado','success');
-  closeModal(); 
-  empleados();
-}
-
-async function modalEditarEmpleado(id) {
-  const { data:e } = await sb.from('empleados').select('*').eq('id',id).single();
-  openModal(`
-    <div class="modal-title">${t("modEditarEmpleado")}</div>
-    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" value="${h(e.nombre||'')}"></div>
-    <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" value="${h(e.rol||'')}"></div>
-    <div class="form-group"><label class="form-label">Sueldo mensual ₲</label>${renderMontoInput('f-sueldo', e.sueldo||0)}</div>
-    <div class="form-group"><label class="form-label">Teléfono</label>${phoneInput('f-tel', e.telefono, '0981 123 456')}</div>
-    <button class="btn-primary" onclick="guardarEmpleadoConSafeCall('${id}')">${t('actualizar')}</button>
-    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
-}
-
-// ─── VALES Y ADELANTOS ──────────────────────────────────────────────────────
+// ─── VALES Y ADELANTOS (sin cambios) ────────────────────────────────────────
 async function cargarVales(empleadoId) {
   const mesActual = new Date();
   const primerDia = new Date(mesActual.getFullYear(), mesActual.getMonth(), 1).toISOString().split('T')[0];
@@ -360,4 +347,55 @@ async function eliminarTrabajo(trabajoId, empleadoId) {
       detalleEmpleado(empleadoId);
     }, null, 'No se pudo eliminar el trabajo');
   });
+}
+
+// Las funciones modalNuevoEmpleado, guardarEmpleado, modalEditarEmpleado se mantienen igual que antes
+function modalNuevoEmpleado() {
+  openModal(`
+    <div class="modal-title">${t("modNuevoEmpleado")}</div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" placeholder="Carlos Rodríguez"></div>
+    <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" placeholder="Mecánico, Electricista..."></div>
+    <div class="form-group"><label class="form-label">Sueldo mensual ₲</label>${renderMontoInput('f-sueldo', '', '0')}</div>
+    <div class="form-group"><label class="form-label">Teléfono</label>${phoneInput('f-tel','','0981 123 456')}</div>
+    <button class="btn-primary" onclick="guardarEmpleadoConSafeCall()">${t('guardar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function guardarEmpleadoConSafeCall() {
+  await safeCall(async () => {
+    await guardarEmpleado();
+  }, null, 'No se pudo guardar el empleado');
+}
+
+async function guardarEmpleado(id=null) {
+  const nombre = document.getElementById('f-nombre').value.trim();
+  if (!validateRequired(nombre, 'Nombre')) return;
+  
+  const data = {
+    nombre,
+    rol: document.getElementById('f-rol').value,
+    sueldo: parseFloat(document.getElementById('f-sueldo')?.value)||0,
+    telefono: document.getElementById('f-tel').value,
+    taller_id: tid()
+  };
+  
+  const { error } = id ? await offlineUpdate('empleados', data, 'id', id) : await offlineInsert('empleados', data);
+  if (error) { toast('Error: '+error.message,'error'); return; }
+  
+  clearCache('empleados');
+  toast(id ? 'Empleado actualizado' : 'Empleado guardado','success');
+  closeModal(); 
+  empleados();
+}
+
+async function modalEditarEmpleado(id) {
+  const { data:e } = await sb.from('empleados').select('*').eq('id',id).single();
+  openModal(`
+    <div class="modal-title">${t("modEditarEmpleado")}</div>
+    <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" value="${h(e.nombre||'')}"></div>
+    <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" value="${h(e.rol||'')}"></div>
+    <div class="form-group"><label class="form-label">Sueldo mensual ₲</label>${renderMontoInput('f-sueldo', e.sueldo||0)}</div>
+    <div class="form-group"><label class="form-label">Teléfono</label>${phoneInput('f-tel', e.telefono, '0981 123 456')}</div>
+    <button class="btn-primary" onclick="guardarEmpleadoConSafeCall('${id}')">${t('actualizar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
 }
