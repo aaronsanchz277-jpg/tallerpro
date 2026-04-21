@@ -2,21 +2,11 @@
 async function misTrabajos({ filtro='en_progreso' }={}) {
   if (currentPerfil?.rol !== 'empleado') { dashboard(); return; }
 
-  const empleadoId = currentPerfil?.empleado_id;
-  if (!empleadoId) {
-    document.getElementById('main-content').innerHTML = `
-      <div class="empty">
-        <p>Tu cuenta no está vinculada a una ficha de empleado.</p>
-        <p style="font-size:.8rem">Contactá al administrador para que te vincule manualmente.</p>
-      </div>`;
-    return;
-  }
-
-  // Consulta unificada
+  // Buscar asignaciones por mecanico_id (usuario) O empleado_id (manual)
   const { data: misAsignaciones } = await sb
     .from('reparacion_mecanicos')
     .select('reparacion_id')
-    .eq('empleado_id', empleadoId);
+    .or(`mecanico_id.eq.${currentUser.id},empleado_id.eq.${currentUser.id}`);
 
   const misRepIds = (misAsignaciones || []).map(a => a.reparacion_id);
 
@@ -27,20 +17,23 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
       .in('id', misRepIds)
       .order('created_at', { ascending: false });
 
-    if (filtro !== 'todos') q = q.eq('estado', filtro);
+    if (filtro !== 'todos') {
+      q = q.eq('estado', filtro);
+    }
 
     const res = await q;
     data = res.data || [];
   }
 
   const hoy = fechaHoy();
-  const misRepsHoy = data.filter(r => r.fecha === hoy);
-  const total = data.length;
+  const misRepsHoy = (data || []).filter(r => r.fecha === hoy);
+  const total = (data || []).length;
 
   document.getElementById('main-content').innerHTML = `
     <div style="padding:.25rem 0">
       <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text);margin-bottom:.25rem">Mis Trabajos</div>
       <div style="font-size:.8rem;color:var(--text2);margin-bottom:1rem">${total} reparaciones · ${misRepsHoy.length} hoy</div>
+
       <div class="tabs">
         <button class="tab ${filtro==='en_progreso'?'active':''}" onclick="misTrabajos({filtro:'en_progreso'})">En Progreso</button>
         <button class="tab ${filtro==='pendiente'?'active':''}" onclick="misTrabajos({filtro:'pendiente'})">Pendientes</button>
@@ -48,6 +41,7 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
         <button class="tab ${filtro==='finalizado'?'active':''}" onclick="misTrabajos({filtro:'finalizado'})">Finalizados</button>
         <button class="tab ${filtro==='todos'?'active':''}" onclick="misTrabajos({filtro:'todos'})">Todos</button>
       </div>
+
       ${data.length === 0 ? `<div class="empty"><p>No hay reparaciones ${filtro !== 'todos' ? 'con estado "' + estadoLabel(filtro) + '"' : ''}</p></div>` :
         data.map(r => `
         <div class="card" onclick="detalleReparacion('${r.id}')">
@@ -232,28 +226,3 @@ async function guardarConfigDatos() {
   closeModal();
   navigate('dashboard');
 }
-
-// ─── DIAGNÓSTICO (ejecutar desde consola como admin) ─────────────────────────
-window.diagnosticarEmpleado = async function(idEmpleado) {
-  if (!idEmpleado) {
-    console.error('Debes proporcionar el ID del empleado. Ej: diagnosticarEmpleado("ec01f067-...")');
-    return;
-  }
-  console.log('🔍 Diagnosticando empleado:', idEmpleado);
-  
-  const { data: emp } = await sb.from('empleados').select('*').eq('id', idEmpleado).single();
-  console.log('📋 Empleado:', emp);
-  
-  const { data: perfil } = await sb.from('perfiles').select('id, nombre, rol').eq('empleado_id', idEmpleado).maybeSingle();
-  console.log('👤 Perfil asociado:', perfil);
-  
-  const { data: manuales } = await sb.from('trabajos_empleado').select('*').eq('empleado_id', idEmpleado);
-  console.log('🛠️ Trabajos manuales:', manuales?.length || 0, manuales);
-  
-  const { data: asignaciones } = await sb.from('reparacion_mecanicos')
-    .select('*, reparaciones(descripcion, estado)')
-    .eq('empleado_id', idEmpleado);
-  console.log('🔧 Asignaciones en reparaciones:', asignaciones?.length || 0, asignaciones);
-  
-  console.log('✅ Diagnóstico completado.');
-};
