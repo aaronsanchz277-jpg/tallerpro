@@ -2,8 +2,7 @@
 async function misTrabajos({ filtro='en_progreso' }={}) {
   if (currentPerfil?.rol !== 'empleado') { dashboard(); return; }
 
-  // Obtener IDs de reparaciones asignadas a este mecánico
-  // Buscar tanto por mecanico_id como por empleado_id
+  // Buscar asignaciones por mecanico_id (usuario) O empleado_id (manual)
   const { data: misAsignaciones } = await sb
     .from('reparacion_mecanicos')
     .select('reparacion_id')
