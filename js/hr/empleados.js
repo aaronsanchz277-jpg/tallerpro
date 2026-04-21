@@ -1,4 +1,4 @@
-// ─── EMPLEADOS ───────────────────────────────────────────────────────────────
+// ─── EMPLEADOS (VERSIÓN COMERCIAL - SOLO EMPLEADO_ID) ───────────────────────
 async function empleados() {
   const { data } = await cachedQuery('empleados_list', () =>
     sb.from('empleados').select('*').eq('taller_id',tid()).order('nombre')
@@ -26,13 +26,11 @@ async function empleados() {
 }
 
 async function detalleEmpleado(id) {
-  const DEBUG = localStorage.getItem('tallerpro_debug') === 'true';
   let emp, trabajosManuales, asignacionesMecanico;
   
   try {
     const empRes = await sb.from('empleados').select('*').eq('id',id).single();
     emp = empRes.data;
-    if (DEBUG) console.log('📋 detalleEmpleado - emp:', emp);
 
     const trabajosRes = await sb.from('trabajos_empleado')
       .select('*, vehiculos(patente,marca,modelo)')
@@ -40,7 +38,6 @@ async function detalleEmpleado(id) {
       .order('fecha',{ascending:false})
       .limit(50);
     trabajosManuales = trabajosRes.data || [];
-    if (DEBUG) console.log('🛠️ detalleEmpleado - manuales:', trabajosManuales.length);
 
     const asignacionesRes = await sb.from('reparacion_mecanicos')
       .select('reparacion_id, horas, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
@@ -48,7 +45,7 @@ async function detalleEmpleado(id) {
       .order('created_at', { ascending: false })
       .limit(50);
     asignacionesMecanico = asignacionesRes.data || [];
-    if (DEBUG) console.log('🔧 detalleEmpleado - asignaciones:', asignacionesMecanico.length);
+
   } catch(e) {
     toast('Error al cargar empleado','error');
     navigate('empleados');
@@ -77,11 +74,9 @@ async function detalleEmpleado(id) {
     });
   });
 
-  const idsVistos = new Set();
   asignacionesMecanico.forEach(a => {
     const r = a.reparaciones;
-    if (!r || idsVistos.has(r.id)) return;
-    idsVistos.add(r.id);
+    if (!r) return;
     trabajosUnificados.push({
       fecha: r.fecha,
       tipo: 'reparacion',
@@ -164,6 +159,8 @@ async function detalleEmpleado(id) {
   cargarVales(id);
 }
 
+// Las funciones de vales, modales, etc. se mantienen igual que en versiones anteriores.
+// Asegúrate de incluirlas completas.
 // ─── VALES Y ADELANTOS ──────────────────────────────────────────────────────
 async function cargarVales(empleadoId) {
   const mesActual = new Date();
