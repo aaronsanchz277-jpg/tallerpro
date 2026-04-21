@@ -2,28 +2,23 @@
 async function misTrabajos({ filtro='en_progreso' }={}) {
   if (currentPerfil?.rol !== 'empleado') { dashboard(); return; }
 
-  const DEBUG = localStorage.getItem('tallerpro_debug') === 'true';
   const empleadoId = currentPerfil?.empleado_id;
-
-  if (DEBUG) console.log('🔍 [misTrabajos] empleadoId:', empleadoId);
-
   if (!empleadoId) {
     document.getElementById('main-content').innerHTML = `
       <div class="empty">
         <p>Tu cuenta no está vinculada a una ficha de empleado.</p>
-        <p style="font-size:.8rem">Contactá al administrador.</p>
+        <p style="font-size:.8rem">Contactá al administrador para que te vincule manualmente.</p>
       </div>`;
     return;
   }
 
-  // Obtener IDs de reparaciones asignadas a este empleado
+  // Consulta unificada
   const { data: misAsignaciones } = await sb
     .from('reparacion_mecanicos')
     .select('reparacion_id')
     .eq('empleado_id', empleadoId);
 
   const misRepIds = (misAsignaciones || []).map(a => a.reparacion_id);
-  if (DEBUG) console.log('🔍 [misTrabajos] misRepIds:', misRepIds);
 
   let data = [];
   if (misRepIds.length > 0) {
@@ -39,14 +34,13 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
   }
 
   const hoy = fechaHoy();
-  const misRepsHoy = (data || []).filter(r => r.fecha === hoy);
-  const total = (data || []).length;
+  const misRepsHoy = data.filter(r => r.fecha === hoy);
+  const total = data.length;
 
   document.getElementById('main-content').innerHTML = `
     <div style="padding:.25rem 0">
       <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text);margin-bottom:.25rem">Mis Trabajos</div>
       <div style="font-size:.8rem;color:var(--text2);margin-bottom:1rem">${total} reparaciones · ${misRepsHoy.length} hoy</div>
-
       <div class="tabs">
         <button class="tab ${filtro==='en_progreso'?'active':''}" onclick="misTrabajos({filtro:'en_progreso'})">En Progreso</button>
         <button class="tab ${filtro==='pendiente'?'active':''}" onclick="misTrabajos({filtro:'pendiente'})">Pendientes</button>
@@ -54,7 +48,6 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
         <button class="tab ${filtro==='finalizado'?'active':''}" onclick="misTrabajos({filtro:'finalizado'})">Finalizados</button>
         <button class="tab ${filtro==='todos'?'active':''}" onclick="misTrabajos({filtro:'todos'})">Todos</button>
       </div>
-
       ${data.length === 0 ? `<div class="empty"><p>No hay reparaciones ${filtro !== 'todos' ? 'con estado "' + estadoLabel(filtro) + '"' : ''}</p></div>` :
         data.map(r => `
         <div class="card" onclick="detalleReparacion('${r.id}')">
