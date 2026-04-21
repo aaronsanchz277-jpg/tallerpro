@@ -2,32 +2,27 @@
 async function misTrabajos({ filtro='en_progreso' }={}) {
   if (currentPerfil?.rol !== 'empleado') { dashboard(); return; }
 
-  const userId = currentUser.id;
   const DEBUG = localStorage.getItem('tallerpro_debug') === 'true';
+  const empleadoId = currentPerfil?.empleado_id;
 
-  if (DEBUG) console.log('🔍 [misTrabajos] userId:', userId);
+  if (DEBUG) console.log('🔍 [misTrabajos] empleadoId:', empleadoId);
 
-  // Consulta 1: por mecanico_id
-  const { data: porMecanico, error: err1 } = await sb
-    .from('reparacion_mecanicos')
-    .select('reparacion_id')
-    .eq('mecanico_id', userId);
-
-  // Consulta 2: por empleado_id
-  const { data: porEmpleado, error: err2 } = await sb
-    .from('reparacion_mecanicos')
-    .select('reparacion_id')
-    .eq('empleado_id', userId);
-
-  if (DEBUG) {
-    console.log('🔍 [misTrabajos] porMecanico:', porMecanico, 'err:', err1);
-    console.log('🔍 [misTrabajos] porEmpleado:', porEmpleado, 'err:', err2);
+  if (!empleadoId) {
+    document.getElementById('main-content').innerHTML = `
+      <div class="empty">
+        <p>Tu cuenta no está vinculada a una ficha de empleado.</p>
+        <p style="font-size:.8rem">Contactá al administrador.</p>
+      </div>`;
+    return;
   }
 
-  const idsMec = (porMecanico || []).map(a => a.reparacion_id);
-  const idsEmp = (porEmpleado || []).map(a => a.reparacion_id);
-  const misRepIds = [...new Set([...idsMec, ...idsEmp])];
+  // Obtener IDs de reparaciones asignadas a este empleado
+  const { data: misAsignaciones } = await sb
+    .from('reparacion_mecanicos')
+    .select('reparacion_id')
+    .eq('empleado_id', empleadoId);
 
+  const misRepIds = (misAsignaciones || []).map(a => a.reparacion_id);
   if (DEBUG) console.log('🔍 [misTrabajos] misRepIds:', misRepIds);
 
   let data = [];
@@ -41,7 +36,6 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
 
     const res = await q;
     data = res.data || [];
-    if (DEBUG) console.log('🔍 [misTrabajos] reparaciones encontradas:', data.length, 'error:', res.error);
   }
 
   const hoy = fechaHoy();
@@ -260,17 +254,13 @@ window.diagnosticarEmpleado = async function(idEmpleado) {
   const { data: perfil } = await sb.from('perfiles').select('id, nombre, rol').eq('empleado_id', idEmpleado).maybeSingle();
   console.log('👤 Perfil asociado:', perfil);
   
-  const mecanicoId = perfil?.id || idEmpleado;
-  console.log('🆔 ID usado para buscar asignaciones:', mecanicoId);
-  
   const { data: manuales } = await sb.from('trabajos_empleado').select('*').eq('empleado_id', idEmpleado);
   console.log('🛠️ Trabajos manuales:', manuales?.length || 0, manuales);
   
-  const { data: porMecanico } = await sb.from('reparacion_mecanicos').select('*, reparaciones(descripcion, estado)').eq('mecanico_id', mecanicoId);
-  console.log('🔧 Asignaciones por mecanico_id:', porMecanico?.length || 0, porMecanico);
-  
-  const { data: porEmpleado } = await sb.from('reparacion_mecanicos').select('*, reparaciones(descripcion, estado)').eq('empleado_id', mecanicoId);
-  console.log('👷 Asignaciones por empleado_id:', porEmpleado?.length || 0, porEmpleado);
+  const { data: asignaciones } = await sb.from('reparacion_mecanicos')
+    .select('*, reparaciones(descripcion, estado)')
+    .eq('empleado_id', idEmpleado);
+  console.log('🔧 Asignaciones en reparaciones:', asignaciones?.length || 0, asignaciones);
   
   console.log('✅ Diagnóstico completado.');
 };
