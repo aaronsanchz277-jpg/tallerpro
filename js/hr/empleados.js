@@ -67,7 +67,7 @@ async function detalleEmpleado(id) {
     </div>
     <div class="sub-section">
       <div class="sub-section-title">${t('empTrabajosReg')}</div>
-      ${Object.keys(porFecha).length===0 ? '<p style="color:var(--text2);font-size:.85rem">${t("empSinTrabajos")}</p>' :
+      ${Object.keys(porFecha).length===0 ? `<p style="color:var(--text2);font-size:.85rem">${t('empSinTrabajos')}</p>` :
         Object.entries(porFecha).map(([fecha,ts]) => `
           <div style="margin-bottom:1rem">
             <div style="font-size:.75rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">${fecha}</div>
