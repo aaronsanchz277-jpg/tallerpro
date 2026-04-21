@@ -19,6 +19,7 @@ async function usuarios() {
         <div style="display:flex;gap:.4rem;align-items:center">
           ${u.id!==currentUser.id?`<button onclick="cambiarRol('${u.id}','${u.rol}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 8px;cursor:pointer">Rol</button>`:''}
           ${u.rol==='cliente'?`<button onclick="modalVincularVehiculo('${u.id}','${h(u.nombre)}')" style="font-size:.7rem;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.3);color:var(--accent);border-radius:6px;padding:3px 8px;cursor:pointer">🚗 Autos</button>`:''}
+          ${(u.rol==='empleado'||u.rol==='admin')?`<button onclick="modalVincularEmpleado('${u.id}','${h(u.nombre)}')" style="font-size:.7rem;background:rgba(255,204,0,.1);border:1px solid rgba(255,204,0,.3);color:var(--warning);border-radius:6px;padding:3px 8px;cursor:pointer">👤 Vincular</button>`:''}
         </div>
       </div>
     </div>`;
@@ -157,6 +158,35 @@ async function desvincularVehiculo(vehiculoId, perfilId, nombreUsuario) {
   toast('Vehículo desvinculado','success');
   closeModal();
   modalVincularVehiculo(perfilId, nombreUsuario);
+}
+
+// ─── VINCULAR PERFIL CON EMPLEADO ─────────────────────────────────────────
+async function modalVincularEmpleado(perfilId, nombreUsuario) {
+  const { data: perfil } = await sb.from('perfiles').select('empleado_id').eq('id', perfilId).maybeSingle();
+  const { data: empleados } = await sb.from('empleados').select('id,nombre').eq('taller_id', tid()).order('nombre');
+  
+  openModal(`
+    <div class="modal-title">Vincular usuario a empleado</div>
+    <p style="color:var(--text2);font-size:.82rem;margin-bottom:1rem">Usuario: <strong style="color:var(--text)">${h(nombreUsuario)}</strong></p>
+    <div class="form-group">
+      <label class="form-label">Seleccionar empleado</label>
+      <select class="form-input" id="f-vincular-empleado">
+        <option value="">Ninguno (desvincular)</option>
+        ${(empleados||[]).map(e => `<option value="${e.id}" ${perfil?.empleado_id===e.id?'selected':''}>${h(e.nombre)}</option>`).join('')}
+      </select>
+    </div>
+    <button class="btn-primary" onclick="vincularPerfilEmpleado('${perfilId}')">Guardar</button>
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function vincularPerfilEmpleado(perfilId) {
+  const empleadoId = document.getElementById('f-vincular-empleado').value || null;
+  const { error } = await sb.from('perfiles').update({ empleado_id: empleadoId }).eq('id', perfilId);
+  if (error) { toast('Error: '+error.message,'error'); return; }
+  toast('Vinculación actualizada','success');
+  closeModal();
+  usuarios();
 }
 
 function modalInvitarUsuario() {
