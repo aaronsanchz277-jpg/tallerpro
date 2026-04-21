@@ -1,4 +1,4 @@
-// ─── EMPLEADOS (VERSIÓN COMERCIAL - SOLO EMPLEADO_ID) ───────────────────────
+// ─── EMPLEADOS ───────────────────────────────────────────────────────────────
 async function empleados() {
   const { data } = await cachedQuery('empleados_list', () =>
     sb.from('empleados').select('*').eq('taller_id',tid()).order('nombre')
@@ -26,39 +26,37 @@ async function empleados() {
 }
 
 async function detalleEmpleado(id) {
-  let emp, trabajosManuales, asignacionesMecanico;
-  
+  let emp, trabajosManuales, asignacionesRep;
   try {
+    // 1. Datos del empleado
     const empRes = await sb.from('empleados').select('*').eq('id',id).single();
     emp = empRes.data;
 
-    const trabajosRes = await sb.from('trabajos_empleado')
+    // 2. Trabajos manuales (trabajos_empleado)
+    const manualesRes = await sb.from('trabajos_empleado')
       .select('*, vehiculos(patente,marca,modelo)')
       .eq('empleado_id', id)
       .order('fecha',{ascending:false})
       .limit(50);
-    trabajosManuales = trabajosRes.data || [];
+    trabajosManuales = manualesRes.data || [];
 
-    const asignacionesRes = await sb.from('reparacion_mecanicos')
-      .select('reparacion_id, horas, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
+    // 3. Asignaciones en reparaciones (reparacion_mecanicos) usando empleado_id
+    const asignRes = await sb.from('reparacion_mecanicos')
+      .select('*, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
       .eq('empleado_id', id)
-      .order('created_at', { ascending: false })
+      .order('created_at',{ascending:false})
       .limit(50);
-    asignacionesMecanico = asignacionesRes.data || [];
+    asignacionesRep = asignRes.data || [];
 
-  } catch(e) {
-    toast('Error al cargar empleado','error');
-    navigate('empleados');
-    return;
-  }
-  
+  } catch(e) { toast('Error al cargar empleado','error'); navigate('empleados'); return; }
   if (!emp) { toast('Empleado no encontrado','error'); navigate('empleados'); return; }
 
-  // Unificar trabajos
-  const trabajosUnificados = [];
+  // Construir lista unificada simple
+  const listaTrabajos = [];
 
+  // Agregar manuales
   trabajosManuales.forEach(t => {
-    trabajosUnificados.push({
+    listaTrabajos.push({
       fecha: t.fecha,
       tipo: 'manual',
       descripcion: t.tipo_trabajo || 'Trabajo general',
@@ -66,18 +64,19 @@ async function detalleEmpleado(id) {
       vehiculo: t.vehiculos ? `${t.vehiculos.patente} · ${t.vehiculos.marca} ${t.vehiculos.modelo||''}` : null,
       comentario: t.comentario,
       foto_url: t.foto_vehiculo_url,
-      origen: 'manual',
       id: t.id,
       estado: null,
       costo: null,
-      cliente: null
+      cliente: null,
+      esReparacion: false
     });
   });
 
-  asignacionesMecanico.forEach(a => {
+  // Agregar asignaciones de reparaciones
+  asignacionesRep.forEach(a => {
     const r = a.reparaciones;
     if (!r) return;
-    trabajosUnificados.push({
+    listaTrabajos.push({
       fecha: r.fecha,
       tipo: 'reparacion',
       descripcion: r.descripcion,
@@ -85,24 +84,26 @@ async function detalleEmpleado(id) {
       vehiculo: r.vehiculos ? `${r.vehiculos.patente} · ${r.vehiculos.marca}` : null,
       comentario: null,
       foto_url: null,
-      origen: 'reparacion',
       id: r.id,
       estado: r.estado,
       costo: r.costo,
-      cliente: r.clientes?.nombre
+      cliente: r.clientes?.nombre,
+      esReparacion: true
     });
   });
 
-  trabajosUnificados.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+  // Ordenar por fecha descendente
+  listaTrabajos.sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
 
+  // Agrupar por fecha
   const porFecha = {};
-  trabajosUnificados.forEach(t => {
+  listaTrabajos.forEach(t => {
     const f = t.fecha || 'sinFecha';
     if (!porFecha[f]) porFecha[f] = [];
     porFecha[f].push(t);
   });
 
-  const totalHoras = trabajosUnificados.reduce((s, t) => s + parseFloat(t.horas || 0), 0);
+  const totalHoras = listaTrabajos.reduce((s,t) => s + parseFloat(t.horas||0), 0);
 
   document.getElementById('main-content').innerHTML = `
     <div class="detail-header">
@@ -127,18 +128,18 @@ async function detalleEmpleado(id) {
       <button class="btn-danger" style="margin:0" onclick="eliminarEmpleado('${id}')">✕</button>
     </div>
     <div class="sub-section">
-      <div class="sub-section-title">${t('empTrabajosReg')} (${trabajosUnificados.length})</div>
+      <div class="sub-section-title">${t('empTrabajosReg')} (${listaTrabajos.length})</div>
       ${Object.keys(porFecha).length===0 ? `<p style="color:var(--text2);font-size:.85rem">${t('empSinTrabajos')}</p>` :
         Object.entries(porFecha).map(([fecha, ts]) => `
           <div style="margin-bottom:1rem">
             <div style="font-size:.75rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">${fecha}</div>
             ${ts.map(t => `
-            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.4rem;cursor:pointer" onclick="${t.origen === 'reparacion' ? `detalleReparacion('${t.id}')` : ''}">
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.4rem;cursor:pointer" onclick="${t.esReparacion ? `detalleReparacion('${t.id}')` : ''}">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
                 <div style="flex:1">
                   <div style="font-weight:500;font-size:.9rem">
                     ${h(t.descripcion)}
-                    ${t.origen === 'reparacion' ? `<span class="card-badge ${estadoBadge(t.estado)}" style="margin-left:.5rem;font-size:.65rem">${estadoLabel(t.estado)}</span>` : ''}
+                    ${t.esReparacion ? `<span class="card-badge ${estadoBadge(t.estado)}" style="margin-left:.5rem;font-size:.65rem">${estadoLabel(t.estado)}</span>` : ''}
                   </div>
                   <div style="font-size:.75rem;color:var(--text2);margin-top:2px">
                     ${t.vehiculo ? h(t.vehiculo) : ''}
@@ -150,7 +151,7 @@ async function detalleEmpleado(id) {
                 </div>
                 <div style="text-align:right;flex-shrink:0">
                   <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--accent)">${t.horas}hs</div>
-                  ${t.origen === 'manual' ? `<button onclick="event.stopPropagation();eliminarTrabajo('${t.id}','${id}')" style="font-size:.65rem;background:none;border:none;color:var(--text2);cursor:pointer;margin-top:4px">✕ borrar</button>` : ''}
+                  ${!t.esReparacion ? `<button onclick="event.stopPropagation();eliminarTrabajo('${t.id}','${id}')" style="font-size:.65rem;background:none;border:none;color:var(--text2);cursor:pointer;margin-top:4px">✕ borrar</button>` : ''}
                 </div>
               </div>
             </div>`).join('')}
@@ -159,8 +160,6 @@ async function detalleEmpleado(id) {
   cargarVales(id);
 }
 
-// Las funciones de vales, modales, etc. se mantienen igual que en versiones anteriores.
-// Asegúrate de incluirlas completas.
 // ─── VALES Y ADELANTOS ──────────────────────────────────────────────────────
 async function cargarVales(empleadoId) {
   const mesActual = new Date();
