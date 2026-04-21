@@ -1,6 +1,4 @@
-// ─── MOD-2: MECÁNICOS POR REPARACIÓN (multi-asignación con horas) ───────────
-// Versión unificada: solo se usa empleado_id
-
+// ─── MOD-2: MECÁNICOS POR REPARACIÓN (VERSIÓN COMERCIAL) ─────────────────────
 async function repMecanicos_cargar(repId) {
   const { data } = await sb.from('reparacion_mecanicos')
     .select('*, empleados(nombre)')
@@ -74,9 +72,7 @@ async function repMecanicos_agregar(repId) {
   }
 
   const empleadoId = sel.value;
-  const nombre = sel.options[sel.selectedIndex].textContent.trim();
 
-  // Verificar si ya está asignado
   const { data: existente } = await sb
     .from('reparacion_mecanicos')
     .select('id')
@@ -85,30 +81,20 @@ async function repMecanicos_agregar(repId) {
     .maybeSingle();
 
   if (existente) {
-    toast('Este mecánico ya está asignado a este trabajo', 'error');
+    toast('Este mecánico ya está asignado', 'error');
     return;
   }
 
-  const insertData = {
+  const { error } = await sb.from('reparacion_mecanicos').insert({
     reparacion_id: repId,
     empleado_id: empleadoId,
     horas: 0,
     pago: 0
-  };
-
-  const { error } = await sb.from('reparacion_mecanicos').insert(insertData);
+  });
 
   if (error) {
     console.error('Error al agregar mecánico:', error);
-    if (error.message.includes('duplicate')) {
-      toast('Este mecánico ya está asignado a este trabajo', 'error');
-    } else if (error.code === '42501' || error.message.includes('permission')) {
-      toast('No tenés permiso para asignar mecánicos. Verificá tu rol.', 'error');
-    } else if (error.message.includes('violates row-level security')) {
-      toast('Error de seguridad: contactá al administrador para revisar permisos.', 'error');
-    } else {
-      toast('Error al agregar: ' + error.message, 'error');
-    }
+    toast('Error al agregar: ' + error.message, 'error');
     return;
   }
 
@@ -123,12 +109,7 @@ async function repMecanicos_quitarConSafeCall(id, repId) {
 }
 
 async function repMecanicos_quitar(id, repId) {
-  const { error } = await sb.from('reparacion_mecanicos').delete().eq('id', id);
-  if (error) {
-    console.error('Error al quitar mecánico:', error);
-    toast('Error al quitar: ' + error.message, 'error');
-    return;
-  }
+  await sb.from('reparacion_mecanicos').delete().eq('id', id);
   toast('Mecánico removido', 'success');
   repMecanicos_modal(repId);
 }
@@ -143,10 +124,5 @@ async function repMecanicos_actualizarConSafeCall(id, campo, valor, repId) {
 async function repMecanicos_actualizar(id, campo, valor) {
   const update = {};
   update[campo] = campo === 'horas' || campo === 'pago' ? parseFloat(valor) || 0 : valor;
-  
-  const { error } = await sb.from('reparacion_mecanicos').update(update).eq('id', id);
-  if (error) {
-    console.error('Error al actualizar mecánico:', error);
-    toast('Error al actualizar: ' + error.message, 'error');
-  }
+  await sb.from('reparacion_mecanicos').update(update).eq('id', id);
 }
