@@ -225,4 +225,5 @@ async function guardarConfigDatos() {
   toast('Taller actualizado','success');
   closeModal();
   navigate('dashboard');
+  window.misTrabajos = misTrabajos;
 }
