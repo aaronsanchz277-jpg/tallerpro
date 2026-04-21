@@ -101,10 +101,11 @@ async function modalVerTrabajosAsignados(empleadoId, nombreEmpleado) {
 
   const mecanicoId = perfil?.id || empleadoId;
 
+  // CORRECCIÓN: Buscar tanto por mecanico_id como por empleado_id
   const { data: asignaciones } = await sb
     .from('reparacion_mecanicos')
     .select('reparacion_id, reparaciones(id,descripcion,tipo_trabajo,estado,fecha,costo,vehiculos(patente,marca),clientes(nombre))')
-    .eq('mecanico_id', mecanicoId)
+    .or(`mecanico_id.eq.${mecanicoId},empleado_id.eq.${mecanicoId}`)
     .order('created_at', { ascending: false })
     .limit(50);
 
