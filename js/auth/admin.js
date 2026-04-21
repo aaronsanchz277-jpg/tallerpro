@@ -2,13 +2,24 @@
 async function misTrabajos({ filtro='en_progreso' }={}) {
   if (currentPerfil?.rol !== 'empleado') { dashboard(); return; }
 
-  // Buscar asignaciones por mecanico_id (usuario) O empleado_id (manual)
-  const { data: misAsignaciones } = await sb
+  const userId = currentUser.id;
+
+  // Consulta 1: por mecanico_id
+  const { data: porMecanico } = await sb
     .from('reparacion_mecanicos')
     .select('reparacion_id')
-    .or(`mecanico_id.eq.${currentUser.id},empleado_id.eq.${currentUser.id}`);
+    .eq('mecanico_id', userId);
 
-  const misRepIds = (misAsignaciones || []).map(a => a.reparacion_id);
+  // Consulta 2: por empleado_id
+  const { data: porEmpleado } = await sb
+    .from('reparacion_mecanicos')
+    .select('reparacion_id')
+    .eq('empleado_id', userId);
+
+  // Unir IDs sin duplicados
+  const idsMec = (porMecanico || []).map(a => a.reparacion_id);
+  const idsEmp = (porEmpleado || []).map(a => a.reparacion_id);
+  const misRepIds = [...new Set([...idsMec, ...idsEmp])];
 
   let data = [];
   if (misRepIds.length > 0) {
