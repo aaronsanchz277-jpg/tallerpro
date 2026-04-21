@@ -1,23 +1,34 @@
 // ─── MIS TRABAJOS (Empleado) ────────────────────────────────────────────────
 async function misTrabajos({ filtro='en_progreso' }={}) {
   if (currentPerfil?.rol !== 'empleado') { dashboard(); return; }
-  
+
   // Obtener IDs de reparaciones asignadas a este mecánico
-  const { data: misAsignaciones } = await sb.from('reparacion_mecanicos').select('reparacion_id').eq('mecanico_id', currentUser.id);
-  const misRepIds = (misAsignaciones||[]).map(a => a.reparacion_id);
-  
+  // Buscar tanto por mecanico_id como por empleado_id
+  const { data: misAsignaciones } = await sb
+    .from('reparacion_mecanicos')
+    .select('reparacion_id')
+    .or(`mecanico_id.eq.${currentUser.id},empleado_id.eq.${currentUser.id}`);
+
+  const misRepIds = (misAsignaciones || []).map(a => a.reparacion_id);
+
   let data = [];
   if (misRepIds.length > 0) {
-    let q = sb.from('reparaciones').select('*, vehiculos(patente,marca), clientes(nombre)')
-      .in('id', misRepIds).order('created_at', {ascending:false});
-    if (filtro !== 'todos') q = q.eq('estado', filtro);
+    let q = sb.from('reparaciones')
+      .select('*, vehiculos(patente,marca), clientes(nombre)')
+      .in('id', misRepIds)
+      .order('created_at', { ascending: false });
+
+    if (filtro !== 'todos') {
+      q = q.eq('estado', filtro);
+    }
+
     const res = await q;
     data = res.data || [];
   }
 
   const hoy = fechaHoy();
-  const misRepsHoy = (data||[]).filter(r => r.fecha === hoy);
-  const total = (data||[]).length;
+  const misRepsHoy = (data || []).filter(r => r.fecha === hoy);
+  const total = (data || []).length;
 
   document.getElementById('main-content').innerHTML = `
     <div style="padding:.25rem 0">
@@ -32,8 +43,8 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
         <button class="tab ${filtro==='todos'?'active':''}" onclick="misTrabajos({filtro:'todos'})">Todos</button>
       </div>
 
-      ${(data||[]).length === 0 ? `<div class="empty"><p>No hay reparaciones ${filtro !== 'todos' ? 'con estado "' + estadoLabel(filtro) + '"' : ''}</p></div>` :
-        (data||[]).map(r => `
+      ${data.length === 0 ? `<div class="empty"><p>No hay reparaciones ${filtro !== 'todos' ? 'con estado "' + estadoLabel(filtro) + '"' : ''}</p></div>` :
+        data.map(r => `
         <div class="card" onclick="detalleReparacion('${r.id}')">
           <div class="card-header">
             <div class="card-avatar">${TIPO_ICONS[r.tipo_trabajo] || '🔧'}</div>
