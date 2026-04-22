@@ -255,59 +255,77 @@ async function finanzas_guardarConSafeCall(id = null, uniqueId = null) {
 }
 
 async function finanzas_guardar(id = null, uniqueId = null) {
-  const concepto = document.getElementById('f-fin-concepto').value.trim();
+  console.log('🟢 finanzas_guardar llamado con id:', id, 'uniqueId:', uniqueId);
+  
+  const concepto = document.getElementById('f-fin-concepto')?.value.trim();
   if (!validateRequired(concepto, 'Concepto')) return;
   
-  const monto = parseFloat(document.getElementById('f-fin-monto').value);
+  const monto = parseFloat(document.getElementById('f-fin-monto')?.value);
   if (!validatePositiveNumber(monto, 'Monto')) return;
   
-  // Determinar el ID del checkbox según si es edición o nuevo
+  // Leer el valor del checkbox de manera directa y robusta
   let incluirEnMes = true;
-  if (uniqueId) {
-    const checkbox = document.getElementById(`f-fin-incluir-mes-${uniqueId}`);
-    incluirEnMes = checkbox ? checkbox.checked : true;
-  } else if (id) {
-    // Para edición, usamos el checkbox específico de editar
+  if (id) {
+    // Estamos en modo edición: buscamos el checkbox específico de editar
     const checkbox = document.getElementById('f-fin-incluir-mes-editar');
+    console.log('🔵 Checkbox editar encontrado:', checkbox);
     incluirEnMes = checkbox ? checkbox.checked : true;
-  } else {
-    const checkbox = document.getElementById('f-fin-incluir-mes');
+  } else if (uniqueId) {
+    // Estamos en modo nuevo: buscamos el checkbox con el ID único
+    const checkbox = document.getElementById(`f-fin-incluir-mes-${uniqueId}`);
+    console.log('🟡 Checkbox nuevo encontrado:', checkbox);
     incluirEnMes = checkbox ? checkbox.checked : true;
   }
   
+  console.log('📤 Valor de incluir_en_mes a enviar:', incluirEnMes);
+  
   const data = {
-    tipo: document.getElementById('f-fin-tipo').value,
+    tipo: document.getElementById('f-fin-tipo')?.value,
     concepto,
     monto,
-    fecha: document.getElementById('f-fin-fecha').value,
-    categoria_id: document.getElementById('f-fin-cat').value || null,
-    notas: document.getElementById('f-fin-notas').value,
+    fecha: document.getElementById('f-fin-fecha')?.value,
+    categoria_id: document.getElementById('f-fin-cat')?.value || null,
+    notas: document.getElementById('f-fin-notas')?.value,
     afecta_caja: document.getElementById('f-fin-afecta-caja')?.value === 'true',
     incluir_en_mes: incluirEnMes,
     taller_id: tid()
   };
 
+  console.log('📦 Datos completos a guardar:', data);
+
   let error;
   if (id) {
     const res = await sb.from('movimientos_financieros').update(data).eq('id', id);
     error = res.error;
+    console.log('🔄 Resultado de update:', error ? 'ERROR: ' + error.message : 'OK');
   } else {
     const res = await sb.from('movimientos_financieros').insert(data);
     error = res.error;
+    console.log('➕ Resultado de insert:', error ? 'ERROR: ' + error.message : 'OK');
   }
     
-  if (error) { toast('Error: ' + error.message, 'error'); return; }
+  if (error) { 
+    toast('Error: ' + error.message, 'error'); 
+    return; 
+  }
   
   toast(id ? 'Movimiento actualizado' : 'Movimiento guardado', 'success');
   clearCache('finanzas');
   closeModal();
-  finanzas_cargarDatos();
+  // Refrescar la vista con un pequeño retraso para asegurar que el modal se cierre
+  setTimeout(() => {
+    console.log('⏳ Ejecutando finanzas_cargarDatos...');
+    finanzas_cargarDatos();
+  }, 300);
 }
 
 async function finanzas_modalEditar(id) {
   const { data: m } = await sb.from('movimientos_financieros').select('*').eq('id', id).single();
   if (!m) return;
   const { data: cats } = await sb.from('categorias_financieras').select('id,nombre').eq('taller_id', tid()).or(`tipo.eq.${m.tipo},tipo.eq.ambos`).order('nombre');
+  
+  console.log('📋 Abriendo edición para movimiento:', m);
+  
   openModal(`
     <div class="modal-title">Editar ${m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</div>
     <input type="hidden" id="f-fin-tipo" value="${m.tipo}">
