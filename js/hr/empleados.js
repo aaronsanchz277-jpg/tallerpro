@@ -278,15 +278,31 @@ async function eliminarTrabajo(trabajoId, empleadoId) {
   });
 }
 
+// ─── Utilidades para períodos ───────────────────────────────────────────────
+function getLunesActual() {
+  const hoy = new Date();
+  const dia = hoy.getDay(); // 0 = domingo
+  const lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() - (dia === 0 ? 6 : dia - 1));
+  return lunes.toISOString().split('T')[0];
+}
+
+function getDomingoActual() {
+  const hoy = new Date();
+  const dia = hoy.getDay();
+  const domingo = new Date(hoy);
+  domingo.setDate(hoy.getDate() + (dia === 0 ? 0 : 7 - dia));
+  return domingo.toISOString().split('T')[0];
+}
+
 async function modalNuevoVale(empleadoId) {
-  // Obtener períodos disponibles (abiertos o cerrados) ordenados por fecha descendente
+  // Obtener períodos disponibles
   const { data: periodos } = await sb.from('periodos_sueldo')
     .select('id, fecha_inicio, fecha_fin, estado')
     .eq('taller_id', tid())
     .order('fecha_inicio', { ascending: false })
     .limit(20);
 
-  // Buscar el período abierto más reciente para preseleccionar
   const periodoAbierto = periodos?.find(p => p.estado === 'abierto');
   const periodoSeleccionado = periodoAbierto?.id || periodos?.[0]?.id || '';
 
@@ -300,11 +316,25 @@ async function modalNuevoVale(empleadoId) {
     <div class="modal-title">💵 Registrar Vale / Adelanto</div>
     <div class="form-group">
       <label class="form-label">Período (semana) *</label>
-      <select class="form-input" id="f-vale-periodo">
-        <option value="">Seleccionar período...</option>
-        ${opcionesPeriodos}
-      </select>
-      ${periodos?.length === 0 ? '<div style="font-size:.7rem;color:var(--warning);margin-top:.3rem">No hay períodos creados. Creá uno en "Sueldos".</div>' : ''}
+      <div style="display:flex; gap:.4rem; align-items:center">
+        <select class="form-input" id="f-vale-periodo" style="flex:1">
+          <option value="">Seleccionar período...</option>
+          ${opcionesPeriodos}
+        </select>
+        <button onclick="event.preventDefault(); mostrarFormNuevoPeriodo('${empleadoId}')" type="button" style="background:var(--accent); color:#000; border:none; border-radius:8px; padding:.45rem .8rem; font-size:.8rem; font-family:var(--font-head); cursor:pointer; white-space:nowrap">➕ Nueva semana</button>
+      </div>
+      ${periodos?.length === 0 ? '<div style="font-size:.7rem;color:var(--warning);margin-top:.3rem">No hay períodos creados. Creá uno con el botón "Nueva semana".</div>' : ''}
+    </div>
+    <div id="nuevo-periodo-form" style="display:none; margin-top:.5rem; background:var(--surface2); border-radius:10px; padding:.75rem; border:1px solid var(--border)">
+      <div style="font-family:var(--font-head); font-size:.75rem; color:var(--accent); margin-bottom:.5rem;">📅 Crear nuevo período semanal</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Inicio</label><input class="form-input" id="np-inicio" type="date" value="${getLunesActual()}"></div>
+        <div class="form-group"><label class="form-label">Fin</label><input class="form-input" id="np-fin" type="date" value="${getDomingoActual()}"></div>
+      </div>
+      <div style="display:flex; gap:.4rem; margin-top:.5rem">
+        <button onclick="event.preventDefault(); crearPeriodoDesdeModal('${empleadoId}')" class="btn-primary" style="margin:0; padding:.5rem; font-size:.8rem">Crear y seleccionar</button>
+        <button onclick="event.preventDefault(); document.getElementById('nuevo-periodo-form').style.display='none'" class="btn-secondary" style="margin:0; padding:.5rem; font-size:.8rem">Cancelar</button>
+      </div>
     </div>
     <div class="form-group"><label class="form-label">Monto ₲ *</label>${renderMontoInput('f-vale-monto', '', '50000')}</div>
     <div class="form-group"><label class="form-label">Concepto</label><input class="form-input" id="f-vale-concepto" placeholder="Almuerzo, adelanto, etc."></div>
@@ -312,6 +342,59 @@ async function modalNuevoVale(empleadoId) {
     <button class="btn-primary" onclick="guardarValeConSafeCall('${empleadoId}')">Registrar vale</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
   `);
+}
+
+// Función para mostrar el formulario de nuevo período
+function mostrarFormNuevoPeriodo(empleadoId) {
+  const form = document.getElementById('nuevo-periodo-form');
+  if (form) {
+    form.style.display = 'block';
+    // Actualizar fechas por si acaso
+    const inicio = document.getElementById('np-inicio');
+    const fin = document.getElementById('np-fin');
+    if (inicio) inicio.value = getLunesActual();
+    if (fin) fin.value = getDomingoActual();
+  }
+}
+
+// Función para crear período desde el modal y actualizar el selector
+async function crearPeriodoDesdeModal(empleadoId) {
+  const inicio = document.getElementById('np-inicio')?.value;
+  const fin = document.getElementById('np-fin')?.value;
+  if (!inicio || !fin) {
+    toast('Las fechas son obligatorias', 'error');
+    return;
+  }
+  
+  await safeCall(async () => {
+    const { data: nuevo, error } = await sb.from('periodos_sueldo')
+      .insert({ fecha_inicio: inicio, fecha_fin: fin, taller_id: tid() })
+      .select('id, fecha_inicio, fecha_fin')
+      .single();
+      
+    if (error) throw new Error(error.message);
+    
+    toast('Período creado correctamente', 'success');
+    
+    // Recargar el modal con el nuevo período seleccionado
+    closeModal();
+    await modalNuevoVale(empleadoId);
+    
+    // Forzar selección del nuevo período
+    setTimeout(() => {
+      const select = document.getElementById('f-vale-periodo');
+      if (select && nuevo) {
+        // Buscar la opción correspondiente al nuevo período (debería estar recién agregada)
+        for (let opt of select.options) {
+          if (opt.value === nuevo.id) {
+            opt.selected = true;
+            break;
+          }
+        }
+      }
+    }, 100);
+    
+  }, null, 'No se pudo crear el período');
 }
 
 async function guardarValeConSafeCall(empleadoId) {
