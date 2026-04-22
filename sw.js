@@ -1,151 +1,142 @@
-// Service Worker para TallerPro
-const CACHE_NAME = 'tallerpro-v4'; // Nueva versión para forzar actualización limpia
+// ─── SERVICE WORKER - TallerPro ───────────────────────────────────────────────
+// Incrementar en cada deploy para invalidar caché viejo
+const CACHE_NAME = 'tallerpro-v2';
 
-// Rutas verificadas una por una contra la estructura real
-const urlsToCache = [
+// Solo el shell mínimo — JS y CSS NO van aquí (se manejan network-first)
+const SHELL_URLS = [
   './',
   './index.html',
-  './css/styles.css',
   './manifest.json',
-
-  // === Núcleo ===
-  './js/core/config.js',
-  './js/core/pwa.js',
-  './js/core/offline.js',
-  './js/core/i18n.js',
-  './js/core/ui.js',
-  './js/core/core.js',
-  './js/core/components.js',
-  './js/core/validators.js',
-  './js/core/backup.js',
-  './js/core/debug.js',
-
-  // === Auth ===
-  './js/auth/auth.js',
-  './js/auth/plan.js',
-  './js/auth/admin.js',
-
-  // === Dashboard ===
-  './js/dashboard/dashboard.js',
-  './js/dashboard/simple-mode.js',
-  './js/dashboard/modo-taller.js',
-
-  // === CRM ===
-  './js/crm/clientes.js',
-  './js/crm/vehiculos.js',
-  './js/crm/cliente-view.js',
-
-  // === Workshop (Reparaciones modularizado) ===
-  './js/workshop/reparaciones-core.js',
-  './js/workshop/reparaciones-list.js',
-  './js/workshop/reparaciones-detalle.js',
-  './js/workshop/reparaciones-items.js',
-  './js/workshop/reparaciones-pagos.js',
-  './js/workshop/reparaciones-checklist.js',
-  './js/workshop/reparaciones-fotos.js',
-  './js/workshop/reparaciones-modales.js',
-  './js/workshop/reparaciones-wizard.js',
-  './js/workshop/reparaciones.js',
-
-  // === Otros módulos de taller ===
-  './js/workshop/inventario.js',
-  './js/workshop/barcode.js',
-  './js/workshop/agenda.js',
-  './js/workshop/mantenimientos.js',
-  './js/workshop/kanban.js',
-  './js/workshop/checklist-templates.js',
-  './js/workshop/stock-realtime.js',
-
-  // === Finanzas ===
-  './js/finances/finanzas.js',
-  './js/finances/creditos.js',
-  './js/finances/cuentas.js',
-  './js/finances/gastos.js',
-  './js/finances/caja.js',
-  './js/finances/sueldos.js',
-  './js/finances/Categorias.js',          // ← CORREGIDO: con mayúscula inicial
-  './js/finances/conciliador.js',
-
-  // === RRHH ===
-  './js/hr/empleados.js',
-  './js/hr/usuarios.js',
-  './js/hr/mecanicos.js',
-  './js/hr/perfil.js',
-
-  // === Ventas ===
-  './js/sales/ventas.js',
-  './js/sales/presupuestos.js',
-
-  // === Reportes ===
-  './js/reports/common.js',
-  './js/reports/rentabilidad.js',
-  './js/reports/flujo-caja.js',
-  './js/reports/comparativas.js',
-  './js/reports/tendencias.js',
-  './js/reports/export-excel.js',
-
-  // === Integraciones ===
-  './js/integrations/ia.js',
-  './js/integrations/push.js',
-  './js/integrations/ocr.js',
-  './js/integrations/google-calendar.js',
-  './js/integrations/recordatorios.js',
-  './js/integrations/realtime.js',
-  './js/integrations/integrations-wizard.js',
-
-  // === Navegación ===
-  './js/navigation/navigation.js',
-
-  // === UX ===
-  './js/ux/theme.js',
-  './js/ux/optimize-images.js',
-  './js/ux/ubicaciones.js',
-  './js/ux/form-guard.js',
-
-  // === Dev ===
-  './js/dev/tests.js'
 ];
 
+// Dominios externos que NUNCA se interceptan
+const BYPASS_DOMAINS = [
+  'supabase.co',
+  'groq.com',
+  'ocr.space',
+  'googleapis.com',
+  'gstatic.com',
+  'supabase.in',
+];
+
+function shouldBypass(url) {
+  return BYPASS_DOMAINS.some(d => url.includes(d));
+}
+
+// ─── INSTALL ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then(async cache => {
-      console.log('📦 Instalando Service Worker...');
-      const resultados = { exitos: 0, fallos: 0, fallosDetalle: [] };
-
-      for (const url of urlsToCache) {
-        try {
-          await cache.add(url);
-          resultados.exitos++;
-        } catch (err) {
-          resultados.fallos++;
-          resultados.fallosDetalle.push({ url, error: err.message });
-          console.error(`❌ Falló cacheo: ${url} — ${err.message}`);
-        }
-      }
-
-      console.log(`✅ Instalación completada: ${resultados.exitos} recursos cacheados.`);
-      if (resultados.fallos > 0) {
-        console.warn(`⚠️ ${resultados.fallos} recursos no se pudieron cachear.`);
-        console.table(resultados.fallosDetalle);
-      }
+    caches.open(CACHE_NAME).then(cache => {
+      console.log('📦 SW: cacheando shell');
+      return cache.addAll(SHELL_URLS);
     })
   );
 });
 
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request).then(response => {
-      return response || fetch(event.request);
-    })
-  );
-});
-
+// ─── ACTIVATE ─────────────────────────────────────────────────────────────────
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
-      keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+      keys
+        .filter(key => key !== CACHE_NAME)
+        .map(key => {
+          console.log('🗑️ SW: eliminando caché viejo:', key);
+          return caches.delete(key);
+        })
     ))
   );
-  // Tomar control inmediato de los clientes
-  event.waitUntil(clients.claim());
+  self.clients.claim();
+  console.log('✅ SW activado:', CACHE_NAME);
+});
+
+// ─── FETCH ────────────────────────────────────────────────────────────────────
+self.addEventListener('fetch', event => {
+  const url = event.request.url;
+
+  // Dejar pasar APIs externas sin interceptar
+  if (shouldBypass(url)) return;
+
+  // Solo interceptar GET
+  if (event.request.method !== 'GET') return;
+
+  const isJS  = url.includes('.js');
+  const isCSS = url.includes('.css');
+  const isHTML = url.includes('.html') || url.endsWith('/');
+
+  // ── JS y CSS: Network-first ──────────────────────────────────────────────
+  // Siempre intenta red primero → caché solo si offline
+  if (isJS || isCSS) {
+    event.respondWith(
+      fetch(event.request)
+        .then(networkResponse => {
+          if (networkResponse && networkResponse.status === 200) {
+            caches.open(CACHE_NAME).then(cache =>
+              cache.put(event.request, networkResponse.clone())
+            );
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          console.warn('SW: offline, sirviendo JS/CSS desde caché:', url);
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // ── HTML: Network-first también ──────────────────────────────────────────
+  // Evita que index.html viejo bloquee actualizaciones
+  if (isHTML) {
+    event.respondWith(
+      fetch(event.request)
+        .then(networkResponse => {
+          if (networkResponse && networkResponse.status === 200) {
+            caches.open(CACHE_NAME).then(cache =>
+              cache.put(event.request, networkResponse.clone())
+            );
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          console.warn('SW: offline, sirviendo HTML desde caché:', url);
+          return caches.match(event.request) || caches.match('./index.html');
+        })
+    );
+    return;
+  }
+
+  // ── Imágenes y fonts: Stale-while-revalidate ─────────────────────────────
+  // Rápido desde caché, se actualiza en segundo plano
+  event.respondWith(
+    caches.open(CACHE_NAME).then(cache =>
+      cache.match(event.request).then(cachedResponse => {
+        const fetchPromise = fetch(event.request)
+          .then(networkResponse => {
+            if (networkResponse && networkResponse.status === 200) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          })
+          .catch(() => {
+            console.warn('SW: fetch falló para:', url);
+          });
+        return cachedResponse || fetchPromise;
+      })
+    )
+  );
+});
+
+// ─── MENSAJES ─────────────────────────────────────────────────────────────────
+self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    console.log('⏩ SW: forzando skipWaiting');
+    self.skipWaiting();
+  }
+
+  // Útil para debugging desde consola:
+  // navigator.serviceWorker.controller.postMessage({ type: 'GET_VERSION' })
+  if (event.data?.type === 'GET_VERSION') {
+    event.source.postMessage({ type: 'VERSION', version: CACHE_NAME });
+  }
 });
