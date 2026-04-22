@@ -82,19 +82,17 @@ async function finanzas_cargarDatos() {
   const fin = _finanzasFechaFin;
 
   try {
-    const [{ data: movimientos }, balanceRes] = await Promise.all([
-      sb.from('movimientos_financieros')
-        .select('*, categorias_financieras(nombre)')
-        .eq('taller_id', tid())
-        .gte('fecha', inicio)
-        .lte('fecha', fin)
-        .order('fecha', { ascending: false })
-        .order('id', { ascending: false }),
-      sb.rpc('get_balance', { p_taller_id: tid(), p_fecha_inicio: inicio, p_fecha_fin: fin })
-    ]);
+    const { data: movimientos } = await sb.from('movimientos_financieros')
+      .select('*, categorias_financieras(nombre)')
+      .eq('taller_id', tid())
+      .gte('fecha', inicio)
+      .lte('fecha', fin)
+      .order('fecha', { ascending: false })
+      .order('id', { ascending: false });
 
-    const balance = balanceRes.data || { total_ingresos: 0, total_egresos: 0, balance_neto: 0 };
-    
+    // Calcular totales directamente desde los movimientos obtenidos
+    const totalIngresos = (movimientos||[]).filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
+    const totalEgresos = (movimientos||[]).filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const movimientosCaja = (movimientos||[]).filter(m => m.afecta_caja !== false);
     const ingresosCaja = movimientosCaja.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const egresosCaja = movimientosCaja.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
@@ -115,11 +113,11 @@ async function finanzas_cargarDatos() {
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:12px;padding:.75rem;text-align:center">
           <div style="font-size:.6rem;color:var(--success);letter-spacing:1px;font-family:var(--font-head)">INGRESOS</div>
-          <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--success)">₲${gs(balance.total_ingresos)}</div>
+          <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--success)">₲${gs(totalIngresos)}</div>
         </div>
         <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:12px;padding:.75rem;text-align:center">
           <div style="font-size:.6rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">EGRESOS</div>
-          <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--danger)">₲${gs(balance.total_egresos)}</div>
+          <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--danger)">₲${gs(totalEgresos)}</div>
         </div>
         <div style="background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem;text-align:center">
           <div style="font-size:.6rem;color:var(--accent);letter-spacing:1px;font-family:var(--font-head)">CAJA REAL</div>
