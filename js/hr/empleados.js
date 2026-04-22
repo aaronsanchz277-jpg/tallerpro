@@ -52,7 +52,49 @@ async function detalleEmpleado(id) {
     return;
   }
 
-  // Construir lista unificada de trabajos
+  // ─── CONSTRUIR HTML DE VALES ─────────────────────────────────────────────
+  const mesActual = new Date();
+  const primerDia = new Date(mesActual.getFullYear(), mesActual.getMonth(), 1).toISOString().split('T')[0];
+  const ultimoDia = new Date(mesActual.getFullYear(), mesActual.getMonth() + 1, 0).toISOString().split('T')[0];
+  const { data: vales } = await sb.from('vales_empleado').select('*').eq('empleado_id', id).gte('fecha', primerDia).lte('fecha', ultimoDia).order('fecha', { ascending: false });
+  const sueldo = parseFloat(emp?.sueldo || 0);
+  const totalVales = (vales || []).reduce((s, v) => s + parseFloat(v.monto || 0), 0);
+  const neto = sueldo - totalVales;
+
+  let valesHTML = '';
+  if ((vales || []).length > 0 || sueldo > 0) {
+    valesHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
+        <div style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px;margin-bottom:.5rem">💵 RESUMEN DEL MES</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-bottom:.5rem">
+          <div style="background:var(--surface2);border-radius:8px;padding:.4rem;text-align:center">
+            <div style="font-size:.55rem;color:var(--text2)">SUELDO</div>
+            <div style="font-family:var(--font-head);font-size:.85rem;color:var(--success)">₲${gs(sueldo)}</div>
+          </div>
+          <div style="background:rgba(255,204,0,.08);border-radius:8px;padding:.4rem;text-align:center">
+            <div style="font-size:.55rem;color:var(--warning)">VALES</div>
+            <div style="font-family:var(--font-head);font-size:.85rem;color:var(--warning)">-₲${gs(totalVales)}</div>
+          </div>
+          <div style="background:${neto >= 0 ? 'rgba(0,255,136,.08)' : 'rgba(255,68,68,.08)'};border-radius:8px;padding:.4rem;text-align:center">
+            <div style="font-size:.55rem;color:${neto >= 0 ? 'var(--success)' : 'var(--danger)'}">A COBRAR</div>
+            <div style="font-family:var(--font-head);font-size:.85rem;color:${neto >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(neto)}</div>
+          </div>
+        </div>
+        ${(vales || []).length > 0 ? (vales || []).map(v => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;border-top:1px solid var(--border)">
+            <div>
+              <div style="font-size:.78rem">${h(v.concepto || 'Vale')}</div>
+              <div style="font-size:.65rem;color:var(--text2)">${formatFecha(v.fecha)}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem">
+              <span style="font-family:var(--font-head);color:var(--warning);font-size:.85rem">-₲${gs(v.monto)}</span>
+              <button onclick="eliminarVale('${v.id}','${id}')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.7rem">✕</button>
+            </div>
+          </div>`).join('') : ''}
+      </div>`;
+  }
+
+  // ─── LISTA UNIFICADA DE TRABAJOS ─────────────────────────────────────────
   const listaTrabajos = [];
 
   trabajosManuales.forEach(t => {
@@ -102,6 +144,42 @@ async function detalleEmpleado(id) {
 
   const totalHoras = listaTrabajos.reduce((s, t) => s + parseFloat(t.horas || 0), 0);
 
+  let trabajosHTML = '';
+  if (Object.keys(porFecha).length === 0) {
+    trabajosHTML = `<p style="color:var(--text2);font-size:.85rem">${t('empSinTrabajos')}</p>`;
+  } else {
+    Object.entries(porFecha).forEach(([fecha, ts]) => {
+      trabajosHTML += `<div style="margin-bottom:1rem">
+        <div style="font-size:.75rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">${fecha}</div>`;
+      ts.forEach(t => {
+        trabajosHTML += `
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.4rem;cursor:pointer" onclick="${t.esReparacion ? `detalleReparacion('${t.id}')` : ''}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
+            <div style="flex:1">
+              <div style="font-weight:500;font-size:.9rem">
+                ${h(t.descripcion)}
+                ${t.esReparacion ? `<span class="card-badge ${estadoBadge(t.estado)}" style="margin-left:.5rem;font-size:.65rem">${estadoLabel(t.estado)}</span>` : ''}
+              </div>
+              <div style="font-size:.75rem;color:var(--text2);margin-top:2px">
+                ${t.vehiculo ? h(t.vehiculo) : ''}
+                ${t.cliente ? ` · ${h(t.cliente)}` : ''}
+                ${t.costo ? ` · ₲${gs(t.costo)}` : ''}
+              </div>
+              ${t.comentario ? `<div style="font-size:.8rem;color:var(--text2);margin-top:.4rem;font-style:italic">"${h(t.comentario)}"</div>` : ''}
+              ${t.foto_url ? `<img src="${safeFotoUrl(t.foto_url)}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-top:.5rem;border:1px solid var(--border)">` : ''}
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--accent)">${t.horas}hs</div>
+              ${!t.esReparacion ? `<button onclick="event.stopPropagation();eliminarTrabajo('${t.id}','${id}')" style="font-size:.65rem;background:none;border:none;color:var(--text2);cursor:pointer;margin-top:4px">✕ borrar</button>` : ''}
+            </div>
+          </div>
+        </div>`;
+      });
+      trabajosHTML += `</div>`;
+    });
+  }
+
+  // ─── RENDERIZADO FINAL (TODO DE UNA VEZ) ─────────────────────────────────
   document.getElementById('main-content').innerHTML = `
     <div class="detail-header">
       <button class="back-btn" onclick="navigate('empleados')">${t('volver')}</button>
@@ -115,7 +193,7 @@ async function detalleEmpleado(id) {
       <div class="info-item"><div class="label">Total horas</div><div class="value" style="color:var(--accent)">${totalHoras.toFixed(1)} hs</div></div>
       ${emp.sueldo ? `<div class="info-item"><div class="label">Sueldo</div><div class="value" style="color:var(--success)">₲${gs(emp.sueldo)}</div></div>` : ''}
     </div>
-    <div id="emp-vales-section"></div>
+    ${valesHTML}
     <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
       <button class="btn-add" style="flex:1;justify-content:center" onclick="modalNuevoTrabajo('${id}')">+ Registrar trabajo</button>
       <button onclick="modalNuevoVale('${id}')" style="flex:1;background:rgba(255,204,0,.12);color:var(--warning);border:1px solid rgba(255,204,0,.3);border-radius:10px;padding:.5rem;font-family:var(--font-head);font-size:.8rem;cursor:pointer;text-align:center">+ Vale / Adelanto</button>
@@ -126,133 +204,12 @@ async function detalleEmpleado(id) {
     </div>
     <div class="sub-section">
       <div class="sub-section-title">${t('empTrabajosReg')} (${listaTrabajos.length})</div>
-      ${Object.keys(porFecha).length === 0 ? `<p style="color:var(--text2);font-size:.85rem">${t('empSinTrabajos')}</p>` :
-        Object.entries(porFecha).map(([fecha, ts]) => `
-          <div style="margin-bottom:1rem">
-            <div style="font-size:.75rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">${fecha}</div>
-            ${ts.map(t => `
-            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.4rem;cursor:pointer" onclick="${t.esReparacion ? `detalleReparacion('${t.id}')` : ''}">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
-                <div style="flex:1">
-                  <div style="font-weight:500;font-size:.9rem">
-                    ${h(t.descripcion)}
-                    ${t.esReparacion ? `<span class="card-badge ${estadoBadge(t.estado)}" style="margin-left:.5rem;font-size:.65rem">${estadoLabel(t.estado)}</span>` : ''}
-                  </div>
-                  <div style="font-size:.75rem;color:var(--text2);margin-top:2px">
-                    ${t.vehiculo ? h(t.vehiculo) : ''}
-                    ${t.cliente ? ` · ${h(t.cliente)}` : ''}
-                    ${t.costo ? ` · ₲${gs(t.costo)}` : ''}
-                  </div>
-                  ${t.comentario ? `<div style="font-size:.8rem;color:var(--text2);margin-top:.4rem;font-style:italic">"${h(t.comentario)}"</div>` : ''}
-                  ${t.foto_url ? `<img src="${safeFotoUrl(t.foto_url)}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-top:.5rem;border:1px solid var(--border)">` : ''}
-                </div>
-                <div style="text-align:right;flex-shrink:0">
-                  <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--accent)">${t.horas}hs</div>
-                  ${!t.esReparacion ? `<button onclick="event.stopPropagation();eliminarTrabajo('${t.id}','${id}')" style="font-size:.65rem;background:none;border:none;color:var(--text2);cursor:pointer;margin-top:4px">✕ borrar</button>` : ''}
-                </div>
-              </div>
-            </div>`).join('')}
-          </div>`).join('')}
+      ${trabajosHTML}
     </div>`;
-  cargarVales(id);
 }
 
-// ─── VALES Y ADELANTOS ──────────────────────────────────────────────────────
-async function cargarVales(empleadoId) {
-  const mesActual = new Date();
-  const primerDia = new Date(mesActual.getFullYear(), mesActual.getMonth(), 1).toISOString().split('T')[0];
-  const ultimoDia = new Date(mesActual.getFullYear(), mesActual.getMonth() + 1, 0).toISOString().split('T')[0];
-  const { data: vales } = await sb.from('vales_empleado').select('*').eq('empleado_id', empleadoId).gte('fecha', primerDia).lte('fecha', ultimoDia).order('fecha', { ascending: false });
-  const { data: emp } = await sb.from('empleados').select('sueldo').eq('id', empleadoId).single();
-  const totalVales = (vales || []).reduce((s, v) => s + parseFloat(v.monto || 0), 0);
-  const sueldo = parseFloat(emp?.sueldo || 0);
-  const neto = sueldo - totalVales;
-
-  const section = document.getElementById('emp-vales-section');
-  if (!section) return;
-  section.innerHTML = (vales || []).length > 0 || sueldo > 0 ? `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
-      <div style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px;margin-bottom:.5rem">💵 RESUMEN DEL MES</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-bottom:.5rem">
-        <div style="background:var(--surface2);border-radius:8px;padding:.4rem;text-align:center">
-          <div style="font-size:.55rem;color:var(--text2)">SUELDO</div>
-          <div style="font-family:var(--font-head);font-size:.85rem;color:var(--success)">₲${gs(sueldo)}</div>
-        </div>
-        <div style="background:rgba(255,204,0,.08);border-radius:8px;padding:.4rem;text-align:center">
-          <div style="font-size:.55rem;color:var(--warning)">VALES</div>
-          <div style="font-family:var(--font-head);font-size:.85rem;color:var(--warning)">-₲${gs(totalVales)}</div>
-        </div>
-        <div style="background:${neto >= 0 ? 'rgba(0,255,136,.08)' : 'rgba(255,68,68,.08)'};border-radius:8px;padding:.4rem;text-align:center">
-          <div style="font-size:.55rem;color:${neto >= 0 ? 'var(--success)' : 'var(--danger)'}">A COBRAR</div>
-          <div style="font-family:var(--font-head);font-size:.85rem;color:${neto >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(neto)}</div>
-        </div>
-      </div>
-      ${(vales || []).length > 0 ? (vales || []).map(v => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;border-top:1px solid var(--border)">
-          <div>
-            <div style="font-size:.78rem">${h(v.concepto || 'Vale')}</div>
-            <div style="font-size:.65rem;color:var(--text2)">${formatFecha(v.fecha)}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:.4rem">
-            <span style="font-family:var(--font-head);color:var(--warning);font-size:.85rem">-₲${gs(v.monto)}</span>
-            <button onclick="eliminarVale('${v.id}','${empleadoId}')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.7rem">✕</button>
-          </div>
-        </div>`).join('') : ''}
-    </div>` : '';
-}
-
-function modalNuevoVale(empleadoId) {
-  openModal(`
-    <div class="modal-title">💵 Registrar Vale / Adelanto</div>
-    <div class="form-group"><label class="form-label">Monto ₲ *</label>${renderMontoInput('f-vale-monto', '', '50000')}</div>
-    <div class="form-group"><label class="form-label">Concepto</label><input class="form-input" id="f-vale-concepto" placeholder="Almuerzo, adelanto, etc."></div>
-    <div class="form-group"><label class="form-label">Fecha</label>${renderFechaInput('f-vale-fecha')}</div>
-    <button class="btn-primary" onclick="guardarValeConSafeCall('${empleadoId}')">Registrar vale</button>
-    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
-}
-
-async function guardarValeConSafeCall(empleadoId) {
-  await safeCall(async () => {
-    await guardarVale(empleadoId);
-  }, null, 'No se pudo registrar el vale');
-}
-
-async function guardarVale(empleadoId) {
-  const monto = parseFloat(document.getElementById('f-vale-monto').value);
-  if (!validatePositiveNumber(monto, 'Monto')) return;
-
-  const concepto = document.getElementById('f-vale-concepto').value || 'Vale';
-  const fecha = document.getElementById('f-vale-fecha').value;
-
-  const { error } = await sb.from('vales_empleado').insert({
-    empleado_id: empleadoId,
-    monto,
-    concepto,
-    fecha,
-    taller_id: tid()
-  });
-  if (error) { toast('Error: ' + error.message, 'error'); return; }
-
-  const { data: emp } = await sb.from('empleados').select('nombre').eq('id', empleadoId).single();
-  const categoriaId = await obtenerCategoriaFinanciera('Vales/Adelantos', 'egreso');
-  if (categoriaId) {
-    await sb.from('movimientos_financieros').insert({
-      taller_id: tid(),
-      tipo: 'egreso',
-      categoria_id: categoriaId,
-      monto,
-      concepto: 'Vale: ' + (emp?.nombre || '') + ' — ' + concepto,
-      fecha
-    });
-  }
-
-  clearCache('empleados');
-  clearCache('finanzas');
-  toast('Vale registrado', 'success');
-  closeModal();
-  detalleEmpleado(empleadoId);
-}
-
+// ─── FUNCIONES AUXILIARES (Vales, Modales, etc.) ────────────────────────────
+// Se mantienen igual que antes (cargarVales ya no se usa, pero las demás sí)
 async function eliminarVale(valeId, empleadoId) {
   confirmar('¿Eliminar este vale?', async () => {
     await safeCall(async () => {
@@ -335,6 +292,58 @@ async function eliminarTrabajo(trabajoId, empleadoId) {
       detalleEmpleado(empleadoId);
     }, null, 'No se pudo eliminar el trabajo');
   });
+}
+
+function modalNuevoVale(empleadoId) {
+  openModal(`
+    <div class="modal-title">💵 Registrar Vale / Adelanto</div>
+    <div class="form-group"><label class="form-label">Monto ₲ *</label>${renderMontoInput('f-vale-monto', '', '50000')}</div>
+    <div class="form-group"><label class="form-label">Concepto</label><input class="form-input" id="f-vale-concepto" placeholder="Almuerzo, adelanto, etc."></div>
+    <div class="form-group"><label class="form-label">Fecha</label>${renderFechaInput('f-vale-fecha')}</div>
+    <button class="btn-primary" onclick="guardarValeConSafeCall('${empleadoId}')">Registrar vale</button>
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
+}
+
+async function guardarValeConSafeCall(empleadoId) {
+  await safeCall(async () => {
+    await guardarVale(empleadoId);
+  }, null, 'No se pudo registrar el vale');
+}
+
+async function guardarVale(empleadoId) {
+  const monto = parseFloat(document.getElementById('f-vale-monto').value);
+  if (!validatePositiveNumber(monto, 'Monto')) return;
+
+  const concepto = document.getElementById('f-vale-concepto').value || 'Vale';
+  const fecha = document.getElementById('f-vale-fecha').value;
+
+  const { error } = await sb.from('vales_empleado').insert({
+    empleado_id: empleadoId,
+    monto,
+    concepto,
+    fecha,
+    taller_id: tid()
+  });
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+
+  const { data: emp } = await sb.from('empleados').select('nombre').eq('id', empleadoId).single();
+  const categoriaId = await obtenerCategoriaFinanciera('Vales/Adelantos', 'egreso');
+  if (categoriaId) {
+    await sb.from('movimientos_financieros').insert({
+      taller_id: tid(),
+      tipo: 'egreso',
+      categoria_id: categoriaId,
+      monto,
+      concepto: 'Vale: ' + (emp?.nombre || '') + ' — ' + concepto,
+      fecha
+    });
+  }
+
+  clearCache('empleados');
+  clearCache('finanzas');
+  toast('Vale registrado', 'success');
+  closeModal();
+  detalleEmpleado(empleadoId);
 }
 
 function modalNuevoEmpleado() {
