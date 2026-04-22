@@ -179,3 +179,5 @@ async function navigate(page, params = {}) {
   'reporte-tendencias': reporteTendencias,
   'modo-taller': modoTaller
 };
+  if (pages[page]) pages[page](params);
+}
