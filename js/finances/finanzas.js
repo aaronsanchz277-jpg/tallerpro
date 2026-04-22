@@ -248,6 +248,13 @@ async function finanzas_modalNuevo(tipo) {
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
+// Wrapper seguro para guardar (usado en los modales)
+async function finanzas_guardarConSafeCall(id = null) {
+  await safeCall(async () => {
+    await finanzas_guardar(id);
+  }, null, 'No se pudo guardar el movimiento');
+}
+
 async function finanzas_guardar(id = null) {
   const concepto = document.getElementById('f-fin-concepto').value.trim();
   if (!validateRequired(concepto, 'Concepto')) return;
@@ -271,7 +278,6 @@ async function finanzas_guardar(id = null) {
 
   let error;
   if (id) {
-    // 🔥 ACTUALIZAR (NO INSERTAR)
     const res = await sb.from('movimientos_financieros').update(data).eq('id', id);
     error = res.error;
   } else {
@@ -284,7 +290,7 @@ async function finanzas_guardar(id = null) {
   toast(id ? 'Movimiento actualizado' : 'Movimiento guardado', 'success');
   clearCache('finanzas');
   closeModal();
-  finanzas_cargarDatos(); // Refrescar lista
+  finanzas_cargarDatos();
 }
 
 async function finanzas_modalEditar(id) {
