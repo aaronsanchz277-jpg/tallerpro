@@ -131,28 +131,64 @@ async function dashboard() {
   const enProgreso = stats.en_progreso || 0;
   const totalCrédito = stats.creditos_pendientes || 0;
   const repsHoyCount = stats.reparaciones_hoy || 0;
-  const totalMes = stats.ingresos_mes || 0;
   const alertasStock = stats.stock_bajo || [];
   const recientes = stats.recientes || [];
   const vehiculosHoy = stats.vehiculos_hoy || 0;
   const vehiculosSemana = stats.vehiculos_semana || 0;
   const vehiculosMes = stats.vehiculos_mes || 0;
-  
+
+  // ─── NUEVO: Obtener ingresos y gastos del mes desde movimientos_financieros (filtrado por incluir_en_mes) ───
+  let ingresosMesFiltrado = 0;
+  let egresosMesFiltrado = 0;
   let gananciaNeta = 0;
 
-  let totalQSMes = 0, totalPOSMes = 0, totalGastosMes = 0;
   if (currentPerfil?.rol === 'admin') {
-    const [{ data: qsMes }, { data: posMes }, { data: gastosMes }] = await Promise.all([
-      cachedQuery('dash_qs_mes', () => sb.from('ventas').select('total').eq('taller_id', tid()).eq('es_servicio_rapido', true).gte('created_at', primerMes + 'T00:00:00')),
-      cachedQuery('dash_pos_mes', () => sb.from('ventas').select('total').eq('taller_id', tid()).eq('es_servicio_rapido', false).gte('created_at', primerMes + 'T00:00:00')),
-      cachedQuery('dash_gastos_mes', () => sb.from('gastos_taller').select('monto').eq('taller_id', tid()).gte('fecha', primerMes))
-    ]);
-    totalQSMes = (qsMes?.data || []).reduce((s, r) => s + parseFloat(r.total || 0), 0);
-    totalPOSMes = (posMes?.data || []).reduce((s, r) => s + parseFloat(r.total || 0), 0);
-    totalGastosMes = (gastosMes?.data || []).reduce((s, r) => s + parseFloat(r.monto || 0), 0);
-    gananciaNeta = totalMes + totalQSMes + totalPOSMes - totalGastosMes;
+    try {
+      const { data: balanceMensual } = await sb.rpc('get_balance_mensual', {
+        p_taller_id: tid(),
+        p_fecha_inicio: primerMes,
+        p_fecha_fin: hoy
+      });
+      
+      if (balanceMensual) {
+        ingresosMesFiltrado = balanceMensual.total_ingresos || 0;
+        egresosMesFiltrado = balanceMensual.total_egresos || 0;
+        gananciaNeta = ingresosMesFiltrado - egresosMesFiltrado;
+      }
+    } catch (e) {
+      console.warn('Error obteniendo balance mensual filtrado, usando cálculo tradicional:', e);
+      // Fallback: usar el cálculo tradicional con ventas y gastos directos (pero también filtramos ventas por incluir_en_mes)
+      const { data: ventasMes } = await sb.from('ventas')
+        .select('total')
+        .eq('taller_id', tid())
+        .eq('estado', 'completado')
+        .eq('incluir_en_mes', true)
+        .gte('created_at', primerMes + 'T00:00:00')
+        .lte('created_at', hoy + 'T23:59:59');
+      const totalVentasMes = (ventasMes || []).reduce((s, v) => s + parseFloat(v.total || 0), 0);
+      
+      const { data: reparacionesMes } = await sb.from('reparaciones')
+        .select('costo')
+        .eq('taller_id', tid())
+        .eq('estado', 'finalizado')
+        .gte('fecha', primerMes)
+        .lte('fecha', hoy);
+      const totalReparacionesMes = (reparacionesMes || []).reduce((s, r) => s + parseFloat(r.costo || 0), 0);
+      
+      const { data: gastosMes } = await sb.from('gastos_taller')
+        .select('monto')
+        .eq('taller_id', tid())
+        .gte('fecha', primerMes)
+        .lte('fecha', hoy);
+      const totalGastosMes = (gastosMes || []).reduce((s, g) => s + parseFloat(g.monto || 0), 0);
+      
+      ingresosMesFiltrado = totalVentasMes + totalReparacionesMes;
+      gananciaNeta = ingresosMesFiltrado - totalGastosMes;
+    }
   }
 
+  // Actualizamos stats para los KPIs
+  stats.ingresos_mes = ingresosMesFiltrado;
   stats.ganancia_neta = gananciaNeta;
   stats.stock_bajo = alertasStock;
 
@@ -338,26 +374,30 @@ async function dashboard() {
         </div>
       </div>
 
-      ${currentPerfil?.rol === 'admin' ? `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
+      ${currentPerfil?.rol === 'admin' ? `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
         <div>
           <div style="font-size:.72rem;color:var(--text2);letter-spacing:1px;font-family:var(--font-head)">${t('dashIngresosMes')}</div>
-          <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--success)">₲${gs(totalMes + totalQSMes + totalPOSMes)}</div>
-          <div style="font-size:.7rem;color:var(--text2);margin-top:.2rem">OTs: ₲${gs(totalMes)} · QS: ₲${gs(totalQSMes)} · POS: ₲${gs(totalPOSMes)}</div>
+          <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--success)">₲${gs(ingresosMesFiltrado)}</div>
+          <div style="font-size:.7rem;color:var(--text2);margin-top:.2rem">Ingresos del mes (filtrado)</div>
         </div>
         <div style="font-size:2rem;">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         </div>
       </div>
-      ${totalGastosMes > 0 ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
+      ${egresosMesFiltrado > 0 || gananciaNeta !== 0 ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:.75rem;cursor:pointer" onclick="navigate('gastos')">
           <div style="font-size:.68rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">${t('dashGastosMes')}</div>
-          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--danger)">₲${gs(totalGastosMes)}</div>
+          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--danger)">₲${gs(egresosMesFiltrado)}</div>
         </div>
         <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem">
           <div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">${t('dashGananciaNeta')}</div>
           <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${gananciaNeta >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(gananciaNeta)}</div>
         </div>
-      </div>` : ''}` : ''}
+      </div>
+      ` : ''}
+      ` : ''}
 
       ${deudoresHTML}
       ${cuentasVencidasHTML}
@@ -480,17 +520,25 @@ async function reportes() {
   const ganMes = (repsMes||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
   const totalCréditos = (creditosPend||[]).reduce((s,f)=>s+parseFloat(f.monto||0),0);
 
-  let repQSMes=0, repPOSMes=0, repGastosMes=0;
-  const [{data:_qsM},{data:_posM},{data:_gastM}] = await Promise.all([
-    cachedQuery('rep_qs', () => sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', true).gte('created_at',primerMes+'T00:00:00')),
-    cachedQuery('rep_pos', () => sb.from('ventas').select('total').eq('taller_id',tid()).eq('es_servicio_rapido', false).gte('created_at',primerMes+'T00:00:00')),
-    cachedQuery('rep_gastos', () => sb.from('gastos_taller').select('monto').eq('taller_id',tid()).gte('fecha',primerMes))
-  ]);
-  repQSMes = (_qsM||[]).reduce((s,r)=>s+parseFloat(r.total||0),0);
-  repPOSMes = (_posM||[]).reduce((s,r)=>s+parseFloat(r.total||0),0);
-  repGastosMes = (_gastM||[]).reduce((s,r)=>s+parseFloat(r.monto||0),0);
-  const ingresosTotalMes = ganMes + repQSMes + repPOSMes;
-  const gananciaNeta = ingresosTotalMes - repGastosMes;
+  // Para reportes también usamos el balance mensual filtrado desde movimientos_financieros
+  let ingresosTotalMes = ganMes;
+  let gananciaNeta = ganMes;
+  
+  if (currentPerfil?.rol === 'admin') {
+    try {
+      const { data: balanceMensual } = await sb.rpc('get_balance_mensual', {
+        p_taller_id: tid(),
+        p_fecha_inicio: primerMes,
+        p_fecha_fin: hoy
+      });
+      if (balanceMensual) {
+        ingresosTotalMes = balanceMensual.total_ingresos || ganMes;
+        gananciaNeta = balanceMensual.balance_neto || ganMes;
+      }
+    } catch (e) {
+      console.warn('Error obteniendo balance mensual para reportes:', e);
+    }
+  }
 
   const serviciosCount = {};
   (todasReps||[]).forEach(r => {
@@ -508,24 +556,21 @@ async function reportes() {
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
         <div>
-          <div style="font-size:.72rem;color:var(--text2);letter-spacing:1px;font-family:var(--font-head)">${t('repMes')} — INGRESOS TOTALES</div>
+          <div style="font-size:.72rem;color:var(--text2);letter-spacing:1px;font-family:var(--font-head)">${t('repMes')} — INGRESOS TOTALES (filtrado)</div>
           <div style="font-family:var(--font-head);font-size:2rem;font-weight:700;color:var(--success)">₲${gs(ingresosTotalMes)}</div>
-          <div style="font-size:.7rem;color:var(--text2);margin-top:.2rem">OTs: ₲${gs(ganMes)} · QS: ₲${gs(repQSMes)} · POS: ₲${gs(repPOSMes)}</div>
         </div>
         <div style="font-size:2.5rem;">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         </div>
       </div>
-      ${repGastosMes>0?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
-        <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:.75rem;cursor:pointer" onclick="navigate('gastos')">
-          <div style="font-size:.68rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">${t('dashGastosMes')}</div>
-          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--danger)">₲${gs(repGastosMes)}</div>
-        </div>
-        <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem">
-          <div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">${t('dashGananciaNeta')}</div>
+      ${gananciaNeta !== ganMes ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
+        <div style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:12px;padding:.75rem">
+          <div style="font-size:.68rem;color:var(--success);font-family:var(--font-head);letter-spacing:1px">${t('dashGananciaNeta')}</div>
           <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${gananciaNeta>=0?'var(--success)':'var(--danger)'}">₲${gs(gananciaNeta)}</div>
         </div>
-      </div>`:''}
+      </div>
+      ` : ''}
       <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
         <div>
           <div style="font-size:.72rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">${t('repFiados')}</div>
