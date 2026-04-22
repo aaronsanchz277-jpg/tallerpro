@@ -284,6 +284,8 @@ function getLunesActual() {
   const dia = hoy.getDay(); // 0 = domingo
   const lunes = new Date(hoy);
   lunes.setDate(hoy.getDate() - (dia === 0 ? 6 : dia - 1));
+  // Ajuste de zona horaria: usar setUTCHours para evitar desplazamientos
+  lunes.setUTCHours(0,0,0,0);
   return lunes.toISOString().split('T')[0];
 }
 
@@ -292,22 +294,66 @@ function getDomingoActual() {
   const dia = hoy.getDay();
   const domingo = new Date(hoy);
   domingo.setDate(hoy.getDate() + (dia === 0 ? 0 : 7 - dia));
+  domingo.setUTCHours(0,0,0,0);
   return domingo.toISOString().split('T')[0];
 }
 
-async function modalNuevoVale(empleadoId) {
-  // Obtener períodos disponibles
+// Mostrar formulario de creación rápida de período
+function mostrarFormNuevoPeriodo(empleadoId) {
+  const form = document.getElementById('nuevo-periodo-form');
+  if (form) {
+    form.style.display = 'block';
+    document.getElementById('np-inicio').value = getLunesActual();
+    document.getElementById('np-fin').value = getDomingoActual();
+  }
+}
+
+// Crear el período desde el modal y recargar
+async function crearPeriodoDesdeModal(empleadoId) {
+  const inicio = document.getElementById('np-inicio')?.value;
+  const fin = document.getElementById('np-fin')?.value;
+  if (!inicio || !fin) {
+    toast('Las fechas son obligatorias', 'error');
+    return;
+  }
+  
+  await safeCall(async () => {
+    const { data: nuevo, error } = await sb.from('periodos_sueldo')
+      .insert({ 
+        fecha_inicio: inicio, 
+        fecha_fin: fin, 
+        taller_id: tid(),
+        estado: 'abierto'
+      })
+      .select('id')
+      .single();
+      
+    if (error) throw new Error(error.message);
+    
+    toast('Período creado correctamente', 'success');
+    closeModal();
+    // Reabrir el modal de vale con el nuevo período seleccionado por defecto
+    await modalNuevoVale(empleadoId, nuevo.id);
+  }, null, 'No se pudo crear el período');
+}
+
+// Modal principal de vale (ahora recibe opcionalmente periodoSeleccionadoId)
+async function modalNuevoVale(empleadoId, periodoSeleccionadoId = null) {
   const { data: periodos } = await sb.from('periodos_sueldo')
     .select('id, fecha_inicio, fecha_fin, estado')
     .eq('taller_id', tid())
     .order('fecha_inicio', { ascending: false })
     .limit(20);
 
-  const periodoAbierto = periodos?.find(p => p.estado === 'abierto');
-  const periodoSeleccionado = periodoAbierto?.id || periodos?.[0]?.id || '';
+  // Determinar cuál período dejar seleccionado por defecto
+  let defaultSelected = periodoSeleccionadoId;
+  if (!defaultSelected) {
+    const periodoAbierto = periodos?.find(p => p.estado === 'abierto');
+    defaultSelected = periodoAbierto?.id || periodos?.[0]?.id || '';
+  }
 
   const opcionesPeriodos = (periodos || []).map(p => 
-    `<option value="${p.id}" ${p.id === periodoSeleccionado ? 'selected' : ''}>
+    `<option value="${p.id}" ${p.id === defaultSelected ? 'selected' : ''}>
       ${formatFecha(p.fecha_inicio)} – ${formatFecha(p.fecha_fin)} ${p.estado === 'abierto' ? '(abierto)' : ''}
     </option>`
   ).join('');
@@ -342,59 +388,6 @@ async function modalNuevoVale(empleadoId) {
     <button class="btn-primary" onclick="guardarValeConSafeCall('${empleadoId}')">Registrar vale</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
   `);
-}
-
-// Función para mostrar el formulario de nuevo período
-function mostrarFormNuevoPeriodo(empleadoId) {
-  const form = document.getElementById('nuevo-periodo-form');
-  if (form) {
-    form.style.display = 'block';
-    // Actualizar fechas por si acaso
-    const inicio = document.getElementById('np-inicio');
-    const fin = document.getElementById('np-fin');
-    if (inicio) inicio.value = getLunesActual();
-    if (fin) fin.value = getDomingoActual();
-  }
-}
-
-// Función para crear período desde el modal y actualizar el selector
-async function crearPeriodoDesdeModal(empleadoId) {
-  const inicio = document.getElementById('np-inicio')?.value;
-  const fin = document.getElementById('np-fin')?.value;
-  if (!inicio || !fin) {
-    toast('Las fechas son obligatorias', 'error');
-    return;
-  }
-  
-  await safeCall(async () => {
-    const { data: nuevo, error } = await sb.from('periodos_sueldo')
-      .insert({ fecha_inicio: inicio, fecha_fin: fin, taller_id: tid() })
-      .select('id, fecha_inicio, fecha_fin')
-      .single();
-      
-    if (error) throw new Error(error.message);
-    
-    toast('Período creado correctamente', 'success');
-    
-    // Recargar el modal con el nuevo período seleccionado
-    closeModal();
-    await modalNuevoVale(empleadoId);
-    
-    // Forzar selección del nuevo período
-    setTimeout(() => {
-      const select = document.getElementById('f-vale-periodo');
-      if (select && nuevo) {
-        // Buscar la opción correspondiente al nuevo período (debería estar recién agregada)
-        for (let opt of select.options) {
-          if (opt.value === nuevo.id) {
-            opt.selected = true;
-            break;
-          }
-        }
-      }
-    }, 100);
-    
-  }, null, 'No se pudo crear el período');
 }
 
 async function guardarValeConSafeCall(empleadoId) {
