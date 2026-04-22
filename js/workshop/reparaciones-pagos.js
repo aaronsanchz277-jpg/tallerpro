@@ -73,22 +73,10 @@ async function guardarPagoReparacion(repId) {
     
     if (error) { toast('Error: '+error.message,'error'); return; }
     
-    if (metodo !== 'Crédito') {
-      const categoriaId = await obtenerCategoriaFinanciera('Reparaciones', 'ingreso');
-      if (categoriaId) {
-        const { data: rep } = await sb.from('reparaciones').select('descripcion').eq('id',repId).single();
-        await sb.from('movimientos_financieros').insert({
-          taller_id: tid(),
-          tipo: 'ingreso',
-          categoria_id: categoriaId,
-          monto,
-          descripcion: 'Pago: ' + (rep?.descripcion||'') + ' (' + metodo + ')',
-          fecha,
-          referencia_id: pago.id,
-          referencia_tabla: 'pagos_reparacion'
-        });
-      }
-    } else {
+    // NOTA: La inserción en movimientos_financieros ahora la hace un TRIGGER en Supabase
+    // (ver script SQL proporcionado)
+    
+    if (metodo === 'Crédito') {
       const { data: rep } = await sb.from('reparaciones').select('cliente_id,descripcion').eq('id',repId).single();
       if (rep?.cliente_id) {
         await sb.from('fiados').insert({
