@@ -251,21 +251,11 @@ function updateOnlineStatus() {
   
   if (_isOnline) {
     setTimeout(processOfflineQueue, 1000);
-    toast('✓ Conexión restablecida', 'success', 1500);
+    if (typeof toast === 'function') toast('✓ Conexión restablecida', 'success', 1500);
   } else {
-    toast('⚡ Sin conexión — modo offline activado', 'info', 2000);
+    if (typeof toast === 'function') toast('⚡ Sin conexión — modo offline activado', 'info', 2000);
   }
 }
-
-async function updateSyncBadge() {
-  const count = await getQueueCount();
-  const badge = document.getElementById('sync-badge');
-  if (badge) {
-    badge.textContent = `⏳ ${count}`;
-    badge.classList.toggle('show', count > 0);
-  }
-}
-
 // Registrar Background Sync si está disponible
 if ('serviceWorker' in navigator && 'SyncManager' in window) {
   navigator.serviceWorker.ready.then(reg => {
