@@ -248,13 +248,7 @@ async function finanzas_modalNuevo(tipo) {
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
-async function finanzas_guardarConSafeCall() {
-  await safeCall(async () => {
-    await finanzas_guardar();
-  }, null, 'No se pudo guardar el movimiento');
-}
-
-async function finanzas_guardar(id=null) {
+async function finanzas_guardar(id = null) {
   const concepto = document.getElementById('f-fin-concepto').value.trim();
   if (!validateRequired(concepto, 'Concepto')) return;
   
@@ -274,17 +268,23 @@ async function finanzas_guardar(id=null) {
     incluir_en_mes: incluirEnMes,
     taller_id: tid()
   };
-  
-  const { error } = id
-    ? await sb.from('movimientos_financieros').update(data).eq('id', id)
-    : await sb.from('movimientos_financieros').insert(data);
+
+  let error;
+  if (id) {
+    // 🔥 ACTUALIZAR (NO INSERTAR)
+    const res = await sb.from('movimientos_financieros').update(data).eq('id', id);
+    error = res.error;
+  } else {
+    const res = await sb.from('movimientos_financieros').insert(data);
+    error = res.error;
+  }
     
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   
-  toast('Movimiento guardado', 'success');
+  toast(id ? 'Movimiento actualizado' : 'Movimiento guardado', 'success');
   clearCache('finanzas');
   closeModal();
-  finanzas_cargarDatos();
+  finanzas_cargarDatos(); // Refrescar lista
 }
 
 async function finanzas_modalEditar(id) {
