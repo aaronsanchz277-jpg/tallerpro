@@ -244,7 +244,7 @@ async function finanzas_modalNuevo(tipo) {
       </label>
     </div>
     <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas')}</div>
-    <button class="btn-primary" onclick="finanzas_guardarConSafeCall()">Guardar</button>
+    <button class="btn-primary" onclick="window.finanzas_guardarConSafeCall()">Guardar</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
@@ -323,7 +323,7 @@ async function finanzas_modalEditar(id) {
       </label>
     </div>
     <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas', m.notas)}</div>
-    <button class="btn-primary" onclick="finanzas_guardarConSafeCall('${id}')">Actualizar</button>
+    <button class="btn-primary" onclick="window.finanzas_guardarConSafeCall('${id}')">Actualizar</button>
     ${currentPerfil?.rol === 'admin' ? `<button class="btn-danger" onclick="finanzas_eliminarConSafeCall('${id}')">Eliminar</button>` : ''}
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
@@ -401,3 +401,14 @@ async function finanzas_eliminarCat(id) {
   toast('Categoría eliminada', 'success');
   finanzas_modalCategorias();
 }
+
+// ========== DECLARACIONES GLOBALES FORZADAS ==========
+window.finanzas = finanzas;
+window.finanzas_modalNuevo = finanzas_modalNuevo;
+window.finanzas_modalEditar = finanzas_modalEditar;
+window.finanzas_guardarConSafeCall = finanzas_guardarConSafeCall;
+window.finanzas_guardar = finanzas_guardar;
+window.finanzas_eliminarConSafeCall = finanzas_eliminarConSafeCall;
+window.finanzas_modalCategorias = finanzas_modalCategorias;
+window.finanzas_aplicarRango = finanzas_aplicarRango;
+window.finanzas_setRangoRapido = finanzas_setRangoRapido;
