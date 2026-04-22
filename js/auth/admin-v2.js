@@ -54,15 +54,10 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
 }
 
 // ─── SUPER-ADMIN: Panel de gestión de talleres ──────────────────────────────
-let _isSuperAdmin = false;
-
-async function checkSuperAdmin() {
-  const { data } = await sb.from('super_admins').select('user_id').eq('user_id', currentUser?.id).maybeSingle();
-  _isSuperAdmin = !!data;
-}
+// NOTA: _isSuperAdmin y checkSuperAdmin ya están definidos en auth.js
 
 async function superAdminPanel() {
-  if (!_isSuperAdmin) { navigate('dashboard'); return; }
+  if (typeof _isSuperAdmin === 'undefined' || !_isSuperAdmin) { navigate('dashboard'); return; }
   
   const [{ data: talleres }, { data: suscripciones }, { data: planes }] = await Promise.all([
     sb.from('talleres').select('*').order('created_at', {ascending:false}),
