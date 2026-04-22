@@ -39,8 +39,7 @@ async function modalNuevoPeriodo() {
 
 function crearPeriodoSemanaActual() {
   const hoy = new Date();
-  const diaSemana = hoy.getDay(); // 0 = domingo, 1 = lunes...
-  // Asumiendo semana laboral de lunes a domingo
+  const diaSemana = hoy.getDay();
   const inicio = new Date(hoy);
   inicio.setDate(hoy.getDate() - (diaSemana === 0 ? 6 : diaSemana - 1));
   const fin = new Date(inicio);
@@ -151,15 +150,8 @@ async function registrarPagoSueldo(liquidacionId) {
   const fechaPago = new Date().toISOString().split('T')[0];
   await sb.from('liquidaciones').update({ estado:'pagado', fecha_pago: fechaPago }).eq('id', liquidacionId);
 
-  // Integración con Finanzas (MODIFICADO)
-  const catId = await obtenerCategoriaFinanciera('Sueldos', 'egreso');
-  if (catId) {
-    const descripcion = `Pago de sueldo a ${liq.empleados?.nombre || 'empleado'} (período ${formatFecha(liq.periodos_sueldo?.fecha_inicio)} - ${formatFecha(liq.periodos_sueldo?.fecha_fin)})`;
-    await sb.from('movimientos_financieros').insert({
-      taller_id: tid(), tipo: 'egreso', categoria_id: catId, monto: liq.total_liquidado,
-      descripcion: descripcion, fecha: fechaPago, referencia_id: liquidacionId, referencia_tabla: 'liquidaciones'
-    });
-  }
+  // NOTA: La inserción en movimientos_financieros ahora la hace un TRIGGER en Supabase
+  // (ver script SQL proporcionado)
 
   clearCache('finanzas');
   toast('✓ Sueldo marcado como pagado y registrado en Finanzas', 'success');
