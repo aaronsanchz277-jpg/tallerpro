@@ -47,7 +47,6 @@ async function finanzas() {
         </div>
       </div>
       
-      <!-- Selector de fechas -->
       <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;background:var(--surface);padding:.5rem;border-radius:10px;border:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:.3rem;flex:1">
           <input type="date" id="finanzas-fecha-inicio" value="${_finanzasFechaInicio}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:.4rem;color:var(--text);font-size:.8rem;width:100%">
@@ -90,7 +89,6 @@ async function finanzas_cargarDatos() {
       .order('fecha', { ascending: false })
       .order('id', { ascending: false });
 
-    // Calcular totales directamente desde los movimientos obtenidos
     const totalIngresos = (movimientos||[]).filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const totalEgresos = (movimientos||[]).filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const movimientosCaja = (movimientos||[]).filter(m => m.afecta_caja !== false);
@@ -243,11 +241,10 @@ async function finanzas_modalNuevo(tipo) {
       </label>
     </div>
     <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas')}</div>
-    <button class="btn-primary" onclick="window.finanzas_guardarConSafeCall(null, '${uniqueId}')">Guardar</button>
-    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
+    <button class="btn-primary" onclick="event.stopPropagation(); window.finanzas_guardarConSafeCall(null, '${uniqueId}')">Guardar</button>
+    <button class="btn-secondary" onclick="event.stopPropagation(); closeModal()">Cancelar</button>`);
 }
 
-// Wrapper seguro para guardar (usado en los modales)
 async function finanzas_guardarConSafeCall(id = null, uniqueId = null) {
   await safeCall(async () => {
     await finanzas_guardar(id, uniqueId);
@@ -255,77 +252,58 @@ async function finanzas_guardarConSafeCall(id = null, uniqueId = null) {
 }
 
 async function finanzas_guardar(id = null, uniqueId = null) {
-  console.log('🟢 finanzas_guardar llamado con id:', id, 'uniqueId:', uniqueId);
-  
-  const concepto = document.getElementById('f-fin-concepto')?.value.trim();
+  const concepto = document.getElementById('f-fin-concepto').value.trim();
   if (!validateRequired(concepto, 'Concepto')) return;
   
-  const monto = parseFloat(document.getElementById('f-fin-monto')?.value);
+  const monto = parseFloat(document.getElementById('f-fin-monto').value);
   if (!validatePositiveNumber(monto, 'Monto')) return;
   
-  // Leer el valor del checkbox de manera directa y robusta
   let incluirEnMes = true;
-  if (id) {
-    // Estamos en modo edición: buscamos el checkbox específico de editar
-    const checkbox = document.getElementById('f-fin-incluir-mes-editar');
-    console.log('🔵 Checkbox editar encontrado:', checkbox);
-    incluirEnMes = checkbox ? checkbox.checked : true;
-  } else if (uniqueId) {
-    // Estamos en modo nuevo: buscamos el checkbox con el ID único
+  if (uniqueId) {
     const checkbox = document.getElementById(`f-fin-incluir-mes-${uniqueId}`);
-    console.log('🟡 Checkbox nuevo encontrado:', checkbox);
+    incluirEnMes = checkbox ? checkbox.checked : true;
+  } else if (id) {
+    const checkbox = document.getElementById('f-fin-incluir-mes-editar');
+    incluirEnMes = checkbox ? checkbox.checked : true;
+  } else {
+    const checkbox = document.getElementById('f-fin-incluir-mes');
     incluirEnMes = checkbox ? checkbox.checked : true;
   }
   
-  console.log('📤 Valor de incluir_en_mes a enviar:', incluirEnMes);
-  
   const data = {
-    tipo: document.getElementById('f-fin-tipo')?.value,
+    tipo: document.getElementById('f-fin-tipo').value,
     concepto,
     monto,
-    fecha: document.getElementById('f-fin-fecha')?.value,
-    categoria_id: document.getElementById('f-fin-cat')?.value || null,
-    notas: document.getElementById('f-fin-notas')?.value,
+    fecha: document.getElementById('f-fin-fecha').value,
+    categoria_id: document.getElementById('f-fin-cat').value || null,
+    notas: document.getElementById('f-fin-notas').value,
     afecta_caja: document.getElementById('f-fin-afecta-caja')?.value === 'true',
     incluir_en_mes: incluirEnMes,
     taller_id: tid()
   };
 
-  console.log('📦 Datos completos a guardar:', data);
-
   let error;
   if (id) {
     const res = await sb.from('movimientos_financieros').update(data).eq('id', id);
     error = res.error;
-    console.log('🔄 Resultado de update:', error ? 'ERROR: ' + error.message : 'OK');
   } else {
     const res = await sb.from('movimientos_financieros').insert(data);
     error = res.error;
-    console.log('➕ Resultado de insert:', error ? 'ERROR: ' + error.message : 'OK');
   }
     
-  if (error) { 
-    toast('Error: ' + error.message, 'error'); 
-    return; 
-  }
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
   
   toast(id ? 'Movimiento actualizado' : 'Movimiento guardado', 'success');
   clearCache('finanzas');
   closeModal();
-  // Refrescar la vista con un pequeño retraso para asegurar que el modal se cierre
-  setTimeout(() => {
-    console.log('⏳ Ejecutando finanzas_cargarDatos...');
-    finanzas_cargarDatos();
-  }, 300);
+  // Retraso para asegurar que el modal se cierre y el DOM se estabilice
+  setTimeout(() => finanzas_cargarDatos(), 300);
 }
 
 async function finanzas_modalEditar(id) {
   const { data: m } = await sb.from('movimientos_financieros').select('*').eq('id', id).single();
   if (!m) return;
   const { data: cats } = await sb.from('categorias_financieras').select('id,nombre').eq('taller_id', tid()).or(`tipo.eq.${m.tipo},tipo.eq.ambos`).order('nombre');
-  
-  console.log('📋 Abriendo edición para movimiento:', m);
-  
   openModal(`
     <div class="modal-title">Editar ${m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</div>
     <input type="hidden" id="f-fin-tipo" value="${m.tipo}">
@@ -352,9 +330,9 @@ async function finanzas_modalEditar(id) {
       </label>
     </div>
     <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas', m.notas)}</div>
-    <button class="btn-primary" onclick="window.finanzas_guardarConSafeCall('${id}')">Actualizar</button>
-    ${currentPerfil?.rol === 'admin' ? `<button class="btn-danger" onclick="finanzas_eliminarConSafeCall('${id}')">Eliminar</button>` : ''}
-    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
+    <button class="btn-primary" onclick="event.stopPropagation(); window.finanzas_guardarConSafeCall('${id}')">Actualizar</button>
+    ${currentPerfil?.rol === 'admin' ? `<button class="btn-danger" onclick="event.stopPropagation(); finanzas_eliminarConSafeCall('${id}')">Eliminar</button>` : ''}
+    <button class="btn-secondary" onclick="event.stopPropagation(); closeModal()">Cancelar</button>`);
 }
 
 async function finanzas_eliminarConSafeCall(id) {
@@ -364,7 +342,7 @@ async function finanzas_eliminarConSafeCall(id) {
       toast('Eliminado', 'success');
       clearCache('finanzas');
       closeModal();
-      finanzas_cargarDatos();
+      setTimeout(() => finanzas_cargarDatos(), 300);
     }, null, 'No se pudo eliminar el movimiento');
   });
 }
@@ -431,7 +409,7 @@ async function finanzas_eliminarCat(id) {
   finanzas_modalCategorias();
 }
 
-// ========== DECLARACIONES GLOBALES FORZADAS ==========
+// ========== DECLARACIONES GLOBALES ==========
 window.finanzas = finanzas;
 window.finanzas_modalNuevo = finanzas_modalNuevo;
 window.finanzas_modalEditar = finanzas_modalEditar;
