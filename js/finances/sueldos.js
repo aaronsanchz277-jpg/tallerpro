@@ -1,177 +1,167 @@
-// ─── MEJORA #7: GESTIÓN DE SUELDOS ──────────────────────────────────────────
+// ─── CUENTAS A PAGAR (Proveedores) ──────────────────────────────────────────
+async function cuentasPagar({ filtro='pendiente' }={}) {
+  const { data } = await sb.from('cuentas_pagar').select('*').eq('taller_id',tid()).order('fecha_vencimiento',{ascending:true});
+  const hoy = new Date().toISOString().split('T')[0];
+  const pendientes = (data||[]).filter(c => !c.pagada);
+  const pagadas = (data||[]).filter(c => c.pagada);
+  const vencidas = pendientes.filter(c => c.fecha_vencimiento && c.fecha_vencimiento < hoy);
+  const porVencer = pendientes.filter(c => c.fecha_vencimiento && c.fecha_vencimiento >= hoy && c.fecha_vencimiento <= new Date(Date.now()+7*86400000).toISOString().split('T')[0]);
+  const totalPendiente = pendientes.reduce((s,c) => s+parseFloat(c.monto||0), 0);
+  const lista = filtro === 'pagada' ? pagadas : pendientes;
 
-async function sueldos() {
-  const { data: periodos } = await sb.from('periodos_sueldo').select('*').eq('taller_id', tid()).order('fecha_inicio', {ascending:false});
-  
   document.getElementById('main-content').innerHTML = `
     <div class="section-header">
-      <div class="section-title">💰 Sueldos</div>
-      <button class="btn-add" onclick="modalNuevoPeriodo()">+ Período</button>
+      <div class="section-title">Cuentas a pagar</div>
+      <button class="btn-add" onclick="modalNuevaCuenta()">+ Nueva</button>
     </div>
-    ${(periodos||[]).length === 0 ? '<div class="empty"><p>No hay períodos de sueldo. Creá uno para empezar.</p></div>' :
-      (periodos||[]).map(p => `
-      <div class="card" onclick="detallePeriodo('${p.id}')">
-        <div class="card-header">
-          <div class="card-avatar">📅</div>
-          <div class="card-info">
-            <div class="card-name">${formatFecha(p.fecha_inicio)} — ${formatFecha(p.fecha_fin)}</div>
-            <div class="card-sub">${p.estado === 'cerrado' ? '✓ Cerrado' : '⏳ Abierto'}</div>
+
+    <div style="background:var(--surface);border:1px solid ${vencidas.length?'var(--danger)':'var(--border)'};border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:.7rem;color:${totalPendiente>0?'var(--danger)':'var(--success)'};letter-spacing:1px;font-family:var(--font-head)">TOTAL POR PAGAR</div>
+        <div style="font-family:var(--font-head);font-size:1.8rem;color:${totalPendiente>0?'var(--danger)':'var(--success)'}">₲${gs(totalPendiente)}</div>
+        <div style="font-size:.7rem;color:var(--text2)">${pendientes.length} pendiente(s)${vencidas.length?' · <span style="color:var(--danger)">'+vencidas.length+' vencida(s)</span>':''}</div>
+      </div>
+      <div style="font-size:2rem">${vencidas.length?'🚨':'📋'}</div>
+    </div>
+
+    ${porVencer.length > 0 ? `<div style="background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.3);border-radius:10px;padding:.75rem;margin-bottom:1rem">
+      <div style="font-size:.7rem;color:var(--warning);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.3rem">⏰ VENCEN ESTA SEMANA</div>
+      ${porVencer.map(c => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(c.proveedor)} — ₲${gs(c.monto)} · ${formatFecha(c.fecha_vencimiento)}</div>`).join('')}
+    </div>` : ''}
+
+    <div class="tabs">
+      <button class="tab ${filtro==='pendiente'?'active':''}" onclick="cuentasPagar({filtro:'pendiente'})">Pendientes (${pendientes.length})</button>
+      <button class="tab ${filtro==='pagada'?'active':''}" onclick="cuentasPagar({filtro:'pagada'})">Pagadas (${pagadas.length})</button>
+    </div>
+
+    ${lista.length === 0 ? '<div class="empty"><p>No hay cuentas</p></div>' :
+      lista.map(c => {
+        const vencida = !c.pagada && c.fecha_vencimiento && c.fecha_vencimiento < hoy;
+        return `<div class="card" onclick="detalleCuenta('${c.id}')">
+          <div class="card-header">
+            <div class="card-avatar" style="font-size:1.2rem">${c.pagada?'✅':vencida?'🚨':'📄'}</div>
+            <div class="card-info">
+              <div class="card-name">${h(c.proveedor)}</div>
+              <div class="card-sub">₲${gs(c.monto)} · Vence: ${c.fecha_vencimiento?formatFecha(c.fecha_vencimiento):'Sin fecha'}</div>
+              ${c.notas?`<div class="card-sub">${h(c.notas)}</div>`:''}
+            </div>
+            <span class="card-badge ${c.pagada?'badge-green':vencida?'badge-red':'badge-yellow'}">${c.pagada?'Pagada':vencida?'Vencida':'Pendiente'}</span>
           </div>
-          <span class="card-badge ${p.estado==='cerrado'?'badge-green':'badge-yellow'}">${p.estado==='cerrado'?'CERRADO':'ABIERTO'}</span>
-        </div>
-      </div>`).join('')}`;
+        </div>`;
+      }).join('')}`;
 }
 
-async function modalNuevoPeriodo() {
-  const hoy = new Date();
-  const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
-  const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth()+1, 0).toISOString().split('T')[0];
+function modalNuevaCuenta() {
   openModal(`
-    <div class="modal-title">Nuevo Período de Sueldo</div>
+    <div class="modal-title">Nueva cuenta a pagar</div>
+    <div class="form-group"><label class="form-label">Proveedor *</label><input class="form-input" id="f-proveedor" placeholder="Distribuidora X, Repuestera Y..."></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Fecha inicio</label>${renderFechaInput('f-periodo-inicio', primerDia)}</div>
-      <div class="form-group"><label class="form-label">Fecha fin</label>${renderFechaInput('f-periodo-fin', ultimoDia)}</div>
+      <div class="form-group"><label class="form-label">Monto ₲ *</label>${renderMontoInput('f-monto', '', '500000')}</div>
+      <div class="form-group"><label class="form-label">Fecha vencimiento</label>${renderFechaInput('f-vence')}</div>
     </div>
-    <button class="btn-primary" onclick="guardarPeriodoConSafeCall()">Crear Período</button>
-    <button onclick="crearPeriodoSemanaActual()" style="margin-top:.5rem; width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text2); border-radius:8px; padding:.4rem; cursor:pointer; font-size:.8rem;">📆 Crear período de esta semana</button>
+    <div class="form-group"><label class="form-label">Concepto / Notas</label><input class="form-input" id="f-notas" placeholder="Factura #123, repuestos..."></div>
+    <button class="btn-primary" onclick="guardarCuentaConSafeCall()">Guardar</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
-function crearPeriodoSemanaActual() {
-  const hoy = new Date();
-  const diaSemana = hoy.getDay();
-  const inicio = new Date(hoy);
-  inicio.setDate(hoy.getDate() - (diaSemana === 0 ? 6 : diaSemana - 1));
-  const fin = new Date(inicio);
-  fin.setDate(inicio.getDate() + 6);
-  
-  document.getElementById('f-periodo-inicio').value = inicio.toISOString().split('T')[0];
-  document.getElementById('f-periodo-fin').value = fin.toISOString().split('T')[0];
-}
-
-async function guardarPeriodoConSafeCall() {
+async function guardarCuentaConSafeCall() {
   await safeCall(async () => {
-    await guardarPeriodo();
-  }, null, 'No se pudo crear el período');
+    await guardarCuenta();
+  }, null, 'No se pudo guardar la cuenta');
 }
 
-async function guardarPeriodo() {
-  const inicio = document.getElementById('f-periodo-inicio').value;
-  const fin = document.getElementById('f-periodo-fin').value;
-  if (!inicio || !fin) { toast('Las fechas son obligatorias','error'); return; }
-  const { error } = await sb.from('periodos_sueldo').insert({ fecha_inicio:inicio, fecha_fin:fin, taller_id:tid() });
+async function guardarCuenta(id=null) {
+  const proveedor = document.getElementById('f-proveedor').value.trim();
+  if (!validateRequired(proveedor, 'Proveedor')) return;
+  
+  const monto = parseFloat(document.getElementById('f-monto').value);
+  if (!validatePositiveNumber(monto, 'Monto')) return;
+  
+  const data = {
+    proveedor,
+    monto,
+    fecha_vencimiento: document.getElementById('f-vence').value || null,
+    notas: document.getElementById('f-notas').value || null,
+    pagada: false,
+    taller_id: tid()
+  };
+  
+  const { error } = id ?
+    await sb.from('cuentas_pagar').update(data).eq('id',id) :
+    await sb.from('cuentas_pagar').insert(data);
+    
   if (error) { toast('Error: '+error.message,'error'); return; }
-  toast('Período creado','success');
+  
+  clearCache('cuentas');
+  toast(id ? 'Cuenta actualizada' : 'Cuenta registrada','success');
   closeModal(); 
-  sueldos();
+  cuentasPagar();
 }
 
-async function detallePeriodo(periodoId) {
-  const [{ data: periodo }, { data: liquidaciones }, { data: empleadosAll }] = await Promise.all([
-    sb.from('periodos_sueldo').select('*').eq('id', periodoId).single(),
-    sb.from('liquidaciones').select('*, empleados(nombre)').eq('periodo_id', periodoId).order('created_at'),
-    sb.from('empleados').select('id,nombre,sueldo').eq('taller_id', tid()).order('nombre')
-  ]);
-  if (!periodo) return;
-  const totalLiquidado = (liquidaciones||[]).reduce((s,l) => s + parseFloat(l.total_liquidado||0), 0);
-  const totalPagado = (liquidaciones||[]).filter(l => l.estado==='pagado').reduce((s,l) => s + parseFloat(l.total_liquidado||0), 0);
+async function detalleCuenta(id) {
+  const { data:c } = await sb.from('cuentas_pagar').select('*').eq('id',id).single();
+  if (!c) return;
+  const hoy = new Date().toISOString().split('T')[0];
+  const vencida = !c.pagada && c.fecha_vencimiento && c.fecha_vencimiento < hoy;
 
   document.getElementById('main-content').innerHTML = `
     <div class="detail-header">
-      <button class="back-btn" onclick="sueldos()">← Volver</button>
-      <div class="detail-avatar">📅</div>
-      <div><div class="detail-name">${formatFecha(periodo.fecha_inicio)} — ${formatFecha(periodo.fecha_fin)}</div><div class="detail-sub">${periodo.estado==='cerrado'?'Cerrado':'Abierto'}</div></div>
+      <button class="back-btn" onclick="cuentasPagar()">${t('volver')}</button>
+      <div class="detail-avatar" style="font-size:1.2rem">${c.pagada?'✅':vencida?'🚨':'📄'}</div>
+      <div><div class="detail-name">${h(c.proveedor)}</div><div class="detail-sub">${c.pagada?'Pagada':vencida?'VENCIDA':'Pendiente'}</div></div>
     </div>
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-value" style="font-size:1.2rem">₲${gs(totalLiquidado)}</div><div class="stat-label">TOTAL</div></div>
-      <div class="stat-card"><div class="stat-value" style="font-size:1.2rem;color:var(--success)">₲${gs(totalPagado)}</div><div class="stat-label">PAGADO</div></div>
+    <div class="info-grid">
+      <div class="info-item"><div class="label">Monto</div><div class="value" style="color:var(--danger);font-family:var(--font-head);font-size:1.3rem">₲${gs(c.monto)}</div></div>
+      <div class="info-item"><div class="label">Vencimiento</div><div class="value" style="color:${vencida?'var(--danger)':'var(--text)'}">${c.fecha_vencimiento?formatFecha(c.fecha_vencimiento):'Sin fecha'}</div></div>
+      ${c.notas?`<div class="info-item" style="grid-column:1/-1"><div class="label">Notas</div><div class="value">${h(c.notas)}</div></div>`:''}
+      <div class="info-item"><div class="label">Estado</div><div class="value"><span class="card-badge ${c.pagada?'badge-green':vencida?'badge-red':'badge-yellow'}">${c.pagada?'Pagada':vencida?'Vencida':'Pendiente'}</span></div></div>
     </div>
-    ${periodo.estado==='abierto'?`<button class="btn-primary" style="margin-bottom:1rem" onclick="generarLiquidacionesConSafeCall('${periodoId}')">⚡ Generar liquidaciones</button>`:''}
-    ${(liquidaciones||[]).length === 0 ? '<div class="empty"><p>Sin liquidaciones. Tocá "Generar liquidaciones" para crear.</p></div>' :
-      (liquidaciones||[]).map(l => `
-      <div class="card" style="cursor:default">
-        <div class="card-header">
-          <div class="card-avatar">👤</div>
-          <div class="card-info">
-            <div class="card-name">${h(l.empleados?.nombre||'?')}</div>
-            <div class="card-sub">Base: ₲${gs(l.sueldo_base)} · Bonos: ₲${gs(l.total_bonos)} · Desc: ₲${gs(l.total_descuentos)}</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-family:var(--font-head);font-size:1rem;color:${l.estado==='pagado'?'var(--success)':'var(--accent)'}">₲${gs(l.total_liquidado)}</div>
-            ${l.estado!=='pagado'&&periodo.estado==='abierto'?`<button onclick="registrarPagoSueldoConSafeCall('${l.id}')" style="font-size:.65rem;background:var(--success);color:#000;border:none;border-radius:6px;padding:2px 8px;cursor:pointer;margin-top:4px">Pagar</button>`:`<span style="font-size:.65rem;color:var(--success)">✓ Pagado</span>`}
-          </div>
-        </div>
-      </div>`).join('')}
-    ${periodo.estado==='abierto'?`<button class="btn-danger" style="margin-top:1rem" onclick="cerrarPeriodoConSafeCall('${periodoId}')">🔒 Cerrar período</button>`:''}`;
+    <div style="display:flex;gap:.5rem;margin-top:1rem">
+      ${!c.pagada?`<button onclick="marcarCuentaPagadaConSafeCall('${id}')" class="btn-primary" style="flex:1;margin:0">✓ Marcar como pagada</button>`:''}
+      <button onclick="modalEditarCuenta('${id}')" class="btn-secondary" style="margin:0">Editar</button>
+      <button onclick="eliminarCuentaConSafeCall('${id}')" class="btn-danger" style="margin:0">✕</button>
+    </div>`;
 }
 
-async function generarLiquidacionesConSafeCall(periodoId) {
+async function marcarCuentaPagadaConSafeCall(id) {
   await safeCall(async () => {
-    await generarLiquidaciones(periodoId);
-  }, null, 'No se pudieron generar las liquidaciones');
+    await marcarCuentaPagada(id);
+  }, null, 'No se pudo marcar como pagada');
 }
 
-async function generarLiquidaciones(periodoId) {
-  const { data: periodo } = await sb.from('periodos_sueldo').select('*').eq('id', periodoId).single();
-  const { data: emps } = await sb.from('empleados').select('id,nombre,sueldo').eq('taller_id', tid());
-  if (!emps?.length) { toast('No hay empleados registrados','error'); return; }
-  let creados = 0;
-  for (const emp of emps) {
-    const { data: existe } = await sb.from('liquidaciones').select('id').eq('empleado_id',emp.id).eq('periodo_id',periodoId).maybeSingle();
-    if (existe) continue;
-    const { data: vales } = await sb.from('vales_empleado').select('monto').eq('empleado_id',emp.id).gte('fecha',periodo.fecha_inicio).lte('fecha',periodo.fecha_fin);
-    const totalDescuentos = (vales||[]).reduce((s,v) => s + parseFloat(v.monto||0), 0);
-    const { data: trabajos } = await sb.from('trabajos_empleado').select('monto').eq('empleado_id',emp.id).gte('fecha',periodo.fecha_inicio).lte('fecha',periodo.fecha_fin);
-    const totalExtra = (trabajos||[]).reduce((s,t) => s + parseFloat(t.monto||0), 0);
-    await sb.from('liquidaciones').insert({
-      taller_id: tid(), empleado_id: emp.id, periodo_id: periodoId,
-      sueldo_base: emp.sueldo||0, total_bonos: 0, total_descuentos: totalDescuentos, total_extra: totalExtra, estado: 'pendiente'
-    });
-    creados++;
-  }
-  toast(`✓ ${creados} liquidación(es) generada(s)`,'success');
-  detallePeriodo(periodoId);
-}
-
-async function registrarPagoSueldoConSafeCall(liquidacionId) {
-  confirmar('¿Marcar esta liquidación como pagada?', async () => {
-    await safeCall(async () => {
-      await registrarPagoSueldo(liquidacionId);
-    }, null, 'No se pudo registrar el pago');
-  });
-}
-
-async function registrarPagoSueldo(liquidacionId) {
-  const { data: liq, error: liqErr } = await sb.from('liquidaciones')
-    .select('*, empleados(nombre), periodos_sueldo(fecha_inicio, fecha_fin)')
-    .eq('id', liquidacionId).single();
-  if (liqErr || !liq) { toast('Error al obtener liquidación','error'); return; }
-
-  const fechaPago = new Date().toISOString().split('T')[0];
-  await sb.from('liquidaciones').update({ estado:'pagado', fecha_pago: fechaPago }).eq('id', liquidacionId);
-
+async function marcarCuentaPagada(id) {
+  await sb.from('cuentas_pagar').update({ pagada:true, fecha_pago:new Date().toISOString().split('T')[0] }).eq('id',id);
+  
   // NOTA: La inserción en movimientos_financieros ahora la hace un TRIGGER en Supabase
   // (ver script SQL proporcionado)
-
+  
+  clearCache('cuentas');
   clearCache('finanzas');
-  toast('✓ Sueldo marcado como pagado y registrado en Finanzas', 'success');
-  detallePeriodo(liq.periodo_id);
+  toast('Cuenta pagada — egreso registrado en Finanzas','success');
+  detalleCuenta(id);
 }
 
-async function cerrarPeriodoConSafeCall(periodoId) {
-  confirmar('¿Cerrar este período? No se podrán hacer más cambios.', async () => {
+async function modalEditarCuenta(id) {
+  const { data:c } = await sb.from('cuentas_pagar').select('*').eq('id',id).single();
+  openModal(`
+    <div class="modal-title">Editar cuenta</div>
+    <div class="form-group"><label class="form-label">Proveedor *</label><input class="form-input" id="f-proveedor" value="${h(c.proveedor||'')}"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Monto ₲</label>${renderMontoInput('f-monto', c.monto||0)}</div>
+      <div class="form-group"><label class="form-label">Fecha vencimiento</label>${renderFechaInput('f-vence', c.fecha_vencimiento)}</div>
+    </div>
+    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="f-notas" value="${h(c.notas||'')}"></div>
+    <button class="btn-primary" onclick="guardarCuentaConSafeCall('${id}')">Actualizar</button>
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
+}
+
+async function eliminarCuentaConSafeCall(id) {
+  confirmar('¿Eliminar esta cuenta?', async () => {
     await safeCall(async () => {
-      await cerrarPeriodo(periodoId);
-    }, null, 'No se pudo cerrar el período');
+      await sb.from('cuentas_pagar').delete().eq('id',id);
+      clearCache('cuentas');
+      toast('Cuenta eliminada');
+      cuentasPagar();
+    }, null, 'No se pudo eliminar la cuenta');
   });
-}
-
-async function cerrarPeriodo(periodoId) {
-  await sb.from('periodos_sueldo').update({ estado:'cerrado' }).eq('id', periodoId);
-  toast('Período cerrado','success');
-  detallePeriodo(periodoId);
-}
-
-function verLiquidaciones(empleadoId) {
-  navigate('sueldos');
 }
