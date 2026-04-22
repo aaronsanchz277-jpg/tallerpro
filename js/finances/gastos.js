@@ -1,5 +1,5 @@
 // ─── GASTOS (Registro de egresos del taller) ────────────────────────────────
-// Integrado con Finanzas automáticamente
+// Integrado con Finanzas vía trigger en BD
 
 const CATEGORIAS_GASTO = ['Alquiler','Servicios','Repuestos','Sueldos','Impuestos','Herramientas','Insumos','Limpieza','Otros'];
 
@@ -112,42 +112,8 @@ async function guardarGasto(id) {
     gastoId = saved?.[0]?.id;
   }
   
-  // Integración con Finanzas (MODIFICADO)
-  try {
-    const catFinanciera = categoria || 'Gastos generales';
-    const categoriaId = await obtenerCategoriaFinanciera(catFinanciera, 'egreso');
-    
-    if (categoriaId) {
-      const movimientoData = {
-        taller_id: tid(),
-        tipo: 'egreso',
-        categoria_id: categoriaId,
-        monto: monto,
-        descripcion: `${desc}${proveedor?' — '+proveedor:''}${comprobante?' (Comp: '+comprobante+')':''}`,
-        fecha: fecha,
-        referencia_id: gastoId,
-        referencia_tabla: 'gastos_taller'
-      };
-      
-      if (id) {
-        const { data: existente } = await sb.from('movimientos_financieros')
-          .select('id')
-          .eq('referencia_id', id)
-          .eq('referencia_tabla', 'gastos_taller')
-          .maybeSingle();
-        
-        if (existente) {
-          await sb.from('movimientos_financieros').update(movimientoData).eq('id', existente.id);
-        } else {
-          await sb.from('movimientos_financieros').insert(movimientoData);
-        }
-      } else {
-        await sb.from('movimientos_financieros').insert(movimientoData);
-      }
-    }
-  } catch (e) {
-    console.warn('Error al registrar en finanzas:', e);
-  }
+  // NOTA: La inserción en movimientos_financieros ahora la hace un TRIGGER en Supabase
+  // (ver script SQL proporcionado)
   
   clearCache('gastos');
   clearCache('finanzas');
@@ -159,6 +125,7 @@ async function guardarGasto(id) {
 
 async function eliminarGasto(id) {
   confirmar('¿Eliminar este gasto? También se eliminará el registro financiero asociado.', async () => {
+    // El trigger de BD podría encargarse, pero por seguridad borramos manualmente
     await sb.from('movimientos_financieros')
       .delete()
       .eq('referencia_id', id)
