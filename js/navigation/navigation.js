@@ -157,27 +157,38 @@ async function navigate(page, params = {}) {
   if (navEl) navEl.classList.add('active');
   
   document.getElementById('main-content').innerHTML = getSkeleton(page);
- const pages = { 
-  dashboard, clientes, vehiculos, reparaciones, inventario, creditos, empleados, 
-  presupuestos, reportes, usuarios, mantenimientos, agenda, finanzas, 
-  'cuentas-pagar': cuentasPagar, 
-  'mis-vehiculos': misVehiculos, 
-  'mis-reparaciones': misReparaciones, 
-  'mis-mantenimientos': misMantenimientos, 
-  'mis-citas': misCitas, 
-  'mi-plan': miPlan, 
-  'super-admin': superAdminPanel, 
-  'mis-trabajos': misTrabajos,    // ← DEBE ESTAR PRESENTE
-  'mi-perfil': miPerfil, 
-  ventas, 
-  gastos, 
-  'panel-trabajo': panelTrabajo,
-  sueldos,
-  'reporte-rentabilidad': reporteRentabilidad,
-  'reporte-flujo-caja': reporteFlujoCaja,
-  'reporte-comparativas': reporteComparativas,
-  'reporte-tendencias': reporteTendencias,
-  'modo-taller': modoTaller
-};
-  if (pages[page]) pages[page](params);
+  const pages = { 
+    dashboard, clientes, vehiculos, reparaciones, inventario, creditos, empleados, 
+    presupuestos, reportes, usuarios, mantenimientos, agenda, finanzas, 
+    'cuentas-pagar': cuentasPagar, 
+    'mis-vehiculos': misVehiculos, 
+    'mis-reparaciones': misReparaciones, 
+    'mis-mantenimientos': misMantenimientos, 
+    'mis-citas': misCitas, 
+    'mi-plan': miPlan, 
+    'super-admin': superAdminPanel, 
+    'mis-trabajos': misTrabajos,
+    'mi-perfil': miPerfil, 
+    ventas, 
+    gastos, 
+    'panel-trabajo': panelTrabajo,
+    sueldos,
+    'reporte-rentabilidad': reporteRentabilidad,
+    'reporte-flujo-caja': reporteFlujoCaja,
+    'reporte-comparativas': reporteComparativas,
+    'reporte-tendencias': reporteTendencias,
+    'modo-taller': modoTaller
+  };
+  const pageFn = pages[page];
+  if (pageFn) {
+    try {
+      await pageFn(params);
+    } catch (e) {
+      console.error('Error navegando a', page, e);
+      toast('Error al cargar la página', 'error');
+    }
+  } else {
+    console.warn('Página no encontrada:', page);
+    navigate('dashboard');
+  }
 }
