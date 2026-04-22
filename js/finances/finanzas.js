@@ -1,5 +1,6 @@
 // ─── FINANZAS (VERSIÓN AVANZADA: RANGO DE FECHAS + AGRUPACIÓN DIARIA) ────────
-// Incluye selector de fechas, resumen diario, y control de inclusión en mes.
+// Incluye selector de fechas, resumen diario, control de inclusión en mes,
+// y toggle para filtrar las tarjetas de INGRESOS/EGRESOS por balance mensual.
 
 const CATEGORIAS_FIJAS = {
   ingreso: ['Reparaciones', 'Servicios', 'Otros ingresos'],
@@ -8,6 +9,7 @@ const CATEGORIAS_FIJAS = {
 
 let _finanzasFechaInicio = null;
 let _finanzasFechaFin = null;
+let _filtrarBalanceMensual = localStorage.getItem('finanzas_filtrar_balance') === 'true';
 
 function finanzas_initFechas() {
   if (!_finanzasFechaInicio) {
@@ -58,11 +60,17 @@ async function finanzas() {
         </div>
         <button onclick="finanzas_aplicarRango()" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:.4rem .8rem;font-size:.8rem;cursor:pointer;font-family:var(--font-head)">Aplicar</button>
       </div>
-      <div style="display:flex;gap:.3rem;margin-bottom:.75rem;flex-wrap:wrap">
+      
+      <!-- Fila de botones rápidos + Toggle de filtro -->
+      <div style="display:flex;gap:.3rem;margin-bottom:.75rem;flex-wrap:wrap;align-items:center">
         <button onclick="finanzas_setRangoRapido('este_mes')" class="tab" style="font-size:.7rem;padding:.3rem .6rem">Este mes</button>
         <button onclick="finanzas_setRangoRapido('mes_anterior')" class="tab" style="font-size:.7rem;padding:.3rem .6rem">Mes anterior</button>
         <button onclick="finanzas_setRangoRapido('ultimos_30')" class="tab" style="font-size:.7rem;padding:.3rem .6rem">Últ. 30 días</button>
         <button onclick="finanzas_setRangoRapido('este_anio')" class="tab" style="font-size:.7rem;padding:.3rem .6rem">Este año</button>
+        <div style="flex:1"></div>
+        <button onclick="finanzas_toggleFiltroBalance()" id="btn-filtro-balance" style="background:${_filtrarBalanceMensual ? 'var(--accent)' : 'var(--surface2)'}; color:${_filtrarBalanceMensual ? '#000' : 'var(--text2)'}; border:1px solid ${_filtrarBalanceMensual ? 'var(--accent)' : 'var(--border)'}; border-radius:20px; padding:.25rem .75rem; font-size:.7rem; cursor:pointer; display:flex; align-items:center; gap:4px;">
+          ${_filtrarBalanceMensual ? '📊 Solo balance mensual' : '📋 Ver todo'}
+        </button>
       </div>
       
       <div id="finanzas-contenido-dinamico">
@@ -72,6 +80,23 @@ async function finanzas() {
   `;
 
   await finanzas_cargarDatos();
+}
+
+// Toggle para activar/desactivar el filtro por balance mensual en las tarjetas
+function finanzas_toggleFiltroBalance() {
+  _filtrarBalanceMensual = !_filtrarBalanceMensual;
+  localStorage.setItem('finanzas_filtrar_balance', _filtrarBalanceMensual);
+  
+  // Actualizar apariencia del botón
+  const btn = document.getElementById('btn-filtro-balance');
+  if (btn) {
+    btn.style.background = _filtrarBalanceMensual ? 'var(--accent)' : 'var(--surface2)';
+    btn.style.color = _filtrarBalanceMensual ? '#000' : 'var(--text2)';
+    btn.style.borderColor = _filtrarBalanceMensual ? 'var(--accent)' : 'var(--border)';
+    btn.innerHTML = _filtrarBalanceMensual ? '📊 Solo balance mensual' : '📋 Ver todo';
+  }
+  
+  finanzas_cargarDatos();
 }
 
 async function finanzas_cargarDatos() {
@@ -90,9 +115,15 @@ async function finanzas_cargarDatos() {
       .order('fecha', { ascending: false })
       .order('id', { ascending: false });
 
-    // Calcular totales directamente desde los movimientos obtenidos
-    const totalIngresos = (movimientos||[]).filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
-    const totalEgresos = (movimientos||[]).filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
+    // Aplicar filtro de balance mensual a los totales de INGRESOS y EGRESOS (pero no a CAJA REAL)
+    const movimientosParaTotales = _filtrarBalanceMensual 
+      ? (movimientos||[]).filter(m => m.incluir_en_mes !== false)
+      : (movimientos||[]);
+    
+    const totalIngresos = movimientosParaTotales.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
+    const totalEgresos = movimientosParaTotales.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
+    
+    // CAJA REAL siempre se calcula con TODOS los movimientos que afectan caja (ignora el filtro de balance mensual)
     const movimientosCaja = (movimientos||[]).filter(m => m.afecta_caja !== false);
     const ingresosCaja = movimientosCaja.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const egresosCaja = movimientosCaja.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
@@ -112,11 +143,11 @@ async function finanzas_cargarDatos() {
     let html = `
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:12px;padding:.75rem;text-align:center">
-          <div style="font-size:.6rem;color:var(--success);letter-spacing:1px;font-family:var(--font-head)">INGRESOS</div>
+          <div style="font-size:.6rem;color:var(--success);letter-spacing:1px;font-family:var(--font-head)">INGRESOS ${_filtrarBalanceMensual ? '(Balance)' : ''}</div>
           <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--success)">₲${gs(totalIngresos)}</div>
         </div>
         <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:12px;padding:.75rem;text-align:center">
-          <div style="font-size:.6rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">EGRESOS</div>
+          <div style="font-size:.6rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">EGRESOS ${_filtrarBalanceMensual ? '(Balance)' : ''}</div>
           <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--danger)">₲${gs(totalEgresos)}</div>
         </div>
         <div style="background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem;text-align:center">
@@ -436,3 +467,4 @@ window.finanzas_eliminarConSafeCall = finanzas_eliminarConSafeCall;
 window.finanzas_modalCategorias = finanzas_modalCategorias;
 window.finanzas_aplicarRango = finanzas_aplicarRango;
 window.finanzas_setRangoRapido = finanzas_setRangoRapido;
+window.finanzas_toggleFiltroBalance = finanzas_toggleFiltroBalance;
