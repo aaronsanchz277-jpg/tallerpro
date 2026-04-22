@@ -27,14 +27,12 @@
 
 <!-- LOGIN SCREEN -->
 <div id="login-screen">
-  <!-- HERO -->
   <div style="text-align:center;padding:2rem 1.5rem 1rem;max-width:500px;margin:0 auto">
     <div style="font-family:var(--font-head);font-size:2rem;color:var(--accent);letter-spacing:4px;margin-bottom:.3rem">TALLERPRO</div>
     <div style="font-size:1.1rem;color:var(--text);font-weight:500;margin-bottom:.5rem">Gestión Inteligente para Talleres</div>
     <div style="font-size:.82rem;color:var(--text2);line-height:1.5;margin-bottom:1.5rem">Todo lo que necesitás para organizar tu taller, cobrar más y perder menos. Desde tu celular.</div>
   </div>
 
-  <!-- FEATURES RÁPIDAS -->
   <div style="max-width:500px;margin:0 auto;padding:0 1.5rem 1.5rem">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1.25rem">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.6rem;text-align:center">
@@ -81,13 +79,11 @@
   <!-- LOGIN BOX -->
   <div class="login-box">
     <div id="login-form">
-      <!-- LOGIN NORMAL -->
       <div id="login-normal">
         <div class="login-tabs">
           <button class="login-tab active" onclick="switchLoginTab('login')" id="lt-ingresar">Ingresar</button>
           <button class="login-tab" id="tab-nuevo-taller" onclick="switchLoginTab('nuevo-taller')">Nuevo Taller</button>
         </div>
-        <!-- NUEVO TALLER (ADMIN) -->
         <div id="nuevo-taller-fields" style="display:none">
           <div style="background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.2);border-radius:8px;padding:.75rem;margin-bottom:1rem;font-size:.8rem;color:var(--text2)" id="lt-registro-msg">
             Registrá tu taller y creá tu cuenta de administrador.
@@ -105,7 +101,6 @@
         </div>
       </div>
 
-      <!-- REGISTRO POR INVITACIÓN -->
       <div id="login-invitacion" style="display:none">
         <div style="background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.2);border-radius:10px;padding:.75rem;margin-bottom:1.25rem;text-align:center;font-size:.82rem;color:var(--text2)">
           Fuiste invitado a un taller. Completá tus datos para registrarte.
@@ -147,7 +142,6 @@
     </div>
   </div>
 
-  <!-- Selector de idioma -->
   <div style="text-align:center;margin-top:1rem">
     <select onchange="cambiarIdiomaLogin(this.value)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 8px;font-size:.75rem;cursor:pointer;outline:none">
       <option value="es">🇵🇾 Español</option>
@@ -157,12 +151,10 @@
     </select>
   </div>
 
-  <!-- Botón de contacto por WhatsApp -->
   <div style="text-align:center;margin-top:1rem">
     <a href="https://wa.me/595982333971?text=Hola!%20Quiero%20saber%20más%20sobre%20TallerPro" style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.25);border-radius:8px;padding:.5rem 1rem;font-size:.8rem;font-family:var(--font-head)">💬 ¿Dudas? Hablanos por WhatsApp</a>
   </div>
 
-  <!-- Enlaces a Términos y Privacidad -->
   <div style="text-align:center;margin-top:1rem;padding-bottom:2rem;font-size:.72rem;color:var(--text2)">
     <a href="./terminos.html" style="color:var(--text2);text-decoration:underline">Términos</a> · 
     <a href="./privacidad.html" style="color:var(--text2);text-decoration:underline">Privacidad</a>
@@ -170,7 +162,6 @@
 </div>
 
 <div id="app">
-  <!-- SIDEBAR -->
   <div id="sidebar-overlay" onclick="closeSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:150;backdrop-filter:blur(4px);opacity:0;transition:opacity .3s"></div>
   <div id="sidebar" style="position:fixed;top:0;left:-280px;width:280px;height:100%;background:linear-gradient(180deg,var(--surface2) 0%,var(--surface) 100%);border-right:1px solid var(--border);z-index:160;transition:left .3s cubic-bezier(.4,0,.2,1);overflow-y:auto;display:flex;flex-direction:column">
     <div id="sidebar-header" style="padding:1.25rem;border-bottom:1px solid var(--border)">
@@ -186,7 +177,7 @@
       </button>
     </div>
   </div>
-  <!-- TOPBAR -->
+
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:.6rem">
       <button onclick="openSidebar()" style="background:none;border:none;color:var(--text);cursor:pointer;padding:4px;display:flex">
@@ -205,11 +196,12 @@
       <span id="sync-badge">⏳</span>
     </div>
   </div>
+
   <div class="content"><div id="main-content"></div></div>
   <nav class="bottom-nav" id="bottom-nav"></nav>
 </div>
 
- <!-- ==================== SCRIPTS ==================== -->
+<!-- ==================== SCRIPTS ==================== -->
 <!-- Núcleo -->
 <script src="./js/core/config.js"></script>
 <script src="./js/core/pwa.js"></script>
@@ -227,7 +219,6 @@
 <script src="./js/auth/plan.js"></script>
 <script src="./js/auth/admin-v2.js"></script>
 <script>
-  // Garantía absoluta: si admin-v2.js falla, misTrabajos existirá.
   if (typeof window.misTrabajos !== 'function') {
     console.warn('admin-v2.js no definió misTrabajos - usando fallback');
     window.misTrabajos = function() {
@@ -252,7 +243,7 @@
 
 <!-- Taller (Reparaciones modularizado) -->
 <script src="./js/workshop/reparaciones-core.js"></script>
-<script src="./js/workshop/reparaciones-list.js"></script>
+<script src="./js/workshop/reparaciones-list.js?v=3"></script>
 <script src="./js/workshop/reparaciones-detalle.js"></script>
 <script src="./js/workshop/reparaciones-items.js"></script>
 <script src="./js/workshop/reparaciones-pagos.js"></script>
@@ -281,7 +272,7 @@
 <script src="./js/finances/conciliador.js"></script>
 
 <!-- RRHH -->
-<script src="./js/hr/empleados.js"></script>
+<script src="./js/hr/empleados.js?v=3"></script>
 <script src="./js/hr/usuarios.js"></script>
 <script src="./js/hr/mecanicos.js"></script>
 <script src="./js/hr/perfil.js"></script>
@@ -311,7 +302,7 @@
 <script src="./js/workshop/stock-realtime.js"></script>
 
 <!-- Navegación -->
-<script src="./js/navigation/navigation.js"></script>
+<script src="./js/navigation/navigation.js?v=3"></script>
 
 <!-- UX -->
 <script src="./js/ux/theme.js"></script>
@@ -321,10 +312,6 @@
 
 <!-- Dev -->
 <script src="./js/dev/tests.js"></script>
-
-
-
-
 
 <!-- Función auxiliar para el formulario de invitación -->
 <script>
@@ -342,7 +329,8 @@
     }
   }
 </script>
-<!-- Service Worker Update Handler (Auto-actualización con aviso) -->
+
+<!-- Service Worker Update Handler -->
 <script>
 if ('serviceWorker' in navigator) {
   let refreshing = false;
@@ -361,19 +349,14 @@ if ('serviceWorker' in navigator) {
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (!newWorker) return;
-        
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            // Nueva versión instalada, lista para activarse
             showUpdateBanner();
           }
         });
       });
 
-      // Verificar actualizaciones cada 1 hora
       setInterval(() => registration.update(), 60 * 60 * 1000);
-      
-      // También verificar al recuperar conexión
       window.addEventListener('online', () => registration.update());
     } catch (e) {
       console.warn('Error en checkForUpdates:', e);
@@ -383,37 +366,33 @@ if ('serviceWorker' in navigator) {
   function showUpdateBanner() {
     const existingBanner = document.getElementById('update-banner');
     if (existingBanner) existingBanner.remove();
-    
     const banner = document.createElement('div');
     banner.id = 'update-banner';
     banner.style.cssText = `
-      position: fixed; bottom: 20px; left: 20px; right: 20px; 
-      background: var(--accent, #00e5ff); color: #000; 
-      padding: 12px 20px; border-radius: 30px; z-index: 9999;
-      display: flex; align-items: center; justify-content: space-between;
-      font-family: 'Rajdhani', sans-serif; font-weight: bold; 
-      box-shadow: 0 4px 20px rgba(0,0,0,.3);
-      max-width: 500px; margin: 0 auto;
+      position:fixed;bottom:20px;left:20px;right:20px;
+      background:var(--accent,#00e5ff);color:#000;
+      padding:12px 20px;border-radius:30px;z-index:9999;
+      display:flex;align-items:center;justify-content:space-between;
+      font-family:'Rajdhani',sans-serif;font-weight:bold;
+      box-shadow:0 4px 20px rgba(0,0,0,.3);
+      max-width:500px;margin:0 auto;
     `;
     banner.innerHTML = `
       <span>✨ Nueva versión disponible</span>
       <button id="update-app-btn" style="background:#000;color:#fff;border:none;border-radius:20px;padding:8px 20px;font-weight:bold;cursor:pointer;font-family:inherit">ACTUALIZAR AHORA</button>
     `;
     document.body.appendChild(banner);
-    
     document.getElementById('update-app-btn').onclick = async () => {
       banner.remove();
       const reg = await navigator.serviceWorker.getRegistration();
       if (reg && reg.waiting) {
         reg.waiting.postMessage({ type: 'SKIP_WAITING' });
       } else {
-        // Si no hay waiting, recargar de todos modos
         window.location.reload();
       }
     };
   }
 
-  // Iniciar verificación después de que la app esté lista
   window.addEventListener('load', checkForUpdates);
 }
 </script>
