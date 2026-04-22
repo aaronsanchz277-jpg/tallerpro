@@ -1,29 +1,34 @@
-// ─── LISTADO DE REPARACIONES ─────────────────────────────────────────────────
 async function reparaciones({ filtro='todos', search='', offset=0, tipo='', mecanico='' }={}) {
-  // Si hay filtro por mecánico, primero obtenemos los IDs de reparaciones asignadas
-  let repIds = [];
+
+  // ── Filtro por mecánico (siempre fresco, nunca cacheado) ──────────────────
+  let repIds = null; // null = sin filtro, [] = mecánico sin reparaciones
   if (mecanico) {
-    const { data: asignaciones } = await sb.from('reparacion_mecanicos')
+    const { data: asignaciones, error: errAsig } = await sb
+      .from('reparacion_mecanicos')
       .select('reparacion_id')
       .or(`mecanico_id.eq.${mecanico},empleado_id.eq.${mecanico}`);
+
+    if (errAsig) {
+      console.error('Error al buscar asignaciones:', errAsig);
+      toast('Error al filtrar reparaciones del mecánico', 'error');
+      return;
+    }
     repIds = (asignaciones || []).map(a => a.reparacion_id);
   }
 
-  const cacheKey = `reparaciones_${filtro}_${search}_${offset}_${tipo}_${mecanico}`;
-  const { data, count } = await cachedQuery(cacheKey, () => {
+  // ── Cuando hay mecánico, NO usamos caché (resultado siempre directo) ──────
+  let data, count;
+  if (mecanico) {
     let q = sb.from('reparaciones')
-      .select('*, vehiculos(patente,marca), clientes(nombre)', {count:'exact'})
+      .select('*, vehiculos(patente,marca), clientes(nombre)', { count: 'exact' })
       .eq('taller_id', tid())
-      .order('created_at', {ascending: false});
+      .order('created_at', { ascending: false });
 
-    // Aplicar filtro por IDs si hay mecánico
-    if (mecanico) {
-      if (repIds.length) {
-        q = q.in('id', repIds);
-      } else {
-        // Forzar vacío
-        q = q.in('id', ['00000000-0000-0000-0000-000000000000']);
-      }
+    if (repIds.length > 0) {
+      q = q.in('id', repIds);
+    } else {
+      // Mecánico sin reparaciones asignadas → forzar vacío
+      q = q.in('id', ['00000000-0000-0000-0000-000000000000']);
     }
 
     if (filtro === 'hoy') q = q.eq('fecha', new Date().toISOString().split('T')[0]);
@@ -32,11 +37,42 @@ async function reparaciones({ filtro='todos', search='', offset=0, tipo='', meca
     else if (filtro !== 'todos') q = q.eq('estado', filtro);
     if (tipo) q = q.eq('tipo_trabajo', tipo);
     if (search) q = q.ilike('descripcion', `%${search}%`);
-    return q.range(offset, offset + PAGE_SIZE - 1);
-  });
 
-  // Renderizado (exactamente igual que antes)
+    q = q.range(offset, offset + PAGE_SIZE - 1);
+    const res = await q;
+    data = res.data;
+    count = res.count;
+
+  } else {
+    // ── Sin mecánico: comportamiento normal con caché ─────────────────────
+    const cacheKey = `reparaciones_${filtro}_${search}_${offset}_${tipo}`;
+    const res = await cachedQuery(cacheKey, () => {
+      let q = sb.from('reparaciones')
+        .select('*, vehiculos(patente,marca), clientes(nombre)', { count: 'exact' })
+        .eq('taller_id', tid())
+        .order('created_at', { ascending: false });
+
+      if (filtro === 'hoy') q = q.eq('fecha', new Date().toISOString().split('T')[0]);
+      else if (filtro === 'semana') q = q.gte('fecha', inicioSemana());
+      else if (filtro === 'mes') q = q.gte('fecha', primerDiaMes());
+      else if (filtro !== 'todos') q = q.eq('estado', filtro);
+      if (tipo) q = q.eq('tipo_trabajo', tipo);
+      if (search) q = q.ilike('descripcion', `%${search}%`);
+      return q.range(offset, offset + PAGE_SIZE - 1);
+    });
+    data = res.data;
+    count = res.count;
+  }
+
+  // ── Cabecera con botón volver si venimos de un mecánico ───────────────────
+  const headerExtra = mecanico ? `
+    <button class="btn-secondary" style="margin:0 0 .75rem" onclick="navigate('empleados')">
+      ← Volver a Empleados
+    </button>` : '';
+
+  // ── Renderizado ───────────────────────────────────────────────────────────
   document.getElementById('main-content').innerHTML = `
+    ${headerExtra}
     <div class="section-header">
       <div class="section-title">Trabajos ${count ? `<span style="font-size:.75rem;color:var(--text2)">(${count})</span>` : ''}</div>
       ${['admin','empleado'].includes(currentPerfil?.rol) ? `<button class="btn-add" onclick="modalNuevaReparacion()">+ Nuevo</button>` : ''}
@@ -56,9 +92,9 @@ async function reparaciones({ filtro='todos', search='', offset=0, tipo='', meca
       <span style="font-size:.78rem;color:var(--text2)">Filtro: ${TIPO_ICONS[tipo]||'📋'} ${h(tipo)}</span>
       <button onclick="reparaciones({filtro:'${filtro}',mecanico:'${mecanico}'})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.8rem">✕</button>
     </div>` : `<div style="display:flex;gap:.3rem;margin-bottom:.5rem;overflow-x:auto;padding-bottom:.3rem">
-      ${TIPOS_TRABAJO.map(t => `<button onclick="reparaciones({filtro:'${filtro}',tipo:'${t}',mecanico:'${mecanico}'})" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.25rem .5rem;font-size:.65rem;cursor:pointer;white-space:nowrap;color:var(--text2)">${TIPO_ICONS[t]||'📋'} ${t}</button>`).join('')}
+      ${TIPOS_TRABAJO.map(tp => `<button onclick="reparaciones({filtro:'${filtro}',tipo:'${tp}',mecanico:'${mecanico}'})" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.25rem .5rem;font-size:.65rem;cursor:pointer;white-space:nowrap;color:var(--text2)">${TIPO_ICONS[tp]||'📋'} ${tp}</button>`).join('')}
     </div>`}
-    ${(data||[]).length===0 ? `<div class="empty"><p>No hay trabajos</p></div>` :
+    ${(data||[]).length===0 ? `<div class="empty"><p>${mecanico ? 'Este mecánico no tiene reparaciones asignadas' : 'No hay trabajos'}</p></div>` :
       (data||[]).map(r => `
       <div class="card" onclick="detalleReparacion('${r.id}')">
         <div class="card-header">
@@ -71,7 +107,7 @@ async function reparaciones({ filtro='todos', search='', offset=0, tipo='', meca
           <span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span>
         </div>
       </div>`).join('')}
-    ${renderPagination(count||0, offset, `()=>reparaciones({offset:offset,filtro:'${filtro}',search:'${search}',tipo:'${tipo}',mecanico:'${mecanico}'})`)}`;
+    ${renderPagination(count||0, offset, `()=>reparaciones({offset:${offset},filtro:'${filtro}',search:'${search}',tipo:'${tipo}',mecanico:'${mecanico}'})`)}`;
 }
 
 function _navRep(o) { reparaciones({offset:o}); }
