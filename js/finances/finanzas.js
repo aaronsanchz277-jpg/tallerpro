@@ -47,6 +47,7 @@ async function finanzas() {
         </div>
       </div>
       
+      <!-- Selector de fechas -->
       <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;background:var(--surface);padding:.5rem;border-radius:10px;border:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:.3rem;flex:1">
           <input type="date" id="finanzas-fecha-inicio" value="${_finanzasFechaInicio}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:.4rem;color:var(--text);font-size:.8rem;width:100%">
@@ -89,6 +90,7 @@ async function finanzas_cargarDatos() {
       .order('fecha', { ascending: false })
       .order('id', { ascending: false });
 
+    // Calcular totales directamente desde los movimientos obtenidos
     const totalIngresos = (movimientos||[]).filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const totalEgresos = (movimientos||[]).filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const movimientosCaja = (movimientos||[]).filter(m => m.afecta_caja !== false);
@@ -245,6 +247,7 @@ async function finanzas_modalNuevo(tipo) {
     <button class="btn-secondary" onclick="event.stopPropagation(); closeModal()">Cancelar</button>`);
 }
 
+// Wrapper seguro para guardar (usado en los modales)
 async function finanzas_guardarConSafeCall(id = null, uniqueId = null) {
   await safeCall(async () => {
     await finanzas_guardar(id, uniqueId);
@@ -258,11 +261,13 @@ async function finanzas_guardar(id = null, uniqueId = null) {
   const monto = parseFloat(document.getElementById('f-fin-monto').value);
   if (!validatePositiveNumber(monto, 'Monto')) return;
   
+  // Determinar el ID del checkbox según si es edición o nuevo
   let incluirEnMes = true;
   if (uniqueId) {
     const checkbox = document.getElementById(`f-fin-incluir-mes-${uniqueId}`);
     incluirEnMes = checkbox ? checkbox.checked : true;
   } else if (id) {
+    // Para edición, usamos el checkbox específico de editar
     const checkbox = document.getElementById('f-fin-incluir-mes-editar');
     incluirEnMes = checkbox ? checkbox.checked : true;
   } else {
@@ -296,8 +301,15 @@ async function finanzas_guardar(id = null, uniqueId = null) {
   toast(id ? 'Movimiento actualizado' : 'Movimiento guardado', 'success');
   clearCache('finanzas');
   closeModal();
-  // Retraso para asegurar que el modal se cierre y el DOM se estabilice
-  setTimeout(() => finanzas_cargarDatos(), 300);
+  
+  // Refrescar la lista de Finanzas después de un pequeño retraso
+  setTimeout(() => {
+    finanzas_cargarDatos();
+    // Si estamos en el Dashboard, también refrescarlo para que los totales se actualicen
+    if (currentPage === 'dashboard' && typeof dashboard === 'function') {
+      dashboard();
+    }
+  }, 300);
 }
 
 async function finanzas_modalEditar(id) {
@@ -342,7 +354,12 @@ async function finanzas_eliminarConSafeCall(id) {
       toast('Eliminado', 'success');
       clearCache('finanzas');
       closeModal();
-      setTimeout(() => finanzas_cargarDatos(), 300);
+      setTimeout(() => {
+        finanzas_cargarDatos();
+        if (currentPage === 'dashboard' && typeof dashboard === 'function') {
+          dashboard();
+        }
+      }, 300);
     }, null, 'No se pudo eliminar el movimiento');
   });
 }
@@ -409,7 +426,7 @@ async function finanzas_eliminarCat(id) {
   finanzas_modalCategorias();
 }
 
-// ========== DECLARACIONES GLOBALES ==========
+// ========== DECLARACIONES GLOBALES FORZADAS ==========
 window.finanzas = finanzas;
 window.finanzas_modalNuevo = finanzas_modalNuevo;
 window.finanzas_modalEditar = finanzas_modalEditar;
