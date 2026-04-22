@@ -45,46 +45,102 @@ async function detalleEmpleado(id) {
     return;
   }
 
-  // ─── VALES (HTML) ────────────────────────────────────────────────────────
-  const mesActual = new Date();
-  const primerDia = new Date(mesActual.getFullYear(), mesActual.getMonth(), 1).toISOString().split('T')[0];
-  const ultimoDia = new Date(mesActual.getFullYear(), mesActual.getMonth() + 1, 0).toISOString().split('T')[0];
-  const { data: vales } = await sb.from('vales_empleado').select('*').eq('empleado_id', id).gte('fecha', primerDia).lte('fecha', ultimoDia).order('fecha', { ascending: false });
-  const sueldo = parseFloat(emp?.sueldo || 0);
-  const totalVales = (vales || []).reduce((s, v) => s + parseFloat(v.monto || 0), 0);
-  const neto = sueldo - totalVales;
+  // ─── VALES AGRUPADOS POR PERÍODO ─────────────────────────────────────────
+  const { data: periodos } = await sb.from('periodos_sueldo')
+    .select('id, fecha_inicio, fecha_fin, estado')
+    .eq('taller_id', tid())
+    .order('fecha_inicio', { ascending: false })
+    .limit(12);
 
+  const periodosMap = {};
+  periodos?.forEach(p => { periodosMap[p.id] = p; });
+
+  const { data: valesTodos } = await sb.from('vales_empleado')
+    .select('*, periodo_id')
+    .eq('empleado_id', id)
+    .order('fecha', { ascending: false })
+    .limit(200);
+
+  // Agrupar vales por periodo_id
+  const valesPorPeriodo = {};
+  valesTodos?.forEach(v => {
+    const pid = v.periodo_id || 'sin_periodo';
+    if (!valesPorPeriodo[pid]) valesPorPeriodo[pid] = [];
+    valesPorPeriodo[pid].push(v);
+  });
+
+  // Ordenar períodos del más reciente al más antiguo
+  const periodosOrdenados = periodos?.sort((a,b) => b.fecha_inicio.localeCompare(a.fecha_inicio)) || [];
+
+  // Calcular total de vales del MES ACTUAL (para el resumen de arriba)
+  const primerDiaMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+  const ultimoDiaMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0];
+  const totalValesMes = (valesTodos || [])
+    .filter(v => v.fecha >= primerDiaMes && v.fecha <= ultimoDiaMes)
+    .reduce((s, v) => s + parseFloat(v.monto || 0), 0);
+
+  const sueldo = parseFloat(emp?.sueldo || 0);
+  const neto = sueldo - totalValesMes;
+
+  // Construir HTML de vales agrupados
   let valesHTML = '';
-  if ((vales || []).length > 0 || sueldo > 0) {
-    valesHTML = `
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
-        <div style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px;margin-bottom:.5rem">💵 RESUMEN DEL MES</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-bottom:.5rem">
-          <div style="background:var(--surface2);border-radius:8px;padding:.4rem;text-align:center">
-            <div style="font-size:.55rem;color:var(--text2)">SUELDO</div>
-            <div style="font-family:var(--font-head);font-size:.85rem;color:var(--success)">₲${gs(sueldo)}</div>
+  if (periodosOrdenados.length === 0 && (!valesTodos || valesTodos.length === 0)) {
+    valesHTML = '<p style="color:var(--text2);font-size:.85rem">No hay vales registrados</p>';
+  } else {
+    periodosOrdenados.forEach(p => {
+      const valesDelPeriodo = valesPorPeriodo[p.id] || [];
+      if (valesDelPeriodo.length === 0) return;
+
+      const totalPeriodo = valesDelPeriodo.reduce((s, v) => s + parseFloat(v.monto || 0), 0);
+      valesHTML += `
+        <div style="margin-bottom:1rem; background:var(--surface); border-radius:10px; padding:.5rem; border:1px solid var(--border)">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem; padding:0 .3rem">
+            <span style="font-family:var(--font-head); font-size:.8rem; color:var(--accent);">
+              📅 ${formatFecha(p.fecha_inicio)} – ${formatFecha(p.fecha_fin)} ${p.estado === 'abierto' ? '(abierto)' : ''}
+            </span>
+            <span style="font-family:var(--font-head); color:var(--warning);">Total: ₲${gs(totalPeriodo)}</span>
           </div>
-          <div style="background:rgba(255,204,0,.08);border-radius:8px;padding:.4rem;text-align:center">
-            <div style="font-size:.55rem;color:var(--warning)">VALES</div>
-            <div style="font-family:var(--font-head);font-size:.85rem;color:var(--warning)">-₲${gs(totalVales)}</div>
-          </div>
-          <div style="background:${neto >= 0 ? 'rgba(0,255,136,.08)' : 'rgba(255,68,68,.08)'};border-radius:8px;padding:.4rem;text-align:center">
-            <div style="font-size:.55rem;color:${neto >= 0 ? 'var(--success)' : 'var(--danger)'}">A COBRAR</div>
-            <div style="font-family:var(--font-head);font-size:.85rem;color:${neto >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(neto)}</div>
-          </div>
+          ${valesDelPeriodo.map(v => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:.4rem .3rem; border-top:1px solid var(--border);">
+              <div>
+                <div style="font-size:.82rem;">${h(v.concepto || 'Vale')}</div>
+                <div style="font-size:.68rem; color:var(--text2);">${formatFecha(v.fecha)}</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:.4rem;">
+                <span style="font-family:var(--font-head); color:var(--warning); font-size:.85rem;">-₲${gs(v.monto)}</span>
+                <button onclick="eliminarVale('${v.id}','${id}')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.7rem;">✕</button>
+              </div>
+            </div>
+          `).join('')}
         </div>
-        ${(vales || []).length > 0 ? (vales || []).map(v => `
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;border-top:1px solid var(--border)">
-            <div>
-              <div style="font-size:.78rem">${h(v.concepto || 'Vale')}</div>
-              <div style="font-size:.65rem;color:var(--text2)">${formatFecha(v.fecha)}</div>
+      `;
+    });
+
+    // Mostrar vales sin período asignado
+    const valesSinPeriodo = valesPorPeriodo['sin_periodo'] || [];
+    if (valesSinPeriodo.length > 0) {
+      const totalSinPeriodo = valesSinPeriodo.reduce((s, v) => s + parseFloat(v.monto || 0), 0);
+      valesHTML += `
+        <div style="margin-bottom:1rem; background:var(--surface); border-radius:10px; padding:.5rem; border:1px dashed var(--danger);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem; padding:0 .3rem">
+            <span style="font-family:var(--font-head); font-size:.8rem; color:var(--danger);">⚠️ Sin período asignado</span>
+            <span style="font-family:var(--font-head); color:var(--warning);">Total: ₲${gs(totalSinPeriodo)}</span>
+          </div>
+          ${valesSinPeriodo.map(v => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:.4rem .3rem; border-top:1px solid var(--border);">
+              <div>
+                <div style="font-size:.82rem;">${h(v.concepto || 'Vale')}</div>
+                <div style="font-size:.68rem; color:var(--text2);">${formatFecha(v.fecha)}</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:.4rem;">
+                <span style="font-family:var(--font-head); color:var(--warning); font-size:.85rem;">-₲${gs(v.monto)}</span>
+                <button onclick="eliminarVale('${v.id}','${id}')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.7rem;">✕</button>
+              </div>
             </div>
-            <div style="display:flex;align-items:center;gap:.4rem">
-              <span style="font-family:var(--font-head);color:var(--warning);font-size:.85rem">-₲${gs(v.monto)}</span>
-              <button onclick="eliminarVale('${v.id}','${id}')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.7rem">✕</button>
-            </div>
-          </div>`).join('') : ''}
-      </div>`;
+          `).join('')}
+        </div>
+      `;
+    }
   }
 
   // Total horas (solo trabajos manuales)
@@ -103,7 +159,27 @@ async function detalleEmpleado(id) {
       <div class="info-item"><div class="label">Total horas</div><div class="value" style="color:var(--accent)">${totalHoras.toFixed(1)} hs</div></div>
       ${emp.sueldo ? `<div class="info-item"><div class="label">Sueldo</div><div class="value" style="color:var(--success)">₲${gs(emp.sueldo)}</div></div>` : ''}
     </div>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
+      <div style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px;margin-bottom:.5rem">💵 RESUMEN DEL MES</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-bottom:.5rem">
+        <div style="background:var(--surface2);border-radius:8px;padding:.4rem;text-align:center">
+          <div style="font-size:.55rem;color:var(--text2)">SUELDO</div>
+          <div style="font-family:var(--font-head);font-size:.85rem;color:var(--success)">₲${gs(sueldo)}</div>
+        </div>
+        <div style="background:rgba(255,204,0,.08);border-radius:8px;padding:.4rem;text-align:center">
+          <div style="font-size:.55rem;color:var(--warning)">VALES</div>
+          <div style="font-family:var(--font-head);font-size:.85rem;color:var(--warning)">-₲${gs(totalValesMes)}</div>
+        </div>
+        <div style="background:${neto >= 0 ? 'rgba(0,255,136,.08)' : 'rgba(255,68,68,.08)'};border-radius:8px;padding:.4rem;text-align:center">
+          <div style="font-size:.55rem;color:${neto >= 0 ? 'var(--success)' : 'var(--danger)'}">A COBRAR</div>
+          <div style="font-family:var(--font-head);font-size:.85rem;color:${neto >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(neto)}</div>
+        </div>
+      </div>
+    </div>
+
     ${valesHTML}
+
     <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
       <button class="btn-add" style="flex:1;justify-content:center" onclick="modalNuevoTrabajo('${id}')">+ Registrar trabajo</button>
       <button onclick="modalNuevoVale('${id}')" style="flex:1;background:rgba(255,204,0,.12);color:var(--warning);border:1px solid rgba(255,204,0,.3);border-radius:10px;padding:.5rem;font-family:var(--font-head);font-size:.8rem;cursor:pointer;text-align:center">+ Vale / Adelanto</button>
@@ -202,14 +278,40 @@ async function eliminarTrabajo(trabajoId, empleadoId) {
   });
 }
 
-function modalNuevoVale(empleadoId) {
+async function modalNuevoVale(empleadoId) {
+  // Obtener períodos disponibles (abiertos o cerrados) ordenados por fecha descendente
+  const { data: periodos } = await sb.from('periodos_sueldo')
+    .select('id, fecha_inicio, fecha_fin, estado')
+    .eq('taller_id', tid())
+    .order('fecha_inicio', { ascending: false })
+    .limit(20);
+
+  // Buscar el período abierto más reciente para preseleccionar
+  const periodoAbierto = periodos?.find(p => p.estado === 'abierto');
+  const periodoSeleccionado = periodoAbierto?.id || periodos?.[0]?.id || '';
+
+  const opcionesPeriodos = (periodos || []).map(p => 
+    `<option value="${p.id}" ${p.id === periodoSeleccionado ? 'selected' : ''}>
+      ${formatFecha(p.fecha_inicio)} – ${formatFecha(p.fecha_fin)} ${p.estado === 'abierto' ? '(abierto)' : ''}
+    </option>`
+  ).join('');
+
   openModal(`
     <div class="modal-title">💵 Registrar Vale / Adelanto</div>
+    <div class="form-group">
+      <label class="form-label">Período (semana) *</label>
+      <select class="form-input" id="f-vale-periodo">
+        <option value="">Seleccionar período...</option>
+        ${opcionesPeriodos}
+      </select>
+      ${periodos?.length === 0 ? '<div style="font-size:.7rem;color:var(--warning);margin-top:.3rem">No hay períodos creados. Creá uno en "Sueldos".</div>' : ''}
+    </div>
     <div class="form-group"><label class="form-label">Monto ₲ *</label>${renderMontoInput('f-vale-monto', '', '50000')}</div>
     <div class="form-group"><label class="form-label">Concepto</label><input class="form-input" id="f-vale-concepto" placeholder="Almuerzo, adelanto, etc."></div>
     <div class="form-group"><label class="form-label">Fecha</label>${renderFechaInput('f-vale-fecha')}</div>
     <button class="btn-primary" onclick="guardarValeConSafeCall('${empleadoId}')">Registrar vale</button>
-    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+  `);
 }
 
 async function guardarValeConSafeCall(empleadoId) {
@@ -224,12 +326,19 @@ async function guardarVale(empleadoId) {
 
   const concepto = document.getElementById('f-vale-concepto').value || 'Vale';
   const fecha = document.getElementById('f-vale-fecha').value;
+  const periodoId = document.getElementById('f-vale-periodo')?.value || null;
+
+  if (!periodoId) {
+    toast('Debés seleccionar un período (semana)', 'error');
+    return;
+  }
 
   const { error } = await sb.from('vales_empleado').insert({
     empleado_id: empleadoId,
     monto,
     concepto,
     fecha,
+    periodo_id: periodoId,
     taller_id: tid()
   });
   if (error) { toast('Error: ' + error.message, 'error'); return; }
