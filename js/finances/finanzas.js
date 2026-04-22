@@ -218,6 +218,7 @@ function finanzas_setRangoRapido(tipo) {
 // ─── MODALES (NUEVO/EDITAR) ─────────────────────────────────────────────────
 async function finanzas_modalNuevo(tipo) {
   const { data: cats } = await sb.from('categorias_financieras').select('id,nombre').eq('taller_id', tid()).or(`tipo.eq.${tipo},tipo.eq.ambos`).order('nombre');
+  const uniqueId = 'nuevo-' + Date.now();
   openModal(`
     <div class="modal-title">${tipo === 'ingreso' ? 'Nuevo Ingreso' : 'Nuevo Egreso'}</div>
     <input type="hidden" id="f-fin-tipo" value="${tipo}">
@@ -240,29 +241,41 @@ async function finanzas_modalNuevo(tipo) {
     </div>
     <div class="form-group">
       <label class="form-label" style="display:flex;align-items:center;gap:.5rem;">
-        <input type="checkbox" id="f-fin-incluir-mes" checked style="width:18px;height:18px;accent-color:var(--accent);"> 📊 Incluir en balance mensual
+        <input type="checkbox" id="f-fin-incluir-mes-${uniqueId}" checked style="width:18px;height:18px;accent-color:var(--accent);"> 📊 Incluir en balance mensual
       </label>
     </div>
     <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas')}</div>
-    <button class="btn-primary" onclick="window.finanzas_guardarConSafeCall()">Guardar</button>
+    <button class="btn-primary" onclick="window.finanzas_guardarConSafeCall(null, '${uniqueId}')">Guardar</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
 }
 
 // Wrapper seguro para guardar (usado en los modales)
-async function finanzas_guardarConSafeCall(id = null) {
+async function finanzas_guardarConSafeCall(id = null, uniqueId = null) {
   await safeCall(async () => {
-    await finanzas_guardar(id);
+    await finanzas_guardar(id, uniqueId);
   }, null, 'No se pudo guardar el movimiento');
 }
 
-async function finanzas_guardar(id = null) {
+async function finanzas_guardar(id = null, uniqueId = null) {
   const concepto = document.getElementById('f-fin-concepto').value.trim();
   if (!validateRequired(concepto, 'Concepto')) return;
   
   const monto = parseFloat(document.getElementById('f-fin-monto').value);
   if (!validatePositiveNumber(monto, 'Monto')) return;
   
-  const incluirEnMes = document.getElementById('f-fin-incluir-mes')?.checked ?? true;
+  // Determinar el ID del checkbox según si es edición o nuevo
+  let incluirEnMes = true;
+  if (uniqueId) {
+    const checkbox = document.getElementById(`f-fin-incluir-mes-${uniqueId}`);
+    incluirEnMes = checkbox ? checkbox.checked : true;
+  } else if (id) {
+    // Para edición, usamos el checkbox específico de editar
+    const checkbox = document.getElementById('f-fin-incluir-mes-editar');
+    incluirEnMes = checkbox ? checkbox.checked : true;
+  } else {
+    const checkbox = document.getElementById('f-fin-incluir-mes');
+    incluirEnMes = checkbox ? checkbox.checked : true;
+  }
   
   const data = {
     tipo: document.getElementById('f-fin-tipo').value,
@@ -319,7 +332,7 @@ async function finanzas_modalEditar(id) {
     </div>
     <div class="form-group">
       <label class="form-label" style="display:flex;align-items:center;gap:.5rem;">
-        <input type="checkbox" id="f-fin-incluir-mes" ${m.incluir_en_mes !== false ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);"> 📊 Incluir en balance mensual
+        <input type="checkbox" id="f-fin-incluir-mes-editar" ${m.incluir_en_mes !== false ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);"> 📊 Incluir en balance mensual
       </label>
     </div>
     <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas', m.notas)}</div>
