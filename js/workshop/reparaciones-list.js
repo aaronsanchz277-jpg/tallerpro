@@ -1,22 +1,27 @@
 // ─── LISTADO DE REPARACIONES ─────────────────────────────────────────────────
 async function reparaciones({ filtro='todos', search='', offset=0, tipo='', mecanico='' }={}) {
+  // Si hay filtro por mecánico, primero obtenemos los IDs de reparaciones asignadas
+  let repIds = [];
+  if (mecanico) {
+    const { data: asignaciones } = await sb.from('reparacion_mecanicos')
+      .select('reparacion_id')
+      .or(`mecanico_id.eq.${mecanico},empleado_id.eq.${mecanico}`);
+    repIds = (asignaciones || []).map(a => a.reparacion_id);
+  }
+
   const cacheKey = `reparaciones_${filtro}_${search}_${offset}_${tipo}_${mecanico}`;
-  const { data, count } = await cachedQuery(cacheKey, async () => {
+  const { data, count } = await cachedQuery(cacheKey, () => {
     let q = sb.from('reparaciones')
       .select('*, vehiculos(patente,marca), clientes(nombre)', {count:'exact'})
       .eq('taller_id', tid())
       .order('created_at', {ascending: false});
 
-    // 🔍 Filtro por mecánico (nuevo)
+    // Aplicar filtro por IDs si hay mecánico
     if (mecanico) {
-      const { data: asignaciones } = await sb.from('reparacion_mecanicos')
-        .select('reparacion_id')
-        .or(`mecanico_id.eq.${mecanico},empleado_id.eq.${mecanico}`);
-      const repIds = (asignaciones || []).map(a => a.reparacion_id);
       if (repIds.length) {
         q = q.in('id', repIds);
       } else {
-        // Si no hay asignaciones, forzamos un resultado vacío
+        // Forzar vacío
         q = q.in('id', ['00000000-0000-0000-0000-000000000000']);
       }
     }
@@ -30,6 +35,7 @@ async function reparaciones({ filtro='todos', search='', offset=0, tipo='', meca
     return q.range(offset, offset + PAGE_SIZE - 1);
   });
 
+  // Renderizado (exactamente igual que antes)
   document.getElementById('main-content').innerHTML = `
     <div class="section-header">
       <div class="section-title">Trabajos ${count ? `<span style="font-size:.75rem;color:var(--text2)">(${count})</span>` : ''}</div>
