@@ -1,6 +1,6 @@
 // ─── SERVICE WORKER - TallerPro ───────────────────────────────────────────────
 // Incrementar en cada deploy para invalidar caché viejo
-const CACHE_NAME = 'tallerpro-v2';
+const CACHE_NAME = 'tallerpro-v3';
 
 // Solo el shell mínimo — JS y CSS NO van aquí (se manejan network-first)
 const SHELL_URLS = [
@@ -12,11 +12,11 @@ const SHELL_URLS = [
 // Dominios externos que NUNCA se interceptan
 const BYPASS_DOMAINS = [
   'supabase.co',
+  'supabase.in',
   'groq.com',
   'ocr.space',
   'googleapis.com',
   'gstatic.com',
-  'supabase.in',
 ];
 
 function shouldBypass(url) {
@@ -65,14 +65,14 @@ self.addEventListener('fetch', event => {
   const isHTML = url.includes('.html') || url.endsWith('/');
 
   // ── JS y CSS: Network-first ──────────────────────────────────────────────
-  // Siempre intenta red primero → caché solo si offline
   if (isJS || isCSS) {
     event.respondWith(
       fetch(event.request)
         .then(networkResponse => {
-          if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          if (networkResponse.status === 200) {
             caches.open(CACHE_NAME).then(cache =>
-              cache.put(event.request, networkResponse.clone())
+              cache.put(event.request, responseToCache)
             );
           }
           return networkResponse;
@@ -85,15 +85,15 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // ── HTML: Network-first también ──────────────────────────────────────────
-  // Evita que index.html viejo bloquee actualizaciones
+  // ── HTML: Network-first ──────────────────────────────────────────────────
   if (isHTML) {
     event.respondWith(
       fetch(event.request)
         .then(networkResponse => {
-          if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          if (networkResponse.status === 200) {
             caches.open(CACHE_NAME).then(cache =>
-              cache.put(event.request, networkResponse.clone())
+              cache.put(event.request, responseToCache)
             );
           }
           return networkResponse;
@@ -107,7 +107,6 @@ self.addEventListener('fetch', event => {
   }
 
   // ── Imágenes y fonts: Stale-while-revalidate ─────────────────────────────
-  // Rápido desde caché, se actualiza en segundo plano
   event.respondWith(
     caches.open(CACHE_NAME).then(cache =>
       cache.match(event.request).then(cachedResponse => {
@@ -134,8 +133,6 @@ self.addEventListener('message', event => {
     self.skipWaiting();
   }
 
-  // Útil para debugging desde consola:
-  // navigator.serviceWorker.controller.postMessage({ type: 'GET_VERSION' })
   if (event.data?.type === 'GET_VERSION') {
     event.source.postMessage({ type: 'VERSION', version: CACHE_NAME });
   }
