@@ -1,5 +1,5 @@
 // ─── FINANZAS (VERSIÓN AVANZADA: RANGO DE FECHAS + AGRUPACIÓN DIARIA) ────────
-// Corrección definitiva: usa afecta_caja para cálculo de caja real
+// Incluye selector de fechas, resumen diario, y control de inclusión en mes.
 
 const CATEGORIAS_FIJAS = {
   ingreso: ['Reparaciones', 'Servicios', 'Otros ingresos'],
@@ -47,6 +47,7 @@ async function finanzas() {
         </div>
       </div>
       
+      <!-- Selector de fechas -->
       <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;background:var(--surface);padding:.5rem;border-radius:10px;border:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:.3rem;flex:1">
           <input type="date" id="finanzas-fecha-inicio" value="${_finanzasFechaInicio}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:.4rem;color:var(--text);font-size:.8rem;width:100%">
@@ -94,14 +95,11 @@ async function finanzas_cargarDatos() {
 
     const balance = balanceRes.data || { total_ingresos: 0, total_egresos: 0, balance_neto: 0 };
     
-    // Filtrar solo movimientos que afectan caja para el cálculo de caja real
     const movimientosCaja = (movimientos||[]).filter(m => m.afecta_caja !== false);
-    
     const ingresosCaja = movimientosCaja.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const egresosCaja = movimientosCaja.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const cajaReal = ingresosCaja - egresosCaja;
 
-    // Agrupar por fecha
     const movsPorFecha = {};
     (movimientos||[]).forEach(m => {
       const fecha = m.fecha;
@@ -154,11 +152,16 @@ async function finanzas_cargarDatos() {
             ${grupo.items.map((m, i) => {
               const esIngreso = m.tipo === 'ingreso';
               const afectaCaja = m.afecta_caja !== false;
+              const incluyeEnMes = m.incluir_en_mes !== false;
               return `
               <div style="display:flex;align-items:center;padding:.65rem .75rem;${i > 0 ? 'border-top:1px solid var(--border)' : ''};gap:.6rem;cursor:pointer" onclick="finanzas_modalEditar('${m.id}')">
                 <div style="width:32px;height:32px;border-radius:8px;background:${esIngreso ? 'rgba(0,255,136,.1)' : 'rgba(255,68,68,.1)'};display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0">${esIngreso ? '↑' : '↓'}</div>
                 <div style="flex:1;min-width:0">
-                  <div style="font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.concepto)} ${!afectaCaja ? '<span style="color:var(--warning);font-size:.65rem;">(contable)</span>' : ''}</div>
+                  <div style="font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                    ${h(m.concepto)} 
+                    ${!afectaCaja ? '<span style="color:var(--warning);font-size:.65rem;">(contable)</span>' : ''}
+                    ${!incluyeEnMes ? '<span style="color:var(--text2);font-size:.65rem;">📊 excl. mes</span>' : ''}
+                  </div>
                   <div style="font-size:.68rem;color:var(--text2)">${h(m.categorias_financieras?.nombre || 'Sin categoría')}</div>
                 </div>
                 <div style="font-family:var(--font-head);font-size:.95rem;color:${esIngreso ? 'var(--success)' : 'var(--danger)'};flex-shrink:0">${esIngreso ? '+' : '-'}₲${gs(m.monto)}</div>
@@ -235,6 +238,11 @@ async function finanzas_modalNuevo(tipo) {
         <option value="false">No (solo registro contable)</option>
       </select>
     </div>
+    <div class="form-group">
+      <label class="form-label" style="display:flex;align-items:center;gap:.5rem;">
+        <input type="checkbox" id="f-fin-incluir-mes" checked style="width:18px;height:18px;accent-color:var(--accent);"> 📊 Incluir en balance mensual
+      </label>
+    </div>
     <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas')}</div>
     <button class="btn-primary" onclick="finanzas_guardarConSafeCall()">Guardar</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
@@ -253,6 +261,8 @@ async function finanzas_guardar(id=null) {
   const monto = parseFloat(document.getElementById('f-fin-monto').value);
   if (!validatePositiveNumber(monto, 'Monto')) return;
   
+  const incluirEnMes = document.getElementById('f-fin-incluir-mes')?.checked ?? true;
+  
   const data = {
     tipo: document.getElementById('f-fin-tipo').value,
     concepto,
@@ -261,6 +271,7 @@ async function finanzas_guardar(id=null) {
     categoria_id: document.getElementById('f-fin-cat').value || null,
     notas: document.getElementById('f-fin-notas').value,
     afecta_caja: document.getElementById('f-fin-afecta-caja')?.value === 'true',
+    incluir_en_mes: incluirEnMes,
     taller_id: tid()
   };
   
@@ -299,6 +310,11 @@ async function finanzas_modalEditar(id) {
         <option value="true" ${m.afecta_caja !== false ? 'selected' : ''}>Sí (dinero físico)</option>
         <option value="false" ${m.afecta_caja === false ? 'selected' : ''}>No (solo registro contable)</option>
       </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label" style="display:flex;align-items:center;gap:.5rem;">
+        <input type="checkbox" id="f-fin-incluir-mes" ${m.incluir_en_mes !== false ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);"> 📊 Incluir en balance mensual
+      </label>
     </div>
     <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas', m.notas)}</div>
     <button class="btn-primary" onclick="finanzas_guardarConSafeCall('${id}')">Actualizar</button>
