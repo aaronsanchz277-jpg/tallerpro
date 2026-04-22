@@ -1,13 +1,11 @@
 // ─── FINANZAS (VERSIÓN AVANZADA: RANGO DE FECHAS + AGRUPACIÓN DIARIA) ────────
-// Incluye: selector de fechas, resumen diario, botones +Ingreso/+Egreso y Conciliador.
-// Corrección definitiva: columna 'concepto' y ordenamiento correcto.
+// Corrección definitiva: usa afecta_caja para cálculo de caja real
 
 const CATEGORIAS_FIJAS = {
   ingreso: ['Reparaciones', 'Servicios', 'Otros ingresos'],
   egreso: ['Repuestos', 'Sueldos', 'Alquiler', 'Servicios básicos', 'Gastos personales', 'Vales/Adelantos', 'Otros egresos']
 };
 
-// Variables para el rango de fechas (compartidas con common.js si se usa, pero aquí las manejamos localmente)
 let _finanzasFechaInicio = null;
 let _finanzasFechaFin = null;
 
@@ -34,7 +32,6 @@ async function finanzas_initCategorias() {
   if (toInsert.length > 0) await sb.from('categorias_financieras').insert(toInsert);
 }
 
-// Función principal
 async function finanzas() {
   await finanzas_initCategorias();
   finanzas_initFechas();
@@ -50,7 +47,6 @@ async function finanzas() {
         </div>
       </div>
       
-      <!-- Selector de fechas -->
       <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;background:var(--surface);padding:.5rem;border-radius:10px;border:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:.3rem;flex:1">
           <input type="date" id="finanzas-fecha-inicio" value="${_finanzasFechaInicio}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:.4rem;color:var(--text);font-size:.8rem;width:100%">
@@ -92,11 +88,18 @@ async function finanzas_cargarDatos() {
         .gte('fecha', inicio)
         .lte('fecha', fin)
         .order('fecha', { ascending: false })
-        .order('id', { ascending: false }),   // ← Orden correcto
+        .order('id', { ascending: false }),
       sb.rpc('get_balance', { p_taller_id: tid(), p_fecha_inicio: inicio, p_fecha_fin: fin })
     ]);
 
     const balance = balanceRes.data || { total_ingresos: 0, total_egresos: 0, balance_neto: 0 };
+    
+    // Filtrar solo movimientos que afectan caja para el cálculo de caja real
+    const movimientosCaja = (movimientos||[]).filter(m => m.afecta_caja !== false);
+    
+    const ingresosCaja = movimientosCaja.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
+    const egresosCaja = movimientosCaja.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
+    const cajaReal = ingresosCaja - egresosCaja;
 
     // Agrupar por fecha
     const movsPorFecha = {};
@@ -121,8 +124,8 @@ async function finanzas_cargarDatos() {
           <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--danger)">₲${gs(balance.total_egresos)}</div>
         </div>
         <div style="background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem;text-align:center">
-          <div style="font-size:.6rem;color:var(--accent);letter-spacing:1px;font-family:var(--font-head)">BALANCE</div>
-          <div style="font-family:var(--font-head);font-size:1.1rem;color:${balance.balance_neto >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(balance.balance_neto)}</div>
+          <div style="font-size:.6rem;color:var(--accent);letter-spacing:1px;font-family:var(--font-head)">CAJA REAL</div>
+          <div style="font-family:var(--font-head);font-size:1.1rem;color:${cajaReal >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(cajaReal)}</div>
         </div>
       </div>
 
@@ -150,11 +153,12 @@ async function finanzas_cargarDatos() {
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
             ${grupo.items.map((m, i) => {
               const esIngreso = m.tipo === 'ingreso';
+              const afectaCaja = m.afecta_caja !== false;
               return `
               <div style="display:flex;align-items:center;padding:.65rem .75rem;${i > 0 ? 'border-top:1px solid var(--border)' : ''};gap:.6rem;cursor:pointer" onclick="finanzas_modalEditar('${m.id}')">
                 <div style="width:32px;height:32px;border-radius:8px;background:${esIngreso ? 'rgba(0,255,136,.1)' : 'rgba(255,68,68,.1)'};display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0">${esIngreso ? '↑' : '↓'}</div>
                 <div style="flex:1;min-width:0">
-                  <div style="font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.concepto)}</div>
+                  <div style="font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.concepto)} ${!afectaCaja ? '<span style="color:var(--warning);font-size:.65rem;">(contable)</span>' : ''}</div>
                   <div style="font-size:.68rem;color:var(--text2)">${h(m.categorias_financieras?.nombre || 'Sin categoría')}</div>
                 </div>
                 <div style="font-family:var(--font-head);font-size:.95rem;color:${esIngreso ? 'var(--success)' : 'var(--danger)'};flex-shrink:0">${esIngreso ? '+' : '-'}₲${gs(m.monto)}</div>
@@ -173,7 +177,6 @@ async function finanzas_cargarDatos() {
   }
 }
 
-// Funciones para el selector de fechas
 function finanzas_aplicarRango() {
   _finanzasFechaInicio = document.getElementById('finanzas-fecha-inicio').value;
   _finanzasFechaFin = document.getElementById('finanzas-fecha-fin').value;
@@ -226,6 +229,12 @@ async function finanzas_modalNuevo(tipo) {
         ${(cats||[]).map(c => `<option value="${c.id}">${h(c.nombre)}</option>`).join('')}
       </select>
     </div>
+    <div class="form-group"><label class="form-label">¿Afecta caja?</label>
+      <select class="form-input" id="f-fin-afecta-caja">
+        <option value="true" selected>Sí (dinero físico)</option>
+        <option value="false">No (solo registro contable)</option>
+      </select>
+    </div>
     <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas')}</div>
     <button class="btn-primary" onclick="finanzas_guardarConSafeCall()">Guardar</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
@@ -246,11 +255,12 @@ async function finanzas_guardar(id=null) {
   
   const data = {
     tipo: document.getElementById('f-fin-tipo').value,
-    concepto,                          // ← CORRECTO: 'concepto' en lugar de 'descripcion'
+    concepto,
     monto,
     fecha: document.getElementById('f-fin-fecha').value,
     categoria_id: document.getElementById('f-fin-cat').value || null,
     notas: document.getElementById('f-fin-notas').value,
+    afecta_caja: document.getElementById('f-fin-afecta-caja')?.value === 'true',
     taller_id: tid()
   };
   
@@ -263,7 +273,7 @@ async function finanzas_guardar(id=null) {
   toast('Movimiento guardado', 'success');
   clearCache('finanzas');
   closeModal();
-  finanzas_cargarDatos(); // Refrescar solo los datos, sin recargar toda la página
+  finanzas_cargarDatos();
 }
 
 async function finanzas_modalEditar(id) {
@@ -282,6 +292,12 @@ async function finanzas_modalEditar(id) {
       <select class="form-input" id="f-fin-cat">
         <option value="">Sin categoría</option>
         ${(cats||[]).map(c => `<option value="${c.id}" ${c.id===m.categoria_id?'selected':''}>${h(c.nombre)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">¿Afecta caja?</label>
+      <select class="form-input" id="f-fin-afecta-caja">
+        <option value="true" ${m.afecta_caja !== false ? 'selected' : ''}>Sí (dinero físico)</option>
+        <option value="false" ${m.afecta_caja === false ? 'selected' : ''}>No (solo registro contable)</option>
       </select>
     </div>
     <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas', m.notas)}</div>
