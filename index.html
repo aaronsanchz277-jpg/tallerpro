@@ -225,18 +225,19 @@
 <!-- Autenticación -->
 <script src="./js/auth/auth.js"></script>
 <script src="./js/auth/plan.js"></script>
-<script src="./js/auth/admin.js"></script>
+<script src="./js/auth/admin-v2.js"></script>
 <script>
-  (function() {
-    if (typeof misTrabajos === 'function' && typeof window.misTrabajos === 'undefined') {
-      window.misTrabajos = misTrabajos;
-      console.log('✅ misTrabajos asignada a window (parche)');
-    } else if (typeof window.misTrabajos === 'function') {
-      console.log('✅ misTrabajos ya está en window');
-    } else {
-      console.error('❌ misTrabajos no está definida en admin.js');
-    }
-  })();
+  // Garantía absoluta: si admin-v2.js falla, misTrabajos existirá.
+  if (typeof window.misTrabajos !== 'function') {
+    console.warn('admin-v2.js no definió misTrabajos - usando fallback');
+    window.misTrabajos = function() {
+      if (currentPerfil?.rol !== 'empleado') { dashboard(); return; }
+      document.getElementById('main-content').innerHTML = `
+        <div class="empty">
+          <p>Error temporal. <button onclick="location.reload()">Reintentar</button></p>
+        </div>`;
+    };
+  }
 </script>
 
 <!-- Dashboard -->
