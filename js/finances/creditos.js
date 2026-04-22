@@ -44,23 +44,8 @@ async function marcarPagadoConSafeCall(id) {
 async function marcarPagado(id) {
   await offlineUpdate('fiados', { pagado: true }, 'id', id);
   
-  // Integración con Finanzas (MODIFICADO)
-  const { data: credito } = await sb.from('fiados').select('monto, cliente_id, descripcion').eq('id', id).single();
-  if (credito) {
-    const categoriaId = await obtenerCategoriaFinanciera('Otros ingresos', 'ingreso');
-    if (categoriaId) {
-      await sb.from('movimientos_financieros').insert({
-        taller_id: tid(),
-        tipo: 'ingreso',
-        categoria_id: categoriaId,
-        monto: credito.monto,
-        descripcion: 'Cobro de crédito: ' + (credito.descripcion || ''),
-        fecha: new Date().toISOString().split('T')[0],
-        referencia_id: id,
-        referencia_tabla: 'fiados'
-      });
-    }
-  }
+  // NOTA: La inserción en movimientos_financieros ahora la hace un TRIGGER en Supabase
+  // (ver script SQL proporcionado)
   
   clearCache('creditos');
   clearCache('finanzas');
