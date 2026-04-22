@@ -48,6 +48,7 @@ async function detalleEmpleado(id) {
 
   } catch(e) { toast('Error al cargar empleado','error'); navigate('empleados'); return; }
 
+  // ─── CONSTRUCCIÓN DE listaTrabajos ────────────────────────────────────────
   const listaTrabajos = [];
 
   trabajosManuales.forEach(t => {
@@ -96,6 +97,10 @@ async function detalleEmpleado(id) {
   });
 
   const totalHoras = listaTrabajos.reduce((s,t) => s + parseFloat(t.horas||0), 0);
+
+  // 🔍 LOGS DE DIAGNÓSTICO (míralos en consola)
+  console.log('✅ listaTrabajos:', listaTrabajos);
+  console.log('✅ porFecha:', porFecha);
 
   document.getElementById('main-content').innerHTML = `
     <div class="detail-header">
@@ -152,4 +157,6 @@ async function detalleEmpleado(id) {
   cargarVales(id);
 }
 
+// Funciones auxiliares (vales, modales, etc.) se mantienen igual
+// ...
 // Funciones de vales, modales, etc. (se mantienen igual que antes, las tienes en versiones anteriores)
