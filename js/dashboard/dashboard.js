@@ -137,10 +137,10 @@ async function dashboard() {
   const vehiculosSemana = stats.vehiculos_semana || 0;
   const vehiculosMes = stats.vehiculos_mes || 0;
 
-  // ─── NUEVO: Obtener ingresos y gastos del mes desde movimientos_financieros (filtrado por incluir_en_mes) ───
-  let ingresosMesFiltrado = 0;
-  let egresosMesFiltrado = 0;
+  // ─── Obtener ganancia neta y egresos desde get_balance_mensual para mostrarlos ───
   let gananciaNeta = 0;
+  let egresosMesFiltrado = 0;
+  let ingresosMesFiltrado = stats.ingresos_mes || 0;
 
   if (currentPerfil?.rol === 'admin') {
     try {
@@ -153,41 +153,14 @@ async function dashboard() {
       if (balanceMensual) {
         ingresosMesFiltrado = balanceMensual.total_ingresos || 0;
         egresosMesFiltrado = balanceMensual.total_egresos || 0;
-        gananciaNeta = ingresosMesFiltrado - egresosMesFiltrado;
+        gananciaNeta = balanceMensual.balance_neto || 0;
       }
     } catch (e) {
-      console.warn('Error obteniendo balance mensual filtrado, usando cálculo tradicional:', e);
-      // Fallback: usar el cálculo tradicional con ventas y gastos directos (pero también filtramos ventas por incluir_en_mes)
-      const { data: ventasMes } = await sb.from('ventas')
-        .select('total')
-        .eq('taller_id', tid())
-        .eq('estado', 'completado')
-        .eq('incluir_en_mes', true)
-        .gte('created_at', primerMes + 'T00:00:00')
-        .lte('created_at', hoy + 'T23:59:59');
-      const totalVentasMes = (ventasMes || []).reduce((s, v) => s + parseFloat(v.total || 0), 0);
-      
-      const { data: reparacionesMes } = await sb.from('reparaciones')
-        .select('costo')
-        .eq('taller_id', tid())
-        .eq('estado', 'finalizado')
-        .gte('fecha', primerMes)
-        .lte('fecha', hoy);
-      const totalReparacionesMes = (reparacionesMes || []).reduce((s, r) => s + parseFloat(r.costo || 0), 0);
-      
-      const { data: gastosMes } = await sb.from('gastos_taller')
-        .select('monto')
-        .eq('taller_id', tid())
-        .gte('fecha', primerMes)
-        .lte('fecha', hoy);
-      const totalGastosMes = (gastosMes || []).reduce((s, g) => s + parseFloat(g.monto || 0), 0);
-      
-      ingresosMesFiltrado = totalVentasMes + totalReparacionesMes;
-      gananciaNeta = ingresosMesFiltrado - totalGastosMes;
+      console.warn('Error obteniendo balance mensual filtrado:', e);
     }
   }
 
-  // Actualizamos stats para los KPIs
+  // Actualizamos stats para los KPIs que se muestran
   stats.ingresos_mes = ingresosMesFiltrado;
   stats.ganancia_neta = gananciaNeta;
   stats.stock_bajo = alertasStock;
