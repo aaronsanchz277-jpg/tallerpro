@@ -1,5 +1,5 @@
 // ─── VENTAS (Unificado: POS + QuickService) ─────────────────────────────────
-// Integrado con Finanzas automáticamente
+// Integrado con Finanzas automáticamente (vía trigger en BD)
 
 async function ventas({ filtro='todos', offset=0 }={}) {
   const cacheKey = `ventas_${filtro}_${offset}`;
@@ -272,32 +272,15 @@ async function guardarVenta(esServicioRapido = false) {
     total: totalFinal,
     metodo_pago: esServicioRapido ? 'efectivo' : (document.getElementById('venta-metodo')?.value || 'efectivo'),
     notas: document.getElementById('venta-notas')?.value || null,
-    taller_id: tid()
+    taller_id: tid(),
+    estado: 'completado'
   };
   
-  const { data: saved, error } = await offlineInsert('ventas', data);
+  const { error } = await offlineInsert('ventas', data);
   if (error) { toast('Error: '+error.message,'error'); return; }
   
-  // Integración con Finanzas (MODIFICADO)
-  if (totalFinal > 0) {
-    try {
-      const categoriaId = await obtenerCategoriaFinanciera('Servicios', 'ingreso');
-      if (categoriaId) {
-        await sb.from('movimientos_financieros').insert({
-          taller_id: tid(),
-          tipo: 'ingreso',
-          categoria_id: categoriaId,
-          monto: totalFinal,
-          descripcion: `Venta ${esServicioRapido ? 'servicio rápido' : 'POS'}` + (data.descripcion ? ': '+data.descripcion : ''),
-          fecha: new Date().toISOString().split('T')[0],
-          referencia_id: saved?.[0]?.id,
-          referencia_tabla: 'ventas'
-        });
-      }
-    } catch (e) {
-      console.warn('Error registrando ingreso en finanzas:', e);
-    }
-  }
+  // NOTA: La inserción en movimientos_financieros ahora la hace un TRIGGER en Supabase
+  // (ver script SQL proporcionado)
   
   clearCache('ventas');
   clearCache('inventario');
@@ -321,6 +304,7 @@ async function facturarVenta(id) {
 async function eliminarVenta(id) {
   confirmar('¿Eliminar esta venta? También se eliminará el registro financiero asociado.', async () => {
     await safeCall(async () => {
+      // El trigger en BD podría manejar la eliminación, pero por seguridad borramos manualmente el movimiento
       await sb.from('movimientos_financieros')
         .delete()
         .eq('referencia_id', id)
