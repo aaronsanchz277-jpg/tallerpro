@@ -33,7 +33,21 @@ async function modalNuevoPeriodo() {
       <div class="form-group"><label class="form-label">Fecha fin</label>${renderFechaInput('f-periodo-fin', ultimoDia)}</div>
     </div>
     <button class="btn-primary" onclick="guardarPeriodoConSafeCall()">Crear Período</button>
+    <button onclick="crearPeriodoSemanaActual()" style="margin-top:.5rem; width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text2); border-radius:8px; padding:.4rem; cursor:pointer; font-size:.8rem;">📆 Crear período de esta semana</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
+}
+
+function crearPeriodoSemanaActual() {
+  const hoy = new Date();
+  const diaSemana = hoy.getDay(); // 0 = domingo, 1 = lunes...
+  // Asumiendo semana laboral de lunes a domingo
+  const inicio = new Date(hoy);
+  inicio.setDate(hoy.getDate() - (diaSemana === 0 ? 6 : diaSemana - 1));
+  const fin = new Date(inicio);
+  fin.setDate(inicio.getDate() + 6);
+  
+  document.getElementById('f-periodo-inicio').value = inicio.toISOString().split('T')[0];
+  document.getElementById('f-periodo-fin').value = fin.toISOString().split('T')[0];
 }
 
 async function guardarPeriodoConSafeCall() {
