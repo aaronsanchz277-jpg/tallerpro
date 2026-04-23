@@ -1,4 +1,4 @@
-// ─── FINANZAS (CON MÚLTIPLES BALANCES Y LOGS DE DIAGNÓSTICO) ────────────────
+// ─── FINANZAS (CON MÚLTIPLES BALANCES) ───────────────────────────────────────
 const CATEGORIAS_FIJAS = {
   ingreso: ['Reparaciones', 'Servicios', 'Otros ingresos'],
   egreso: ['Repuestos', 'Sueldos', 'Alquiler', 'Servicios básicos', 'Gastos personales', 'Vales/Adelantos', 'Otros egresos']
@@ -10,7 +10,6 @@ let _balanceSeleccionado = localStorage.getItem('finanzas_balance_id') || null;
 
 async function finanzas_cargarBalancesSelect() {
   const { data } = await sb.from('balances').select('id,nombre,color').eq('taller_id', tid()).order('nombre');
-  console.log('🧪 Balances cargados para select:', data);
   return data || [];
 }
 
@@ -92,7 +91,6 @@ async function finanzas() {
 }
 
 function finanzas_cambiarBalance(balanceId) {
-  console.log('🔁 Cambiando balance a:', balanceId || 'TODOS');
   _balanceSeleccionado = balanceId || null;
   localStorage.setItem('finanzas_balance_id', _balanceSeleccionado || '');
   finanzas_cargarDatos();
@@ -105,7 +103,6 @@ async function finanzas_cargarDatos() {
   const inicio = _finanzasFechaInicio;
   const fin = _finanzasFechaFin;
   const balanceId = _balanceSeleccionado;
-  console.log('🔍 Cargando datos. Balance seleccionado:', balanceId || 'TODOS');
 
   try {
     const { data: movimientos } = await sb.from('movimientos_financieros')
@@ -116,21 +113,12 @@ async function finanzas_cargarDatos() {
       .order('fecha', { ascending: false })
       .order('id', { ascending: false });
 
-    console.log('📦 Movimientos obtenidos:', movimientos?.length || 0);
-    if (movimientos?.length > 0) {
-      console.log('🔎 Ejemplo de movimiento_balance:', movimientos[0].movimiento_balance);
-    }
-
+    // Filtrar movimientos según balance seleccionado
     let movimientosFiltrados = movimientos || [];
     if (balanceId) {
-      movimientosFiltrados = movimientosFiltrados.filter(m => {
-        const tieneBalance = (m.movimiento_balance || []).some(mb => mb.balance_id === balanceId);
-        if (!tieneBalance) {
-          console.log(`❌ Movimiento ${m.id.substring(0,8)} NO tiene balance ${balanceId}`);
-        }
-        return tieneBalance;
-      });
-      console.log(`📊 Después de filtrar por balance ${balanceId}: ${movimientosFiltrados.length} movimientos`);
+      movimientosFiltrados = movimientosFiltrados.filter(m => 
+        (m.movimiento_balance || []).some(mb => mb.balance_id === balanceId)
+      );
     }
 
     const totalIngresos = movimientosFiltrados.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
@@ -141,9 +129,9 @@ async function finanzas_cargarDatos() {
     const egresosCaja = movimientosCaja.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const cajaReal = ingresosCaja - egresosCaja;
 
-    // ... (resto del código de renderizado igual que antes, sin cambios)
+    // AGRUPAR POR FECHA USANDO LOS MOVIMIENTOS FILTRADOS
     const movsPorFecha = {};
-    (movimientos||[]).forEach(m => {
+    movimientosFiltrados.forEach(m => {
       const fecha = m.fecha;
       if (!movsPorFecha[fecha]) movsPorFecha[fecha] = { ingresos: 0, egresos: 0, items: [] };
       if (m.tipo === 'ingreso') movsPorFecha[fecha].ingresos += parseFloat(m.monto||0);
@@ -223,7 +211,6 @@ async function finanzas_cargarDatos() {
   }
 }
 
-// ... (resto de funciones auxiliares de fecha sin cambios)
 function finanzas_aplicarRango() {
   _finanzasFechaInicio = document.getElementById('finanzas-fecha-inicio').value;
   _finanzasFechaFin = document.getElementById('finanzas-fecha-fin').value;
@@ -259,7 +246,7 @@ function finanzas_setRangoRapido(tipo) {
   finanzas_cargarDatos();
 }
 
-// ─── MODALES (NUEVO/EDITAR) CON LOGS ─────────────────────────────────────────
+// ─── MODALES (NUEVO/EDITAR) ─────────────────────────────────────────────────
 async function finanzas_modalNuevo(tipo) {
   const [catsRes, balancesRes] = await Promise.all([
     sb.from('categorias_financieras').select('id,nombre').eq('taller_id', tid()).or(`tipo.eq.${tipo},tipo.eq.ambos`).order('nombre'),
@@ -314,8 +301,6 @@ async function finanzas_guardarConSafeCall(id = null, uniqueId = null) {
 }
 
 async function finanzas_guardar(id = null, uniqueId = null) {
-  console.log('💾 finanzas_guardar - id:', id, 'uniqueId:', uniqueId);
-  
   const concepto = document.getElementById('f-fin-concepto').value.trim();
   if (!validateRequired(concepto, 'Concepto')) return;
   
@@ -346,38 +331,24 @@ async function finanzas_guardar(id = null, uniqueId = null) {
     
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   
-  // ─── Leer checkboxes de balances ─────────────────────────────────────────
   if (movimientoId) {
     let balancesSeleccionados = [];
     if (uniqueId) {
       const checkboxes = document.querySelectorAll(`.bal-check-${uniqueId}:checked`);
       balancesSeleccionados = Array.from(checkboxes).map(cb => cb.value);
-      console.log(`🧪 Nuevo: Checkboxes encontrados con clase .bal-check-${uniqueId}:`, checkboxes.length);
     } else {
       const checkboxes = document.querySelectorAll('.bal-check-editar:checked');
       balancesSeleccionados = Array.from(checkboxes).map(cb => cb.value);
-      console.log(`🧪 Editar: Checkboxes encontrados con clase .bal-check-editar:`, checkboxes.length);
     }
-    console.log('✅ Balances seleccionados para guardar:', balancesSeleccionados);
     
-    // Eliminar relaciones anteriores
-    const { error: delError } = await sb.from('movimiento_balance').delete().eq('movimiento_id', movimientoId);
-    if (delError) console.error('❌ Error eliminando relaciones anteriores:', delError);
+    await sb.from('movimiento_balance').delete().eq('movimiento_id', movimientoId);
     
-    // Insertar nuevas relaciones
     if (balancesSeleccionados.length > 0) {
       const inserts = balancesSeleccionados.map(balanceId => ({
         movimiento_id: movimientoId,
         balance_id: balanceId
       }));
-      const { error: insError } = await sb.from('movimiento_balance').insert(inserts);
-      if (insError) {
-        console.error('❌ Error insertando relaciones:', insError);
-      } else {
-        console.log('✅ Relaciones insertadas correctamente en movimiento_balance');
-      }
-    } else {
-      console.log('⚠️ No se seleccionaron balances.');
+      await sb.from('movimiento_balance').insert(inserts);
     }
   }
   
@@ -394,7 +365,6 @@ async function finanzas_guardar(id = null, uniqueId = null) {
 }
 
 async function finanzas_modalEditar(id) {
-  console.log('✏️ Abriendo edición para movimiento:', id);
   const [{ data: m }, { data: cats }, { data: balances }, { data: relaciones }] = await Promise.all([
     sb.from('movimientos_financieros').select('*').eq('id', id).single(),
     sb.from('categorias_financieras').select('id,nombre').eq('taller_id', tid()).or(`tipo.eq.ingreso,tipo.eq.egreso,tipo.eq.ambos`).order('nombre'),
@@ -404,7 +374,6 @@ async function finanzas_modalEditar(id) {
   if (!m) return;
   
   const balancesAsignados = new Set((relaciones||[]).map(r => r.balance_id));
-  console.log('🧪 Balances asignados actualmente:', Array.from(balancesAsignados));
   
   openModal(`
     <div class="modal-title">Editar ${m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</div>
@@ -463,7 +432,7 @@ async function finanzas_eliminarConSafeCall(id) {
   });
 }
 
-// ─── CATEGORÍAS (SIN CAMBIOS) ────────────────────────────────────────────────
+// ─── CATEGORÍAS ─────────────────────────────────────────────────────────────
 async function finanzas_modalCategorias() {
   const { data: cats } = await sb.from('categorias_financieras').select('*').eq('taller_id', tid()).order('tipo').order('nombre');
   openModal(`
