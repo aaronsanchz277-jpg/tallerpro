@@ -1,4 +1,6 @@
 // ─── FINANZAS (CON MÚLTIPLES BALANCES) ───────────────────────────────────────
+// CAJA REAL ahora refleja el balance seleccionado
+
 const CATEGORIAS_FIJAS = {
   ingreso: ['Reparaciones', 'Servicios', 'Otros ingresos'],
   egreso: ['Repuestos', 'Sueldos', 'Alquiler', 'Servicios básicos', 'Gastos personales', 'Vales/Adelantos', 'Otros egresos']
@@ -113,7 +115,6 @@ async function finanzas_cargarDatos() {
       .order('fecha', { ascending: false })
       .order('id', { ascending: false });
 
-    // Filtrar movimientos según balance seleccionado
     let movimientosFiltrados = movimientos || [];
     if (balanceId) {
       movimientosFiltrados = movimientosFiltrados.filter(m => 
@@ -124,12 +125,12 @@ async function finanzas_cargarDatos() {
     const totalIngresos = movimientosFiltrados.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const totalEgresos = movimientosFiltrados.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     
-    const movimientosCaja = (movimientos||[]).filter(m => m.afecta_caja !== false);
-    const ingresosCaja = movimientosCaja.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
-    const egresosCaja = movimientosCaja.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
+    // CAJA REAL ahora usa movimientosFiltrados en lugar de todos los movimientos
+    const movimientosCajaFiltrados = movimientosFiltrados.filter(m => m.afecta_caja !== false);
+    const ingresosCaja = movimientosCajaFiltrados.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
+    const egresosCaja = movimientosCajaFiltrados.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const cajaReal = ingresosCaja - egresosCaja;
 
-    // AGRUPAR POR FECHA USANDO LOS MOVIMIENTOS FILTRADOS
     const movsPorFecha = {};
     movimientosFiltrados.forEach(m => {
       const fecha = m.fecha;
@@ -152,7 +153,7 @@ async function finanzas_cargarDatos() {
           <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--danger)">₲${gs(totalEgresos)}</div>
         </div>
         <div style="background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem;text-align:center">
-          <div style="font-size:.6rem;color:var(--accent);letter-spacing:1px;font-family:var(--font-head)">CAJA REAL</div>
+          <div style="font-size:.6rem;color:var(--accent);letter-spacing:1px;font-family:var(--font-head)">CAJA REAL ${balanceId ? '(Balance)' : ''}</div>
           <div style="font-family:var(--font-head);font-size:1.1rem;color:${cajaReal >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(cajaReal)}</div>
         </div>
       </div>
