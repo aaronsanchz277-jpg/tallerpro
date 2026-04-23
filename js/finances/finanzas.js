@@ -1,6 +1,5 @@
-// ─── FINANZAS (VERSIÓN AVANZADA: RANGO DE FECHAS + AGRUPACIÓN DIARIA) ────────
-// Incluye selector de fechas, resumen diario, control de inclusión en mes,
-// y toggle para filtrar las tarjetas de INGRESOS/EGRESOS por balance mensual.
+// ─── FINANZAS (CON MÚLTIPLES BALANCES) ───────────────────────────────────────
+// Incluye selector de balances en modales y toggle de vista por balance.
 
 const CATEGORIAS_FIJAS = {
   ingreso: ['Reparaciones', 'Servicios', 'Otros ingresos'],
@@ -9,15 +8,12 @@ const CATEGORIAS_FIJAS = {
 
 let _finanzasFechaInicio = null;
 let _finanzasFechaFin = null;
-let _filtrarBalanceMensual = localStorage.getItem('finanzas_filtrar_balance') === 'true';
+let _balanceSeleccionado = localStorage.getItem('finanzas_balance_id') || null; // 'null' significa "Todos"
 
-function finanzas_initFechas() {
-  if (!_finanzasFechaInicio) {
-    const hoy = new Date();
-    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    _finanzasFechaInicio = inicioMes.toISOString().split('T')[0];
-    _finanzasFechaFin = hoy.toISOString().split('T')[0];
-  }
+// Cargar lista de balances para el selector
+async function finanzas_cargarBalancesSelect() {
+  const { data } = await sb.from('balances').select('id,nombre,color').eq('taller_id', tid()).order('nombre');
+  return data || [];
 }
 
 async function finanzas_initCategorias() {
@@ -34,9 +30,25 @@ async function finanzas_initCategorias() {
   if (toInsert.length > 0) await sb.from('categorias_financieras').insert(toInsert);
 }
 
+function finanzas_initFechas() {
+  if (!_finanzasFechaInicio) {
+    const hoy = new Date();
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    _finanzasFechaInicio = inicioMes.toISOString().split('T')[0];
+    _finanzasFechaFin = hoy.toISOString().split('T')[0];
+  }
+}
+
 async function finanzas() {
   await finanzas_initCategorias();
   finanzas_initFechas();
+
+  const balances = await finanzas_cargarBalancesSelect();
+  const opcionesBalance = [
+    { id: null, nombre: 'Todos los movimientos', color: '#888' },
+    ...balances
+  ];
+  const selectedId = _balanceSeleccionado;
 
   const contenido = document.getElementById('main-content');
   contenido.innerHTML = `
@@ -61,16 +73,17 @@ async function finanzas() {
         <button onclick="finanzas_aplicarRango()" style="background:var(--accent);color:#000;border:none;border-radius:6px;padding:.4rem .8rem;font-size:.8rem;cursor:pointer;font-family:var(--font-head)">Aplicar</button>
       </div>
       
-      <!-- Fila de botones rápidos + Toggle de filtro -->
+      <!-- Selector de balance + botones rápidos -->
       <div style="display:flex;gap:.3rem;margin-bottom:.75rem;flex-wrap:wrap;align-items:center">
         <button onclick="finanzas_setRangoRapido('este_mes')" class="tab" style="font-size:.7rem;padding:.3rem .6rem">Este mes</button>
         <button onclick="finanzas_setRangoRapido('mes_anterior')" class="tab" style="font-size:.7rem;padding:.3rem .6rem">Mes anterior</button>
         <button onclick="finanzas_setRangoRapido('ultimos_30')" class="tab" style="font-size:.7rem;padding:.3rem .6rem">Últ. 30 días</button>
         <button onclick="finanzas_setRangoRapido('este_anio')" class="tab" style="font-size:.7rem;padding:.3rem .6rem">Este año</button>
         <div style="flex:1"></div>
-        <button onclick="finanzas_toggleFiltroBalance()" id="btn-filtro-balance" style="background:${_filtrarBalanceMensual ? 'var(--accent)' : 'var(--surface2)'}; color:${_filtrarBalanceMensual ? '#000' : 'var(--text2)'}; border:1px solid ${_filtrarBalanceMensual ? 'var(--accent)' : 'var(--border)'}; border-radius:20px; padding:.25rem .75rem; font-size:.7rem; cursor:pointer; display:flex; align-items:center; gap:4px;">
-          ${_filtrarBalanceMensual ? '📊 Solo balance mensual' : '📋 Ver todo'}
-        </button>
+        <select id="finanzas-select-balance" onchange="finanzas_cambiarBalance(this.value)" style="background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:.25rem .75rem;font-size:.7rem;color:var(--text);cursor:pointer;max-width:180px">
+          ${opcionesBalance.map(b => `<option value="${b.id || ''}" ${(selectedId === b.id) ? 'selected' : ''}>💰 ${h(b.nombre)}</option>`).join('')}
+        </select>
+        <button onclick="navigate('balances')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.25rem .6rem;font-size:.7rem;cursor:pointer;color:var(--accent)">⚙️</button>
       </div>
       
       <div id="finanzas-contenido-dinamico">
@@ -82,20 +95,9 @@ async function finanzas() {
   await finanzas_cargarDatos();
 }
 
-// Toggle para activar/desactivar el filtro por balance mensual en las tarjetas
-function finanzas_toggleFiltroBalance() {
-  _filtrarBalanceMensual = !_filtrarBalanceMensual;
-  localStorage.setItem('finanzas_filtrar_balance', _filtrarBalanceMensual);
-  
-  // Actualizar apariencia del botón
-  const btn = document.getElementById('btn-filtro-balance');
-  if (btn) {
-    btn.style.background = _filtrarBalanceMensual ? 'var(--accent)' : 'var(--surface2)';
-    btn.style.color = _filtrarBalanceMensual ? '#000' : 'var(--text2)';
-    btn.style.borderColor = _filtrarBalanceMensual ? 'var(--accent)' : 'var(--border)';
-    btn.innerHTML = _filtrarBalanceMensual ? '📊 Solo balance mensual' : '📋 Ver todo';
-  }
-  
+function finanzas_cambiarBalance(balanceId) {
+  _balanceSeleccionado = balanceId || null;
+  localStorage.setItem('finanzas_balance_id', _balanceSeleccionado || '');
   finanzas_cargarDatos();
 }
 
@@ -105,25 +107,30 @@ async function finanzas_cargarDatos() {
 
   const inicio = _finanzasFechaInicio;
   const fin = _finanzasFechaFin;
+  const balanceId = _balanceSeleccionado;
 
   try {
+    // Obtener movimientos y sus balances asociados
     const { data: movimientos } = await sb.from('movimientos_financieros')
-      .select('*, categorias_financieras(nombre)')
+      .select('*, categorias_financieras(nombre), movimiento_balance(balance_id)')
       .eq('taller_id', tid())
       .gte('fecha', inicio)
       .lte('fecha', fin)
       .order('fecha', { ascending: false })
       .order('id', { ascending: false });
 
-    // Aplicar filtro de balance mensual a los totales de INGRESOS y EGRESOS (pero no a CAJA REAL)
-    const movimientosParaTotales = _filtrarBalanceMensual 
-      ? (movimientos||[]).filter(m => m.incluir_en_mes !== false)
-      : (movimientos||[]);
+    // Filtrar movimientos según balance seleccionado
+    let movimientosFiltrados = movimientos || [];
+    if (balanceId) {
+      movimientosFiltrados = movimientosFiltrados.filter(m => 
+        (m.movimiento_balance || []).some(mb => mb.balance_id === balanceId)
+      );
+    }
+
+    const totalIngresos = movimientosFiltrados.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
+    const totalEgresos = movimientosFiltrados.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     
-    const totalIngresos = movimientosParaTotales.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
-    const totalEgresos = movimientosParaTotales.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
-    
-    // CAJA REAL siempre se calcula con TODOS los movimientos que afectan caja (ignora el filtro de balance mensual)
+    // Caja real siempre con todos los movimientos que afectan caja
     const movimientosCaja = (movimientos||[]).filter(m => m.afecta_caja !== false);
     const ingresosCaja = movimientosCaja.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const egresosCaja = movimientosCaja.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
@@ -143,11 +150,11 @@ async function finanzas_cargarDatos() {
     let html = `
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:12px;padding:.75rem;text-align:center">
-          <div style="font-size:.6rem;color:var(--success);letter-spacing:1px;font-family:var(--font-head)">INGRESOS ${_filtrarBalanceMensual ? '(Balance)' : ''}</div>
+          <div style="font-size:.6rem;color:var(--success);letter-spacing:1px;font-family:var(--font-head)">INGRESOS ${balanceId ? '(Balance)' : ''}</div>
           <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--success)">₲${gs(totalIngresos)}</div>
         </div>
         <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:12px;padding:.75rem;text-align:center">
-          <div style="font-size:.6rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">EGRESOS ${_filtrarBalanceMensual ? '(Balance)' : ''}</div>
+          <div style="font-size:.6rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">EGRESOS ${balanceId ? '(Balance)' : ''}</div>
           <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--danger)">₲${gs(totalEgresos)}</div>
         </div>
         <div style="background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem;text-align:center">
@@ -181,7 +188,7 @@ async function finanzas_cargarDatos() {
             ${grupo.items.map((m, i) => {
               const esIngreso = m.tipo === 'ingreso';
               const afectaCaja = m.afecta_caja !== false;
-              const incluyeEnMes = m.incluir_en_mes !== false;
+              const balancesAsignados = (m.movimiento_balance || []).map(mb => mb.balance_id);
               return `
               <div style="display:flex;align-items:center;padding:.65rem .75rem;${i > 0 ? 'border-top:1px solid var(--border)' : ''};gap:.6rem;cursor:pointer" onclick="finanzas_modalEditar('${m.id}')">
                 <div style="width:32px;height:32px;border-radius:8px;background:${esIngreso ? 'rgba(0,255,136,.1)' : 'rgba(255,68,68,.1)'};display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0">${esIngreso ? '↑' : '↓'}</div>
@@ -189,9 +196,9 @@ async function finanzas_cargarDatos() {
                   <div style="font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
                     ${h(m.concepto)} 
                     ${!afectaCaja ? '<span style="color:var(--warning);font-size:.65rem;">(contable)</span>' : ''}
-                    ${!incluyeEnMes ? '<span style="color:var(--text2);font-size:.65rem;">📊 excl. mes</span>' : ''}
                   </div>
                   <div style="font-size:.68rem;color:var(--text2)">${h(m.categorias_financieras?.nombre || 'Sin categoría')}</div>
+                  ${balancesAsignados.length > 0 ? `<div style="font-size:.65rem;color:var(--accent)">💰 Balances: ${balancesAsignados.length}</div>` : ''}
                 </div>
                 <div style="font-family:var(--font-head);font-size:.95rem;color:${esIngreso ? 'var(--success)' : 'var(--danger)'};flex-shrink:0">${esIngreso ? '+' : '-'}₲${gs(m.monto)}</div>
               </div>`;
@@ -209,6 +216,7 @@ async function finanzas_cargarDatos() {
   }
 }
 
+// Funciones de rango de fechas (sin cambios)
 function finanzas_aplicarRango() {
   _finanzasFechaInicio = document.getElementById('finanzas-fecha-inicio').value;
   _finanzasFechaFin = document.getElementById('finanzas-fecha-fin').value;
@@ -244,9 +252,15 @@ function finanzas_setRangoRapido(tipo) {
   finanzas_cargarDatos();
 }
 
-// ─── MODALES (NUEVO/EDITAR) ─────────────────────────────────────────────────
+// ─── MODALES (NUEVO/EDITAR) CON SELECCIÓN MÚLTIPLE DE BALANCES ────────────────
 async function finanzas_modalNuevo(tipo) {
-  const { data: cats } = await sb.from('categorias_financieras').select('id,nombre').eq('taller_id', tid()).or(`tipo.eq.${tipo},tipo.eq.ambos`).order('nombre');
+  const [catsRes, balancesRes] = await Promise.all([
+    sb.from('categorias_financieras').select('id,nombre').eq('taller_id', tid()).or(`tipo.eq.${tipo},tipo.eq.ambos`).order('nombre'),
+    sb.from('balances').select('id,nombre,color').eq('taller_id', tid()).order('nombre')
+  ]);
+  const cats = catsRes.data || [];
+  const balances = balancesRes.data || [];
+  
   const uniqueId = 'nuevo-' + Date.now();
   openModal(`
     <div class="modal-title">${tipo === 'ingreso' ? 'Nuevo Ingreso' : 'Nuevo Egreso'}</div>
@@ -259,7 +273,7 @@ async function finanzas_modalNuevo(tipo) {
     <div class="form-group"><label class="form-label">Categoría</label>
       <select class="form-input" id="f-fin-cat">
         <option value="">Sin categoría</option>
-        ${(cats||[]).map(c => `<option value="${c.id}">${h(c.nombre)}</option>`).join('')}
+        ${cats.map(c => `<option value="${c.id}">${h(c.nombre)}</option>`).join('')}
       </select>
     </div>
     <div class="form-group"><label class="form-label">¿Afecta caja?</label>
@@ -269,16 +283,23 @@ async function finanzas_modalNuevo(tipo) {
       </select>
     </div>
     <div class="form-group">
-      <label class="form-label" style="display:flex;align-items:center;gap:.5rem;">
-        <input type="checkbox" id="f-fin-incluir-mes-${uniqueId}" checked style="width:18px;height:18px;accent-color:var(--accent);"> 📊 Incluir en balance mensual
-      </label>
+      <label class="form-label">Balances (podés marcar varios)</label>
+      <div style="max-height:150px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.5rem;background:var(--surface2)">
+        ${balances.map(b => `
+          <label style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;cursor:pointer">
+            <input type="checkbox" class="bal-check-${uniqueId}" value="${b.id}" style="accent-color:${b.color||'var(--accent)'}">
+            <span style="display:inline-block;width:12px;height:12px;border-radius:4px;background:${b.color||'var(--accent)'};margin-right:4px"></span>
+            ${h(b.nombre)}
+          </label>
+        `).join('')}
+        ${balances.length === 0 ? '<p style="color:var(--text2);font-size:.8rem;padding:.3rem">No hay balances. Creá uno en Configuración.</p>' : ''}
+      </div>
     </div>
     <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas')}</div>
     <button class="btn-primary" onclick="event.stopPropagation(); window.finanzas_guardarConSafeCall(null, '${uniqueId}')">Guardar</button>
     <button class="btn-secondary" onclick="event.stopPropagation(); closeModal()">Cancelar</button>`);
 }
 
-// Wrapper seguro para guardar (usado en los modales)
 async function finanzas_guardarConSafeCall(id = null, uniqueId = null) {
   await safeCall(async () => {
     await finanzas_guardar(id, uniqueId);
@@ -292,20 +313,6 @@ async function finanzas_guardar(id = null, uniqueId = null) {
   const monto = parseFloat(document.getElementById('f-fin-monto').value);
   if (!validatePositiveNumber(monto, 'Monto')) return;
   
-  // Determinar el ID del checkbox según si es edición o nuevo
-  let incluirEnMes = true;
-  if (uniqueId) {
-    const checkbox = document.getElementById(`f-fin-incluir-mes-${uniqueId}`);
-    incluirEnMes = checkbox ? checkbox.checked : true;
-  } else if (id) {
-    // Para edición, usamos el checkbox específico de editar
-    const checkbox = document.getElementById('f-fin-incluir-mes-editar');
-    incluirEnMes = checkbox ? checkbox.checked : true;
-  } else {
-    const checkbox = document.getElementById('f-fin-incluir-mes');
-    incluirEnMes = checkbox ? checkbox.checked : true;
-  }
-  
   const data = {
     tipo: document.getElementById('f-fin-tipo').value,
     concepto,
@@ -314,29 +321,54 @@ async function finanzas_guardar(id = null, uniqueId = null) {
     categoria_id: document.getElementById('f-fin-cat').value || null,
     notas: document.getElementById('f-fin-notas').value,
     afecta_caja: document.getElementById('f-fin-afecta-caja')?.value === 'true',
-    incluir_en_mes: incluirEnMes,
     taller_id: tid()
   };
 
+  let movimientoId = id;
   let error;
   if (id) {
     const res = await sb.from('movimientos_financieros').update(data).eq('id', id);
     error = res.error;
   } else {
-    const res = await sb.from('movimientos_financieros').insert(data);
+    const res = await sb.from('movimientos_financieros').insert(data).select('id').single();
     error = res.error;
+    if (!error && res.data) movimientoId = res.data.id;
   }
     
   if (error) { toast('Error: ' + error.message, 'error'); return; }
+  
+  // Guardar relaciones con balances
+  if (movimientoId) {
+    // Obtener balances seleccionados (si uniqueId existe, usar clase específica; si no, checkbox genérico)
+    let balancesSeleccionados = [];
+    if (uniqueId) {
+      const checkboxes = document.querySelectorAll(`.bal-check-${uniqueId}:checked`);
+      balancesSeleccionados = Array.from(checkboxes).map(cb => cb.value);
+    } else {
+      // Para edición, usamos checkboxes con clase genérica (se setean en modalEditar)
+      const checkboxes = document.querySelectorAll('.bal-check-editar:checked');
+      balancesSeleccionados = Array.from(checkboxes).map(cb => cb.value);
+    }
+    
+    // Eliminar relaciones anteriores
+    await sb.from('movimiento_balance').delete().eq('movimiento_id', movimientoId);
+    
+    // Insertar nuevas relaciones
+    if (balancesSeleccionados.length > 0) {
+      const inserts = balancesSeleccionados.map(balanceId => ({
+        movimiento_id: movimientoId,
+        balance_id: balanceId
+      }));
+      await sb.from('movimiento_balance').insert(inserts);
+    }
+  }
   
   toast(id ? 'Movimiento actualizado' : 'Movimiento guardado', 'success');
   clearCache('finanzas');
   closeModal();
   
-  // Refrescar la lista de Finanzas después de un pequeño retraso
   setTimeout(() => {
     finanzas_cargarDatos();
-    // Si estamos en el Dashboard, también refrescarlo para que los totales se actualicen
     if (currentPage === 'dashboard' && typeof dashboard === 'function') {
       dashboard();
     }
@@ -344,9 +376,16 @@ async function finanzas_guardar(id = null, uniqueId = null) {
 }
 
 async function finanzas_modalEditar(id) {
-  const { data: m } = await sb.from('movimientos_financieros').select('*').eq('id', id).single();
+  const [{ data: m }, { data: cats }, { data: balances }, { data: relaciones }] = await Promise.all([
+    sb.from('movimientos_financieros').select('*').eq('id', id).single(),
+    sb.from('categorias_financieras').select('id,nombre').eq('taller_id', tid()).or(`tipo.eq.ingreso,tipo.eq.egreso,tipo.eq.ambos`).order('nombre'),
+    sb.from('balances').select('id,nombre,color').eq('taller_id', tid()).order('nombre'),
+    sb.from('movimiento_balance').select('balance_id').eq('movimiento_id', id)
+  ]);
   if (!m) return;
-  const { data: cats } = await sb.from('categorias_financieras').select('id,nombre').eq('taller_id', tid()).or(`tipo.eq.${m.tipo},tipo.eq.ambos`).order('nombre');
+  
+  const balancesAsignados = new Set((relaciones||[]).map(r => r.balance_id));
+  
   openModal(`
     <div class="modal-title">Editar ${m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</div>
     <input type="hidden" id="f-fin-tipo" value="${m.tipo}">
@@ -358,7 +397,7 @@ async function finanzas_modalEditar(id) {
     <div class="form-group"><label class="form-label">Categoría</label>
       <select class="form-input" id="f-fin-cat">
         <option value="">Sin categoría</option>
-        ${(cats||[]).map(c => `<option value="${c.id}" ${c.id===m.categoria_id?'selected':''}>${h(c.nombre)}</option>`).join('')}
+        ${cats.map(c => `<option value="${c.id}" ${c.id===m.categoria_id?'selected':''}>${h(c.nombre)}</option>`).join('')}
       </select>
     </div>
     <div class="form-group"><label class="form-label">¿Afecta caja?</label>
@@ -368,9 +407,17 @@ async function finanzas_modalEditar(id) {
       </select>
     </div>
     <div class="form-group">
-      <label class="form-label" style="display:flex;align-items:center;gap:.5rem;">
-        <input type="checkbox" id="f-fin-incluir-mes-editar" ${m.incluir_en_mes !== false ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent);"> 📊 Incluir en balance mensual
-      </label>
+      <label class="form-label">Balances (podés marcar varios)</label>
+      <div style="max-height:150px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.5rem;background:var(--surface2)">
+        ${balances.map(b => `
+          <label style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;cursor:pointer">
+            <input type="checkbox" class="bal-check-editar" value="${b.id}" ${balancesAsignados.has(b.id) ? 'checked' : ''} style="accent-color:${b.color||'var(--accent)'}">
+            <span style="display:inline-block;width:12px;height:12px;border-radius:4px;background:${b.color||'var(--accent)'};margin-right:4px"></span>
+            ${h(b.nombre)}
+          </label>
+        `).join('')}
+        ${balances.length === 0 ? '<p style="color:var(--text2);font-size:.8rem;padding:.3rem">No hay balances. Creá uno en Configuración.</p>' : ''}
+      </div>
     </div>
     <div class="form-group"><label class="form-label">Notas</label>${renderNotasTextarea('f-fin-notas', m.notas)}</div>
     <button class="btn-primary" onclick="event.stopPropagation(); window.finanzas_guardarConSafeCall('${id}')">Actualizar</button>
@@ -381,6 +428,7 @@ async function finanzas_modalEditar(id) {
 async function finanzas_eliminarConSafeCall(id) {
   confirmar('¿Eliminar este movimiento?', async () => {
     await safeCall(async () => {
+      await sb.from('movimiento_balance').delete().eq('movimiento_id', id);
       await sb.from('movimientos_financieros').delete().eq('id', id);
       toast('Eliminado', 'success');
       clearCache('finanzas');
@@ -395,7 +443,7 @@ async function finanzas_eliminarConSafeCall(id) {
   });
 }
 
-// ─── CATEGORÍAS ─────────────────────────────────────────────────────────────
+// Categorías (sin cambios relevantes)
 async function finanzas_modalCategorias() {
   const { data: cats } = await sb.from('categorias_financieras').select('*').eq('taller_id', tid()).order('tipo').order('nombre');
   openModal(`
@@ -457,7 +505,7 @@ async function finanzas_eliminarCat(id) {
   finanzas_modalCategorias();
 }
 
-// ========== DECLARACIONES GLOBALES FORZADAS ==========
+// ========== DECLARACIONES GLOBALES ==========
 window.finanzas = finanzas;
 window.finanzas_modalNuevo = finanzas_modalNuevo;
 window.finanzas_modalEditar = finanzas_modalEditar;
@@ -467,4 +515,4 @@ window.finanzas_eliminarConSafeCall = finanzas_eliminarConSafeCall;
 window.finanzas_modalCategorias = finanzas_modalCategorias;
 window.finanzas_aplicarRango = finanzas_aplicarRango;
 window.finanzas_setRangoRapido = finanzas_setRangoRapido;
-window.finanzas_toggleFiltroBalance = finanzas_toggleFiltroBalance;
+window.finanzas_cambiarBalance = finanzas_cambiarBalance;
