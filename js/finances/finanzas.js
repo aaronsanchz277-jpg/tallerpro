@@ -300,12 +300,6 @@ async function finanzas_modalNuevo(tipo) {
     <button class="btn-secondary" onclick="event.stopPropagation(); closeModal()">Cancelar</button>`);
 }
 
-async function finanzas_guardarConSafeCall(id = null, uniqueId = null) {
-  await safeCall(async () => {
-    await finanzas_guardar(id, uniqueId);
-  }, null, 'No se pudo guardar el movimiento');
-}
-
 async function finanzas_guardar(id = null, uniqueId = null) {
   const concepto = document.getElementById('f-fin-concepto').value.trim();
   if (!validateRequired(concepto, 'Concepto')) return;
@@ -337,18 +331,21 @@ async function finanzas_guardar(id = null, uniqueId = null) {
     
   if (error) { toast('Error: ' + error.message, 'error'); return; }
   
-  // Guardar relaciones con balances
+  // ─── Guardar relaciones con balances ─────────────────────────────────────
   if (movimientoId) {
-    // Obtener balances seleccionados (si uniqueId existe, usar clase específica; si no, checkbox genérico)
+    // Obtener todos los checkboxes de balances marcados
     let balancesSeleccionados = [];
     if (uniqueId) {
+      // Modal nuevo: clase específica
       const checkboxes = document.querySelectorAll(`.bal-check-${uniqueId}:checked`);
       balancesSeleccionados = Array.from(checkboxes).map(cb => cb.value);
     } else {
-      // Para edición, usamos checkboxes con clase genérica (se setean en modalEditar)
+      // Modal edición: clase genérica
       const checkboxes = document.querySelectorAll('.bal-check-editar:checked');
       balancesSeleccionados = Array.from(checkboxes).map(cb => cb.value);
     }
+    
+    console.log('Balances seleccionados:', balancesSeleccionados); // Para depurar
     
     // Eliminar relaciones anteriores
     await sb.from('movimiento_balance').delete().eq('movimiento_id', movimientoId);
@@ -359,7 +356,8 @@ async function finanzas_guardar(id = null, uniqueId = null) {
         movimiento_id: movimientoId,
         balance_id: balanceId
       }));
-      await sb.from('movimiento_balance').insert(inserts);
+      const { error: relError } = await sb.from('movimiento_balance').insert(inserts);
+      if (relError) console.error('Error guardando balances:', relError);
     }
   }
   
