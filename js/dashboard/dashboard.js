@@ -106,6 +106,16 @@ function renderDashboardKPIs(stats, config) {
   return html;
 }
 
+// Variable global para el balance seleccionado en el Dashboard
+let _dashboardBalanceId = localStorage.getItem('dashboard_balance_id') || '';
+
+async function dashboard_cambiarBalance(balanceId) {
+  _dashboardBalanceId = balanceId;
+  localStorage.setItem('dashboard_balance_id', balanceId);
+  await dashboard();
+}
+window.dashboard_cambiarBalance = dashboard_cambiarBalance;
+
 async function dashboard() {
   const rol = currentPerfil?.rol;
   const tallerNombre = currentPerfil?.talleres?.nombre || 'Tu Taller';
@@ -114,17 +124,42 @@ async function dashboard() {
   const hoy = fechaHoy();
   const primerMes = primerDiaMes();
 
-  const { data: stats, error, fromCache } = await cachedQuery('dash_stats', () => 
-    sb.rpc('get_dashboard_stats', { p_taller_id: tid() })
-  );
+  // Obtener estadísticas básicas + stats con balance seleccionado
+  const [statsRes, statsBalanceRes, balancesRes] = await Promise.all([
+    cachedQuery('dash_stats_base', () => sb.rpc('get_dashboard_stats', { p_taller_id: tid() })),
+    sb.rpc('get_dashboard_stats_balance', { 
+      p_taller_id: tid(), 
+      p_balance_id: _dashboardBalanceId || null 
+    }),
+    sb.from('balances').select('id,nombre,color').eq('taller_id', tid()).order('nombre')
+  ]);
   
-  if (error) {
-    console.error('Error cargando dashboard:', error);
+  const stats = statsRes.data || {};
+  const statsBalance = statsBalanceRes.data || {};
+  const balances = balancesRes.data || [];
+  
+  if (statsRes.error) {
+    console.error('Error cargando dashboard:', statsRes.error);
     document.getElementById('main-content').innerHTML = `<div class="empty"><p>${t('errorCargarDashboard')}</p></div>`;
     return;
   }
 
+  // Combinar stats: usamos los valores base, pero reemplazamos ingresos_mes con el valor filtrado
+  const ingresosMesFiltrado = statsBalance.ingresos_mes || 0;
+  const gananciaNeta = statsBalance.ganancia_neta || 0;
+  
   const kpiConfig = await cargarDashboardConfig();
+  
+  // Construir opciones del selector de balances
+  const opcionesBalance = [
+    { id: '', nombre: 'Todos los balances', color: '#888' },
+    ...balances
+  ];
+  const balanceSelectHtml = `
+    <select id="dashboard-balance-select" onchange="dashboard_cambiarBalance(this.value)" style="background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:.25rem .75rem;font-size:.7rem;color:var(--text);cursor:pointer;margin-left:.5rem;">
+      ${opcionesBalance.map(b => `<option value="${b.id}" ${(_dashboardBalanceId === b.id) ? 'selected' : ''}>💰 ${h(b.nombre)}</option>`).join('')}
+    </select>
+  `;
 
   const totalClientes = stats.total_clientes || 0;
   const totalVehiculos = stats.total_vehiculos || 0;
@@ -137,33 +172,9 @@ async function dashboard() {
   const vehiculosSemana = stats.vehiculos_semana || 0;
   const vehiculosMes = stats.vehiculos_mes || 0;
 
-  // ─── Obtener ganancia neta y egresos desde get_balance_mensual para mostrarlos ───
-  let gananciaNeta = 0;
-  let egresosMesFiltrado = 0;
-  let ingresosMesFiltrado = stats.ingresos_mes || 0;
-
-  if (currentPerfil?.rol === 'admin') {
-    try {
-      const { data: balanceMensual } = await sb.rpc('get_balance_mensual', {
-        p_taller_id: tid(),
-        p_fecha_inicio: primerMes,
-        p_fecha_fin: hoy
-      });
-      
-      if (balanceMensual) {
-        ingresosMesFiltrado = balanceMensual.total_ingresos || 0;
-        egresosMesFiltrado = balanceMensual.total_egresos || 0;
-        gananciaNeta = balanceMensual.balance_neto || 0;
-      }
-    } catch (e) {
-      console.warn('Error obteniendo balance mensual filtrado:', e);
-    }
-  }
-
-  // Actualizamos stats para los KPIs que se muestran
+  // Actualizar stats para los KPIs
   stats.ingresos_mes = ingresosMesFiltrado;
   stats.ganancia_neta = gananciaNeta;
-  stats.stock_bajo = alertasStock;
 
   let deudoresHTML = '';
   if (currentPerfil?.rol === 'admin') {
@@ -258,7 +269,7 @@ async function dashboard() {
     <div style="padding:.25rem 0 .75rem">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.15rem">
         <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text)">${h(tallerNombre)}</div>
-        <div style="display:flex;gap:.3rem">
+        <div style="display:flex;gap:.3rem;align-items:center">
           ${typeof getTemaToggle === 'function' ? getTemaToggle() : ''}
           ${currentPerfil?.rol === 'admin' ? `<button onclick="modalConfigurarKPIs()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v16h16"/><path d="m9 12 2 2 4-4"/></svg>
@@ -266,11 +277,12 @@ async function dashboard() {
           ${currentPerfil?.rol === 'admin' ? `<button onclick="modalConfigDatos()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>` : ''}
+          ${balanceSelectHtml}
         </div>
       </div>
       <div style="font-size:.75rem;color:var(--text2);margin-bottom:1rem">${t('bienvenido')}, ${h(currentPerfil?.nombre || '')}</div>`;
 
-  if (fromCache) {
+  if (statsRes.fromCache) {
     html += `<div id="cache-indicator" style="background:var(--warning);color:#000;padding:2px 8px;border-radius:20px;font-size:.65rem;margin-bottom:.5rem;display:inline-block;display:flex;align-items:center;gap:4px;">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
       ${t('dashDatosEnCache')}
@@ -352,24 +364,12 @@ async function dashboard() {
         <div>
           <div style="font-size:.72rem;color:var(--text2);letter-spacing:1px;font-family:var(--font-head)">${t('dashIngresosMes')}</div>
           <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--success)">₲${gs(ingresosMesFiltrado)}</div>
-          <div style="font-size:.7rem;color:var(--text2);margin-top:.2rem">Ingresos del mes (filtrado)</div>
+          <div style="font-size:.7rem;color:var(--text2);margin-top:.2rem">${_dashboardBalanceId ? 'Balance seleccionado' : 'Todos los balances'}</div>
         </div>
         <div style="font-size:2rem;">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         </div>
       </div>
-      ${egresosMesFiltrado > 0 || gananciaNeta !== 0 ? `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
-        <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:.75rem;cursor:pointer" onclick="navigate('gastos')">
-          <div style="font-size:.68rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px">${t('dashGastosMes')}</div>
-          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:var(--danger)">₲${gs(egresosMesFiltrado)}</div>
-        </div>
-        <div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem">
-          <div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">${t('dashGananciaNeta')}</div>
-          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${gananciaNeta >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(gananciaNeta)}</div>
-        </div>
-      </div>
-      ` : ''}
       ` : ''}
 
       ${deudoresHTML}
@@ -493,7 +493,6 @@ async function reportes() {
   const ganMes = (repsMes||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
   const totalCréditos = (creditosPend||[]).reduce((s,f)=>s+parseFloat(f.monto||0),0);
 
-  // Para reportes también usamos el balance mensual filtrado desde movimientos_financieros
   let ingresosTotalMes = ganMes;
   let gananciaNeta = ganMes;
   
@@ -606,5 +605,4 @@ async function reportes() {
     </div>`;
 }
 
-// Asegurar disponibilidad global para navigation.js
 window.reportes = reportes;
