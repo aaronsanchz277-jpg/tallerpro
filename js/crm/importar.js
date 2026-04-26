@@ -240,6 +240,11 @@ async function validarYResumirImport() {
     const { headers, rows, mapping } = _importState;
 
     // Chequear que al menos haya un campo "ancla" mapeado.
+    // Decisión deliberada (no es bug): aceptamos importar SOLO clientes
+    // o SOLO vehículos. Un Excel real puede ser una agenda de clientes
+    // sin patentes, o un parque automotor sin dueños cargados; obligar a
+    // mapear ambos rompería esos casos. Cuando aparecen los dos en la
+    // misma fila, los vinculamos automáticamente.
     const fieldsMapeados = Object.values(mapping);
     const hayNombre = fieldsMapeados.includes('nombre');
     const hayPatente = fieldsMapeados.includes('patente');
@@ -353,9 +358,14 @@ async function validarYResumirImport() {
         if (rucN && idxCliPorRuc.has(rucN)) existente = idxCliPorRuc.get(rucN);
         else if (telN && idxCliPorTel.has(telN)) existente = idxCliPorTel.get(telN);
 
-        // Buscar duplicado intra-Excel (mismo dueño aparece en varias filas).
-        const intraKey = rucN ? `r:${rucN}` : (telN ? `t:${telN}` : `n:${_normHeader(nombre)}`);
-        if (!existente && clientesNuevosKey.has(intraKey)) {
+        // Buscar duplicado intra-Excel — SOLO si tenemos un identificador
+        // fuerte (RUC o teléfono). Fusionar por nombre es peligroso: dos
+        // "Juan Pérez" del mismo barrio terminarían como un solo cliente
+        // mezclando vehículos. Si solo hay nombre, cada fila va como
+        // cliente nuevo y el admin ya puede mergear manualmente después
+        // si quiere.
+        const intraKey = rucN ? `r:${rucN}` : (telN ? `t:${telN}` : null);
+        if (!existente && intraKey && clientesNuevosKey.has(intraKey)) {
           clienteIdParaVehiculo = clientesNuevosKey.get(intraKey);
         } else if (existente) {
           clienteIdParaVehiculo = existente.id;
@@ -364,7 +374,7 @@ async function validarYResumirImport() {
           const newId = crypto.randomUUID();
           const cli = { id: newId, taller_id: tallerId, nombre, telefono: telefono || null, email: email || null, ruc: ruc || null };
           clientesNuevos.push(cli);
-          clientesNuevosKey.set(intraKey, newId);
+          if (intraKey) clientesNuevosKey.set(intraKey, newId);
           // También indexamos por tel/ruc para que la próxima fila con mismo tel/ruc lo reuse.
           if (telN) idxCliPorTel.set(telN, { id: newId, nombre });
           if (rucN) idxCliPorRuc.set(rucN, { id: newId, nombre });
