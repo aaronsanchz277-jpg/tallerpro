@@ -2,6 +2,14 @@
 const PUSH_STORAGE_KEY = 'tallerpro_push_enabled';
 let _pushCheckTimer = null;
 
+// Namespace de keys de notif por usuario para evitar cross-account bleed en
+// dispositivos compartidos (un usuario logueándose después de otro veía el
+// snapshot del anterior y podía perder o repetir notificaciones).
+function _pushKey(base) {
+  const uid = (typeof currentUser !== 'undefined' && currentUser?.id) || 'anon';
+  return base + '_' + uid;
+}
+
 async function pushRequestPermission() {
   if (!('Notification' in window)) {
     toast('Tu navegador no soporta notificaciones', 'error');
@@ -127,7 +135,7 @@ async function pushCheckMisReps() {
     if (!reps || reps.length === 0) return;
 
     // Snapshot anterior por reparación: { estado, aprobacion_cliente, costo }.
-    const prev = JSON.parse(localStorage.getItem('tallerpro_notif_misreps') || '{}');
+    const prev = JSON.parse(localStorage.getItem(_pushKey('tallerpro_notif_misreps')) || '{}');
     const next = {};
     let cambiosNotificados = 0;
 
@@ -149,7 +157,7 @@ async function pushCheckMisReps() {
       }
     });
 
-    localStorage.setItem('tallerpro_notif_misreps', JSON.stringify(next));
+    localStorage.setItem(_pushKey('tallerpro_notif_misreps'), JSON.stringify(next));
   }, null, 'Error verificando mis reparaciones');
 }
 
@@ -170,7 +178,7 @@ async function pushCheckMisCitas() {
       .limit(20);
     if (!citas || citas.length === 0) return;
 
-    const prev = JSON.parse(localStorage.getItem('tallerpro_notif_miscitas') || '{}');
+    const prev = JSON.parse(localStorage.getItem(_pushKey('tallerpro_notif_miscitas')) || '{}');
     const next = {};
     let n = 0;
     citas.forEach(c => {
@@ -188,7 +196,7 @@ async function pushCheckMisCitas() {
         }
       }
     });
-    localStorage.setItem('tallerpro_notif_miscitas', JSON.stringify(next));
+    localStorage.setItem(_pushKey('tallerpro_notif_miscitas'), JSON.stringify(next));
   }, null, 'Error verificando mis turnos');
 }
 
@@ -215,7 +223,7 @@ async function pushCheckMisPresupuestos() {
     if (pptos.length === 0) return;
 
     // Snapshot { id: estado }. Solo notificamos cambios sobre estados ya vistos.
-    const prev = JSON.parse(localStorage.getItem('tallerpro_notif_mispresup') || '{}');
+    const prev = JSON.parse(localStorage.getItem(_pushKey('tallerpro_notif_mispresup')) || '{}');
     const next = {};
     let n = 0;
     pptos.forEach(p => {
@@ -228,7 +236,7 @@ async function pushCheckMisPresupuestos() {
         n++;
       }
     });
-    localStorage.setItem('tallerpro_notif_mispresup', JSON.stringify(next));
+    localStorage.setItem(_pushKey('tallerpro_notif_mispresup'), JSON.stringify(next));
   }, null, 'Error verificando mis presupuestos');
 }
 
