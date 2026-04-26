@@ -117,34 +117,40 @@ function palette_render(q) {
     <div style="font-family:var(--font-head);font-size:.65rem;color:var(--text2);letter-spacing:1.5px;margin:.5rem 0 .3rem">${titulo}</div>
     ${arr.map(render).join('')}` : '';
 
+  // El highlight (highlightMatch) ya hace match literal y compacto (ignora
+  // `-` y espacios), así que pasamos el término tal cual y también resalta
+  // patentes formateadas como AB-123 cuando el usuario tipeó "ab123".
   cont.innerHTML =
     sect('CLIENTES', cli, c => palette_row({
       icon: '👤', titulo: c.nombre, sub: [c.telefono, c.ruc].filter(Boolean).join(' · '),
-      onclick: `palette_go('clientes','${hjs(c.id)}')`
+      onclick: `palette_go('clientes','${hjs(c.id)}')`, term
     })) +
     sect('VEHÍCULOS', veh, v => palette_row({
       icon: '🚗', titulo: `${v.patente || ''}${v.marca ? ' · ' + v.marca : ''}${v.modelo ? ' ' + v.modelo : ''}`,
       sub: v.clientes?.nombre || '',
-      onclick: `palette_go('vehiculos','${hjs(v.id)}')`
+      onclick: `palette_go('vehiculos','${hjs(v.id)}')`, term
     })) +
     sect('TRABAJOS', reps, r => palette_row({
       icon: '🔧', titulo: r.descripcion || 'Trabajo',
       sub: `${r.vehiculos?.patente || ''}${r.clientes ? ' · ' + r.clientes.nombre : ''}${r.fecha ? ' · ' + formatFecha(r.fecha) : ''}`,
-      onclick: `palette_go('reparaciones','${hjs(r.id)}')`
+      onclick: `palette_go('reparaciones','${hjs(r.id)}')`, term
     })) +
     sect('REPUESTOS', inv, i => palette_row({
       icon: '📦', titulo: i.nombre,
       sub: `${i.codigo ? '#' + i.codigo + ' · ' : ''}${i.zona ? '📍 ' + i.zona + ' · ' : ''}${(i.cantidad ?? 0)} en stock`,
-      onclick: `palette_go('inventario','${hjs(i.id)}')`
+      onclick: `palette_go('inventario','${hjs(i.id)}')`, term
     }));
 }
 
-function palette_row({ icon, titulo, sub, onclick }) {
+function palette_row({ icon, titulo, sub, onclick, term }) {
+  // Si hay término, resaltamos las coincidencias (escapado seguro adentro).
+  const tituloHtml = term ? hh(titulo, term) : h(titulo);
+  const subHtml = sub ? (term ? hh(sub, term) : h(sub)) : '';
   return `<div class="palette-item" onclick="${onclick}" style="display:flex;gap:.6rem;align-items:center;padding:.55rem .65rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:.35rem;cursor:pointer">
     <div style="width:32px;height:32px;border-radius:8px;background:rgba(0,229,255,.08);display:flex;align-items:center;justify-content:center;flex-shrink:0">${icon}</div>
     <div style="flex:1;min-width:0">
-      <div style="font-size:.85rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(titulo)}</div>
-      ${sub ? `<div style="font-size:.7rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(sub)}</div>` : ''}
+      <div style="font-size:.85rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tituloHtml}</div>
+      ${sub ? `<div style="font-size:.7rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${subHtml}</div>` : ''}
     </div>
     <div style="color:var(--text2);font-size:1rem;flex-shrink:0">→</div>
   </div>`;

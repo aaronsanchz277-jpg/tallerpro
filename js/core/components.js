@@ -228,11 +228,16 @@ function comboboxFilter(id, q) {
     cont.style.display = 'block';
     return;
   }
-  cont.innerHTML = list.map(it => `
-    <div onclick="comboboxPick('${id}','${hjs(String(it.id))}','${hjs(it.label || '')}')" style="padding:.5rem .65rem;cursor:pointer;border-bottom:1px solid var(--border);font-size:.85rem" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-      <div>${h(it.label || '')}</div>
-      ${it.sub ? `<div style="font-size:.7rem;color:var(--text2);margin-top:1px">${h(it.sub)}</div>` : ''}
-    </div>`).join('');
+  cont.innerHTML = list.map(it => {
+    const lbl = it.label || '';
+    const labelHtml = term ? hh(lbl, term) : h(lbl);
+    const subHtml = it.sub ? (term ? hh(it.sub, term) : h(it.sub)) : '';
+    return `
+    <div onclick="comboboxPick('${id}','${hjs(String(it.id))}','${hjs(lbl)}')" style="padding:.5rem .65rem;cursor:pointer;border-bottom:1px solid var(--border);font-size:.85rem" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <div>${labelHtml}</div>
+      ${it.sub ? `<div style="font-size:.7rem;color:var(--text2);margin-top:1px">${subHtml}</div>` : ''}
+    </div>`;
+  }).join('');
   cont.style.display = 'block';
 }
 
