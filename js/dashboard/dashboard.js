@@ -376,6 +376,29 @@ async function dashboard() {
       ${cuentasVencidasHTML}
       ${ultimosMovimientosHTML}
 
+      ${(() => {
+        // "Recientes" del usuario: clientes y trabajos vistos por última vez
+        // (de localStorage). Permite saltar de un toque sin volver a buscar.
+        const recCli = (typeof getRecientes === 'function' ? getRecientes('clientes', 5) : []) || [];
+        const recRep = (typeof getRecientes === 'function' ? getRecientes('reparaciones', 5) : []) || [];
+        if (recCli.length === 0 && recRep.length === 0) return '';
+        const chip = (icon, titulo, sub, onclick) => `
+          <div onclick="${onclick}" style="display:flex;align-items:center;gap:.55rem;padding:.55rem .65rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;cursor:pointer;min-width:200px;flex:1">
+            <div style="width:30px;height:30px;border-radius:8px;background:rgba(0,229,255,.08);display:flex;align-items:center;justify-content:center;flex-shrink:0">${icon}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.82rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(titulo)}</div>
+              ${sub ? `<div style="font-size:.65rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(sub)}</div>` : ''}
+            </div>
+          </div>`;
+        const all = [
+          ...recCli.map(c => chip('👤', c.nombre || 'Cliente', c.telefono || '', `detalleCliente('${hjs(c.id)}')`)),
+          ...recRep.map(r => chip('🔧', r.descripcion || 'Trabajo', r.patente || '', `detalleReparacion('${hjs(r.id)}')`)),
+        ];
+        return `
+          <div style="font-family:var(--font-head);font-size:.9rem;color:var(--text2);margin:.4rem 0 .5rem;letter-spacing:2px">RECIENTES</div>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem">${all.join('')}</div>`;
+      })()}
+
       <div style="font-family:var(--font-head);font-size:.9rem;color:var(--text2);margin-bottom:.6rem;letter-spacing:2px">${t('dashRecientes')}</div>
       ${recientes.length === 0 ? `<div class="empty"><p>${t('dashSinReps')}</p></div>` :
         recientes.map(r => `

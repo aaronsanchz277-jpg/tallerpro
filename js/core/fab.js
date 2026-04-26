@@ -137,12 +137,15 @@ async function fab_cobrarReparacion() {
   `);
 
   try {
+    // Ordenamos por fecha ascendente: las reparaciones más viejas con saldo
+    // pendiente aparecen primero (es lo que el taller necesita cobrar antes).
     const { data } = await sb.from('reparaciones')
       .select('id,descripcion,costo,fecha,estado,vehiculos(patente,marca),clientes(nombre)')
       .eq('taller_id', tid())
       .neq('estado', 'cancelado')
-      .order('created_at', { ascending: false })
-      .limit(80);
+      .gt('costo', 0)
+      .order('fecha', { ascending: true })
+      .limit(150);
 
     const reps = data || [];
     if (reps.length === 0) {
@@ -208,19 +211,31 @@ function fab_cobrarReparacion_filtrar(q) {
     return;
   }
 
-  cont.innerHTML = lista.map(r => `
+  // "Días sin cobrar" desde la fecha de la reparación: ayuda a priorizar las
+  // deudas más antiguas en el panel del FAB.
+  const hoy = new Date();
+  cont.innerHTML = lista.map(r => {
+    let diasTxt = '';
+    if (r.fecha) {
+      const f = new Date(r.fecha);
+      const dias = Math.max(0, Math.floor((hoy - f) / 86400000));
+      const color = dias >= 30 ? 'var(--danger)' : dias >= 7 ? 'var(--warning)' : 'var(--text2)';
+      diasTxt = `<span style="color:${color};font-weight:600">⏱ ${dias}d sin cobrar</span>`;
+    }
+    return `
     <div onclick="fab_cobrarRep_seleccionar('${r.id}')" style="display:flex;align-items:center;gap:.6rem;padding:.55rem .65rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:.4rem;cursor:pointer">
       <div style="width:36px;height:36px;border-radius:8px;background:rgba(0,229,255,.08);display:flex;align-items:center;justify-content:center;color:var(--accent);font-family:var(--font-head);font-size:.78rem;flex-shrink:0">${h((r.patente||'').slice(0,5)) || '—'}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.descripcion || 'Reparación')}</div>
         <div style="font-size:.68rem;color:var(--text2)">#${r.idCorto} · ${h(r.cliente)} · ${h(r.marca)} ${r.fecha ? '· '+formatFecha(r.fecha) : ''}</div>
+        ${diasTxt ? `<div style="font-size:.65rem;margin-top:2px">${diasTxt}</div>` : ''}
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-family:var(--font-head);font-size:.85rem;color:${r.saldo > 0 ? 'var(--danger)' : 'var(--success)'}">${r.saldo > 0 ? 'Saldo ₲'+gs(r.saldo) : '✓ Pagado'}</div>
         <div style="font-size:.65rem;color:var(--text2)">de ₲${gs(r.costo)}</div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 function fab_cobrarRep_seleccionar(id) {

@@ -110,6 +110,16 @@ async function eliminarCitaConSafeCall(id) {
   });
 }
 
+// Atajo desde la ficha del cliente: abre "nueva cita" con cliente preseleccionado.
+async function quickAgendarCita(clienteId) {
+  await modalNuevaCita();
+  setTimeout(() => {
+    const sel = document.getElementById('f-cliente');
+    if (sel) sel.value = clienteId;
+  }, 80);
+}
+window.quickAgendarCita = quickAgendarCita;
+
 async function modalNuevaCita() {
   const [{ data:vehs }, { data:cls }, { data:config }] = await Promise.all([
     sb.from('vehiculos').select('id,patente,marca').eq('taller_id',tid()).order('patente'),

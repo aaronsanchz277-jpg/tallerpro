@@ -266,3 +266,57 @@ hay, ofrece reusarlo en lugar de crear un duplicado.
    constraints UNIQUE adicionales, para permitir override consciente
    del admin (ej. dos personas distintas con el mismo número, o dos
    vehículos compartiendo patente vieja). No requiere correr SQL.
+
+## Buscador global y atajos de navegación (Tarea #25)
+
+Para que el equipo del taller llegue a cualquier ficha en pocos toques
+sin tener que recorrer pantallas:
+
+1. **Command palette / buscador global** (`js/core/palette.js`).
+   Modal único que busca clientes, vehículos, trabajos e inventario en
+   vivo. Se abre con la tecla `/` desde cualquier vista (ignora cuando
+   el foco está en un input/textarea) y desde el botón "Buscar" del
+   bottom-nav. Si el campo está vacío muestra "Recientes" (clientes y
+   trabajos abiertos previamente). Solo lo ven `admin` y `empleado`.
+
+2. **Recientes** (`recordReciente` / `getRecientes` en
+   `js/core/components.js`). Cada vez que se abre la ficha de un
+   cliente (`detalleCliente`) o de un trabajo (`detalleReparacion`) se
+   guarda en `localStorage` (`tp_recientes_clientes_<tallerId>` y
+   `tp_recientes_reparaciones_<tallerId>`, máx. 10). El dashboard y el
+   palette muestran las 4–5 últimas como chips clicables.
+
+3. **Combobox autocompletar reusable** (`renderComboboxAuto` en
+   `js/core/components.js`). Input visible + lista filtrada en vivo +
+   `<input type="hidden">` con el id elegido. Reemplaza al `<select>`
+   nativo en el wizard de "nueva reparación" (paso 1: cliente, paso 2:
+   vehículo) para escribir y filtrar en lugar de scrollear.
+
+4. **Atajos en la ficha del cliente** (`js/crm/clientes.js`). Tres
+   botones nuevos: "🔧 Nuevo trabajo" (abre el wizard saltando el paso 1
+   con el cliente preseleccionado), "📅 Agendar turno"
+   (`quickAgendarCita` → `modalNuevaCita` con cliente preseteado) y
+   "💰 Cobrar fiado" (visible solo si tiene saldo pendiente).
+
+5. **Filtros en lista de trabajos** (`js/workshop/reparaciones-list.js`).
+   - Selector de mecánico arriba de las pestañas (admin/empleado).
+   - Pestaña rápida "⏱ +7d" → fuerza `estado=esperando_repuestos` con
+     `updated_at < hoy-7d`.
+   - Cada tarjeta `esperando_repuestos` muestra "⏱ X días esperando"
+     en amarillo (≥7d) o rojo (≥14d), calculado desde `updated_at`.
+
+6. **Cobrar reparación priorizado** (`fab_cobrarReparacion` en
+   `js/core/fab.js`). Ahora ordena por fecha ascendente (deudas más
+   antiguas primero) y muestra "⏱ Xd sin cobrar" en cada fila para que
+   el cobrador identifique de un vistazo lo que más urge.
+
+7. **Badges en sidebar** (`cargarBadgesNav` en
+   `js/navigation/navigation.js`). Carga asíncrona de contadores:
+   - **Admin** → "Solicitudes" muestra perfiles cliente sin vincular +
+     turnos pendientes.
+   - **Cliente** → "Mis presupuestos" suma presupuestos `generado` +
+     reparaciones con `aprobacion_cliente=pendiente`; "Mis turnos"
+     muestra citas confirmadas futuras.
+
+No requiere correr SQL nuevo. Todas las consultas usan tablas
+existentes y respetan RLS.

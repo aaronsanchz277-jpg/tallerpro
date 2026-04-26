@@ -9,6 +9,16 @@ async function detalleReparacion(id) {
   const { data: r, error: qErr } = await safeQuery(() => sb.from('reparaciones').select('*, vehiculos(patente,marca,modelo), clientes(nombre,telefono)').eq('id', id).single());
   if (!r) { if (qErr) toast('Error al cargar reparación', 'error'); navigate('reparaciones'); return; }
 
+  // Guardamos el trabajo en "recientes" (localStorage) para que aparezca rápido
+  // en el dashboard y en el buscador global.
+  if (typeof recordReciente === 'function') {
+    recordReciente('reparaciones', {
+      id: r.id,
+      descripcion: r.descripcion,
+      patente: r.vehiculos?.patente || ''
+    });
+  }
+
   const isAdmin = currentPerfil?.rol === 'admin';
   const canEdit = ['admin', 'empleado'].includes(currentPerfil?.rol);
   const isCliente = currentPerfil?.rol === 'cliente';

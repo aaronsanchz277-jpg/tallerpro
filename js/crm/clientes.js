@@ -45,6 +45,13 @@ async function detalleCliente(id) {
     c = results[0].data; veh = results[1].data; reps = results[2].data; creditos = results[3].data; citas = results[4].data; mants = results[5].data;
   } catch(e) { toast('Error al cargar cliente','error'); navigate('clientes'); return; }
   if (!c) { toast('Cliente no encontrado','error'); navigate('clientes'); return; }
+
+  // Lo guardamos en "recientes" (localStorage) para que aparezca en el dashboard
+  // y en el buscador global sin volver a pegar a la red.
+  if (typeof recordReciente === 'function') {
+    recordReciente('clientes', { id: c.id, nombre: c.nombre, telefono: c.telefono });
+  }
+
   const totalCrédito = (creditos||[]).reduce((s,f) => s+parseFloat(f.monto||0),0);
   const isAdmin = currentPerfil?.rol === 'admin';
   const canEdit = ['admin','empleado'].includes(currentPerfil?.rol);
@@ -69,7 +76,13 @@ async function detalleCliente(id) {
       ${totalCrédito > 0 ? `<div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:8px;padding:.4rem .6rem;font-size:.72rem;color:var(--danger)">⚠ Debe ₲${gs(totalCrédito)}</div>` : ''}
     </div>` : ''}
 
-    ${canEdit ? `<div style="display:flex;gap:.5rem;margin-bottom:1rem">
+    ${canEdit ? `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.4rem;margin-bottom:.6rem">
+      <button class="btn-secondary" style="margin:0" onclick="modalNuevaReparacionSimple({cliente_id:'${hjs(id)}'})">🔧 Nuevo trabajo</button>
+      <button class="btn-secondary" style="margin:0" onclick="quickAgendarCita('${hjs(id)}')">📅 Agendar turno</button>
+      ${totalCrédito > 0 ? `<button class="btn-secondary" style="margin:0;color:var(--warning);border-color:rgba(255,193,7,.4)" onclick="navigate('creditos')">💰 Cobrar fiado</button>` : ''}
+    </div>
+    <div style="display:flex;gap:.5rem;margin-bottom:1rem">
       <button class="btn-secondary" style="margin:0" onclick="modalEditarCliente('${id}')">${t('editarBtn')}</button>
       ${isAdmin ? `<button class="btn-danger" style="margin:0" onclick="eliminarCliente('${id}')">${t('eliminarBtn')}</button>` : ''}
       ${c.telefono ? `<button onclick="window.open('https://wa.me/595${c.telefono.replace(/\D/g,'')}')" style="flex:1;background:rgba(37,211,102,.15);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:10px;padding:.5rem;font-family:var(--font-head);font-size:.85rem;cursor:pointer">💬 WhatsApp</button>` : ''}

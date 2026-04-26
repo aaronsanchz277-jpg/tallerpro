@@ -108,12 +108,17 @@ function buildNav() {
     ]});
   }
 
-  // RENDER BOTTOM NAV
+  // RENDER BOTTOM NAV (+ botón "Buscar" para staff: dispara command palette)
+  const buscarBtn = (rol === 'admin' || rol === 'empleado') ? `
+    <button class="nav-btn" onclick="palette_open && palette_open()" id="nav-buscar" title="Buscar (atajo: /)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Buscar
+    </button>` : '';
   document.getElementById('bottom-nav').innerHTML = bottomItems.map(n => `
     <button class="nav-btn" onclick="navigate('${n.id}')" id="nav-${n.id}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${n.icon}</svg>
       ${n.label}
-    </button>`).join('');
+    </button>`).join('') + buscarBtn;
 
   // RENDER SIDEBAR
   const nombre = currentPerfil?.nombre || '';
@@ -128,9 +133,72 @@ function buildNav() {
       ${section.items.map(item => `
         <button onclick="closeSidebar();${item.onclick || `navigate('${item.id}')`}" id="side-${item.id}" style="width:100%;display:flex;align-items:center;gap:.65rem;padding:.55rem .75rem;background:none;border:none;cursor:pointer;border-radius:10px;transition:background .15s;text-align:left" onmouseover="this.style.background='rgba(0,229,255,.06)'" onmouseout="this.style.background='none'">
           <svg viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="1.5" width="18" height="18">${item.icon}</svg>
-          <span style="font-size:.85rem;color:var(--text);font-weight:400">${item.label}</span>
+          <span style="font-size:.85rem;color:var(--text);font-weight:400;flex:1">${item.label}</span>
+          <span id="badge-${item.id}" style="display:none"></span>
         </button>`).join('')}
     </div>`).join('');
+
+  // Cargar contadores en background (no bloquea el render del menú)
+  setTimeout(() => { try { cargarBadgesNav(); } catch(_){} }, 0);
+}
+
+// ─── BADGES DE CONTADOR EN SIDEBAR/BOTTOM-NAV ───────────────────────────────
+// Carga asíncrona de pendientes para que el usuario vea de un vistazo qué le
+// queda por revisar sin tener que entrar a cada sección.
+async function cargarBadgesNav() {
+  const rol = currentPerfil?.rol;
+  const tallerId = tid();
+  if (!tallerId) return;
+
+  if (rol === 'admin') {
+    try {
+      const [pendientes, turnos] = await Promise.all([
+        sb.from('perfiles').select('id', { count: 'exact', head: true })
+          .eq('taller_id', tallerId).eq('rol', 'cliente').is('cliente_id', null),
+        sb.from('citas').select('id', { count: 'exact', head: true })
+          .eq('taller_id', tallerId).eq('estado', 'pendiente'),
+      ]);
+      const total = (pendientes.count || 0) + (turnos.count || 0);
+      pintarBadgeNav('side-solicitudes', total, 'var(--warning)');
+    } catch (_) { /* silencioso */ }
+  }
+
+  if (rol === 'cliente') {
+    try {
+      const { data: perfil } = await sb.from('perfiles')
+        .select('cliente_id').eq('id', currentUser.id).maybeSingle();
+      if (!perfil?.cliente_id) return;
+
+      const [pptosV2, repsPend, citasConf] = await Promise.all([
+        sb.from('presupuestos_v2').select('id', { count: 'exact', head: true })
+          .eq('cliente_id', perfil.cliente_id).eq('estado', 'generado'),
+        sb.from('reparaciones').select('id', { count: 'exact', head: true })
+          .eq('cliente_id', perfil.cliente_id).eq('aprobacion_cliente', 'pendiente').gt('costo', 0),
+        sb.from('citas').select('id', { count: 'exact', head: true })
+          .eq('cliente_id', perfil.cliente_id)
+          .eq('estado', 'confirmada')
+          .gte('fecha', new Date().toISOString().split('T')[0]),
+      ]);
+
+      const pptosTotal = (pptosV2.count || 0) + (repsPend.count || 0);
+      pintarBadgeNav('side-mis-presupuestos', pptosTotal, 'var(--warning)');
+      pintarBadgeNav('side-mis-citas', citasConf.count || 0, 'var(--accent)');
+    } catch (_) { /* silencioso */ }
+  }
+}
+
+function pintarBadgeNav(buttonId, count, color = 'var(--accent)') {
+  const btn = document.getElementById(buttonId);
+  if (!btn) return;
+  const span = btn.querySelector(`#badge-${buttonId.replace('side-', '')}`);
+  if (!span) return;
+  if (!count || count <= 0) {
+    span.style.display = 'none';
+    span.textContent = '';
+    return;
+  }
+  span.style.cssText = `display:inline-block;background:${color};color:#000;font-family:var(--font-head);font-size:.65rem;font-weight:700;padding:1px 7px;border-radius:10px;min-width:18px;text-align:center`;
+  span.textContent = count > 99 ? '99+' : String(count);
 }
 
 function openSidebar() {

@@ -158,6 +158,121 @@ function renderNotasTextarea(id, value = '', rows = 2) {
   return `<textarea class="form-input" id="${id}" rows="${rows}" placeholder="Observaciones...">${h(value)}</textarea>`;
 }
 
+// ─── RECIENTES (localStorage) ───────────────────────────────────────────────
+// Memoria local (por taller) de los últimos clientes/reparaciones tocados.
+// Usado por el dashboard ("Recientes") y el command palette para sugerir
+// resultados sin pegarle a la red.
+function _recientesKey(tipo) {
+  const t = tid() || 'global';
+  return `tp_recientes_${tipo}_${t}`;
+}
+function recordReciente(tipo, item) {
+  if (!item || !item.id) return;
+  try {
+    const key = _recientesKey(tipo);
+    const lista = JSON.parse(localStorage.getItem(key) || '[]');
+    const filtrada = lista.filter(x => x.id !== item.id);
+    filtrada.unshift({ ...item, _ts: Date.now() });
+    localStorage.setItem(key, JSON.stringify(filtrada.slice(0, 10)));
+  } catch (_) { /* localStorage lleno o bloqueado */ }
+}
+function getRecientes(tipo, limit = 5) {
+  try {
+    const lista = JSON.parse(localStorage.getItem(_recientesKey(tipo)) || '[]');
+    return lista.slice(0, limit);
+  } catch (_) { return []; }
+}
+
+// ─── COMBOBOX AUTOCOMPLETAR (reusable) ──────────────────────────────────────
+// Input visible + lista filtrada en vivo + hidden con el id elegido.
+// items: [{ id, label, sub?, hidden? (string para búsqueda extra) }]
+// onChange (opcional): nombre de función global a invocar cuando cambia el id.
+function renderComboboxAuto(id, items, { placeholder = 'Buscar...', selectedId = null, allowEmpty = true, onChange = null } = {}) {
+  const sel = items.find(i => String(i.id) === String(selectedId));
+  const valLabel = sel ? sel.label : '';
+  window._comboboxData = window._comboboxData || {};
+  window._comboboxData[id] = { items, onChange, allowEmpty };
+  return `<div style="position:relative" data-combo="${id}">
+    <input type="text" class="form-input" id="${id}-search" autocomplete="off"
+      value="${h(valLabel)}" placeholder="${h(placeholder)}"
+      oninput="comboboxFilter('${id}', this.value)"
+      onfocus="comboboxFilter('${id}', this.value)"
+      onkeydown="comboboxKey('${id}', event)">
+    <input type="hidden" id="${id}" value="${h(selectedId || '')}">
+    <div id="${id}-results" style="display:none;position:absolute;z-index:50;left:0;right:0;top:100%;margin-top:2px;max-height:220px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:0 0 10px 10px;box-shadow:0 6px 18px rgba(0,0,0,.35)"></div>
+  </div>`;
+}
+
+function comboboxFilter(id, q) {
+  const cfg = (window._comboboxData || {})[id];
+  if (!cfg) return;
+  const cont = document.getElementById(id + '-results');
+  if (!cont) return;
+  const term = (q || '').trim().toLowerCase();
+  const list = cfg.items.filter(it => {
+    if (!term) return true;
+    const haystack = `${it.label || ''} ${it.sub || ''} ${it.hidden || ''}`.toLowerCase();
+    return haystack.includes(term);
+  }).slice(0, 30);
+  // Si el texto coincide exactamente con un label, marcamos hidden
+  const hidden = document.getElementById(id);
+  if (hidden) {
+    const exact = cfg.items.find(it => (it.label || '').toLowerCase() === term);
+    hidden.value = exact ? exact.id : '';
+    if (cfg.onChange) {
+      try { window[cfg.onChange] && window[cfg.onChange](hidden.value); } catch(_){}
+    }
+  }
+  if (list.length === 0) {
+    cont.innerHTML = `<div style="padding:.55rem .65rem;font-size:.78rem;color:var(--text2)">Sin coincidencias</div>`;
+    cont.style.display = 'block';
+    return;
+  }
+  cont.innerHTML = list.map(it => `
+    <div onclick="comboboxPick('${id}','${hjs(String(it.id))}','${hjs(it.label || '')}')" style="padding:.5rem .65rem;cursor:pointer;border-bottom:1px solid var(--border);font-size:.85rem" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <div>${h(it.label || '')}</div>
+      ${it.sub ? `<div style="font-size:.7rem;color:var(--text2);margin-top:1px">${h(it.sub)}</div>` : ''}
+    </div>`).join('');
+  cont.style.display = 'block';
+}
+
+function comboboxPick(id, value, label) {
+  const cfg = (window._comboboxData || {})[id] || {};
+  const search = document.getElementById(id + '-search');
+  const hidden = document.getElementById(id);
+  const results = document.getElementById(id + '-results');
+  if (search) search.value = label;
+  if (hidden) hidden.value = value;
+  if (results) results.style.display = 'none';
+  if (cfg.onChange) {
+    try { window[cfg.onChange] && window[cfg.onChange](value); } catch(_){}
+  }
+}
+
+function comboboxKey(id, ev) {
+  if (ev.key === 'Escape') {
+    const r = document.getElementById(id + '-results');
+    if (r) r.style.display = 'none';
+  } else if (ev.key === 'Enter') {
+    const r = document.getElementById(id + '-results');
+    if (r && r.style.display !== 'none') {
+      const first = r.querySelector('div[onclick]');
+      if (first) { first.click(); ev.preventDefault(); }
+    }
+  }
+}
+
+// Cierra resultados al hacer click afuera del combobox
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('[data-combo]').forEach(box => {
+    if (!box.contains(e.target)) {
+      const id = box.getAttribute('data-combo');
+      const r = document.getElementById(id + '-results');
+      if (r) r.style.display = 'none';
+    }
+  });
+});
+
 const originalOfflineInsert = offlineInsert;
 offlineInsert = async function(table, data) {
   const result = await originalOfflineInsert(table, data);

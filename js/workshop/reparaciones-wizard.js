@@ -3,14 +3,21 @@ let _wizardStep = 1;
 let _wizardData = { cliente_id: null, vehiculo_id: null, patente_nueva: '', descripcion: '', costo: 0 };
 
 function wizardRenderPaso1() {
+  // Combobox autocompletar (input visible + hidden con id) en lugar de un
+  // <select> nativo: en talleres con muchos clientes, escribir es más rápido
+  // que scrollear por todo el listado.
+  const items = (window._wizardClientes || []).map(c => ({
+    id: c.id,
+    label: c.nombre + (c.telefono ? ' · ' + c.telefono : ''),
+    sub: c.telefono || '',
+    hidden: c.telefono || ''
+  }));
   return `
     <div style="text-align:center;padding:.5rem 0">
       <div style="font-size:3rem;margin-bottom:.5rem">👤</div>
       <div style="font-family:var(--font-head);font-size:1.2rem;color:var(--accent);margin-bottom:1rem">Seleccionar cliente</div>
-      <div class="form-group">
-        <select class="form-input" id="wizard-cliente" style="font-size:1rem;padding:.8rem">
-          <option value="">Buscar cliente...</option>
-        </select>
+      <div class="form-group" style="text-align:left">
+        ${renderComboboxAuto('wizard-cliente', items, { placeholder: 'Tipeá nombre o teléfono...' })}
       </div>
       <div style="margin-top:.5rem">
         <button onclick="wizardToggleNuevoCliente()" style="background:none;border:1px dashed var(--border);color:var(--text2);border-radius:8px;padding:.5rem;width:100%;font-size:.8rem;cursor:pointer">+ Agregar cliente nuevo</button>
@@ -28,14 +35,19 @@ function wizardRenderPaso1() {
 }
 
 function wizardRenderPaso2() {
+  const vehiculos = window._wizardVehiculosCliente || [];
+  const items = vehiculos.map(v => ({
+    id: v.id,
+    label: `${v.patente} · ${v.marca || ''} ${v.modelo || ''}`.trim(),
+    sub: '',
+    hidden: v.patente || ''
+  }));
   return `
     <div style="text-align:center;padding:.5rem 0">
       <div style="font-size:3rem;margin-bottom:.5rem">🚙</div>
       <div style="font-family:var(--font-head);font-size:1.2rem;color:var(--accent);margin-bottom:1rem">Seleccionar vehículo</div>
-      <div class="form-group">
-        <select class="form-input" id="wizard-vehiculo" style="font-size:1rem;padding:.8rem">
-          <option value="">Seleccionar vehículo...</option>
-        </select>
+      <div class="form-group" style="text-align:left">
+        ${renderComboboxAuto('wizard-vehiculo', items, { placeholder: 'Tipeá patente o marca...' })}
       </div>
       <div style="margin-top:.5rem">
         <button onclick="wizardToggleNuevoVehiculo()" style="background:none;border:1px dashed var(--border);color:var(--text2);border-radius:8px;padding:.5rem;width:100%;font-size:.8rem;cursor:pointer">+ Agregar vehículo nuevo</button>
@@ -79,7 +91,31 @@ function updateWizardDots(step) {
   });
 }
 
-async function modalNuevaReparacionSimple() {
+// preset: { cliente_id } para arrancar directo en el paso 2 (vehículo).
+async function modalNuevaReparacionSimple(preset = null) {
+  // Precargamos clientes ANTES de pintar para que el combobox tenga datos.
+  window._wizardClientes = await getClientes();
+
+  if (preset && preset.cliente_id) {
+    // Si nos llaman desde la ficha del cliente, saltamos el paso 1 y vamos
+    // directo al paso 2 con el cliente ya elegido.
+    window._wizardStep = 2;
+    window._wizardData = { cliente_id: preset.cliente_id, vehiculo_id: null, patente_nueva: '', descripcion: '', costo: 0 };
+    const vehiculos = await getVehiculos();
+    window._wizardVehiculosCliente = vehiculos.filter(v => v.cliente_id === preset.cliente_id);
+    const cli = window._wizardClientes.find(c => c.id === preset.cliente_id);
+    openModal(`
+      <div class="modal-title" style="text-align:center">Nuevo trabajo${cli ? ' · ' + h(cli.nombre) : ''}</div>
+      <div id="wizard-content">${wizardRenderPaso2()}</div>
+      <div style="display:flex;justify-content:center;gap:.3rem;margin-top:.5rem">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--border)"></span>
+      </div>
+    `);
+    return;
+  }
+
   window._wizardStep = 1;
   window._wizardData = { cliente_id: null, vehiculo_id: null, patente_nueva: '', descripcion: '', costo: 0 };
 
@@ -92,42 +128,50 @@ async function modalNuevaReparacionSimple() {
       <span style="width:8px;height:8px;border-radius:50%;background:var(--border)"></span>
     </div>
   `);
-
-  const clientes = await getClientes();
-  const selCliente = document.getElementById('wizard-cliente');
-  if (selCliente) {
-    selCliente.innerHTML = '<option value="">Buscar cliente...</option>' + 
-      clientes.map(c => `<option value="${c.id}">${h(c.nombre)}${c.telefono ? ' · ' + c.telefono : ''}</option>`).join('');
-  }
 }
 
 function wizardToggleNuevoCliente() {
   const div = document.getElementById('wizard-nuevo-cliente');
-  if (div) {
-    div.style.display = div.style.display === 'none' ? 'block' : 'none';
-    const sel = document.getElementById('wizard-cliente');
-    if (sel) sel.disabled = div.style.display === 'block';
+  if (!div) return;
+  div.style.display = div.style.display === 'none' ? 'block' : 'none';
+  // Limpia el combobox cuando expandimos el bloque de "cliente nuevo" para
+  // que no quede un id viejo seleccionado.
+  if (div.style.display === 'block') {
+    const search = document.getElementById('wizard-cliente-search');
+    const hidden = document.getElementById('wizard-cliente');
+    if (search) { search.value = ''; search.disabled = true; }
+    if (hidden) hidden.value = '';
+  } else {
+    const search = document.getElementById('wizard-cliente-search');
+    if (search) search.disabled = false;
   }
 }
 
 function wizardToggleNuevoVehiculo() {
   const div = document.getElementById('wizard-nuevo-vehiculo');
-  if (div) {
-    div.style.display = div.style.display === 'none' ? 'block' : 'none';
-    const sel = document.getElementById('wizard-vehiculo');
-    if (sel) sel.disabled = div.style.display === 'block';
+  if (!div) return;
+  div.style.display = div.style.display === 'none' ? 'block' : 'none';
+  if (div.style.display === 'block') {
+    const search = document.getElementById('wizard-vehiculo-search');
+    const hidden = document.getElementById('wizard-vehiculo');
+    if (search) { search.value = ''; search.disabled = true; }
+    if (hidden) hidden.value = '';
+  } else {
+    const search = document.getElementById('wizard-vehiculo-search');
+    if (search) search.disabled = false;
   }
 }
 
 async function wizardNextStep() {
   const step = window._wizardStep;
-  
+
   if (step === 1) {
-    const selCliente = document.getElementById('wizard-cliente');
-    const clienteId = selCliente ? selCliente.value : null;
+    // El combobox guarda el id en el <input type="hidden"> con el mismo id.
+    const hiddenCliente = document.getElementById('wizard-cliente');
+    const clienteId = hiddenCliente ? hiddenCliente.value : null;
     const nombreNuevoInput = document.getElementById('wizard-nombre-cliente');
     const nombreNuevo = nombreNuevoInput ? nombreNuevoInput.value.trim() : '';
-    
+
     if (!clienteId && !nombreNuevo) {
       toast('Seleccioná un cliente o creá uno nuevo', 'error');
       return;
@@ -168,22 +212,16 @@ async function wizardNextStep() {
       window._wizardData.cliente_id = clienteId;
     }
     
+    // Cargamos vehículos del cliente y re-renderizamos paso 2 ya con los items.
+    const vehiculos = await getVehiculos();
+    window._wizardVehiculosCliente = vehiculos.filter(v => v.cliente_id === window._wizardData.cliente_id);
     window._wizardStep = 2;
     const content = document.getElementById('wizard-content');
     if (content) content.innerHTML = wizardRenderPaso2();
-    
-    const vehiculos = await getVehiculos();
-    const vehiculosCliente = vehiculos.filter(v => v.cliente_id === window._wizardData.cliente_id);
-    const selVehiculo = document.getElementById('wizard-vehiculo');
-    if (selVehiculo) {
-      selVehiculo.innerHTML = '<option value="">Seleccionar vehículo...</option>' +
-        vehiculosCliente.map(v => `<option value="${v.id}">${h(v.patente)} · ${h(v.marca)} ${h(v.modelo||'')}</option>`).join('');
-    }
-    
     updateWizardDots(2);
   } else if (step === 2) {
-    const selVehiculo = document.getElementById('wizard-vehiculo');
-    const vehiculoId = selVehiculo ? selVehiculo.value : null;
+    const hiddenVehiculo = document.getElementById('wizard-vehiculo');
+    const vehiculoId = hiddenVehiculo ? hiddenVehiculo.value : null;
     const patenteInput = document.getElementById('wizard-patente');
     const patenteNueva = normalizarPatente(patenteInput ? patenteInput.value : '');
     const marcaInput = document.getElementById('wizard-marca');
