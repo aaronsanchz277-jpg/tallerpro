@@ -293,7 +293,8 @@ function showApp() {
     buildNav();
     if (currentPerfil?.rol !== 'cliente') ia_init();
     if (typeof pushInit === 'function') pushInit();
-    if (typeof realtime_init === 'function') realtime_init();  // <-- AÑADIR ESTA LÍNEA
+    if (typeof realtime_init === 'function') realtime_init();
+    if (typeof stockRealtime_init === 'function') stockRealtime_init();
     navigate('dashboard');
   });
 }
@@ -402,16 +403,17 @@ async function handleAuth() {
       const { data, error } = await sb.auth.signUp({ email, password: pass });
       if (error) throw new Error(error.message);
       if (!data.user) throw new Error('Error al crear la cuenta');
-      
-      const { data: taller, error: tallerErr } = await sb.from('talleres').insert({ nombre: tallerNombre, telefono: tallerTel }).select().single();
-      if (tallerErr || !taller) throw new Error('Error al crear el taller: ' + (tallerErr?.message || ''));
-      
-      const { error: perfilErr } = await sb.from('perfiles').insert({ id: data.user.id, nombre, rol: 'admin', taller_id: taller.id });
-      if (perfilErr) throw new Error('Error al crear el perfil: ' + perfilErr.message);
 
-      const trialEnd = new Date(); trialEnd.setDate(trialEnd.getDate() + 14);
-      await sb.from('suscripciones').insert({ taller_id: taller.id, plan_id: 'premium', estado: 'trial', fecha_vencimiento: trialEnd.toISOString().split('T')[0] });
-      
+      const { data: result, error: rpcError } = await sb.rpc('crear_taller_y_admin', {
+        p_user_id:         data.user.id,
+        p_nombre:          nombre,
+        p_taller_nombre:   tallerNombre,
+        p_taller_telefono: tallerTel
+      });
+      if (rpcError || !result?.ok) {
+        throw new Error(result?.error || rpcError?.message || 'Error al crear el taller');
+      }
+
       const { data: loginData, error: loginErr } = await sb.auth.signInWithPassword({ email, password: pass });
       if (loginErr) {
         toast('¡Taller creado! Ingresá con tu email y contraseña.', 'success');
@@ -477,6 +479,31 @@ async function cambiarContrasena() {
 
 async function logout() {
   _loggedOutOnce = true;
+
+  // ─── Cleanup de recursos antes de cerrar sesión ──────────────────────────
+  // Realtime: evita que el canal siga vivo con otro usuario
+  if (typeof realtime_desconectar === 'function') {
+    try { realtime_desconectar(); } catch (e) {}
+  }
+  if (typeof stockRealtime_desconectar === 'function') {
+    try { stockRealtime_desconectar(); } catch (e) {}
+  }
+  // Push: detener el timer de chequeos periódicos
+  if (typeof _pushCheckTimer !== 'undefined' && _pushCheckTimer) {
+    clearInterval(_pushCheckTimer);
+    _pushCheckTimer = null;
+  }
+  // Modo taller: limpiar intervals y clase del body si quedaron activos
+  if (typeof _modoTallerInterval !== 'undefined' && _modoTallerInterval) {
+    clearInterval(_modoTallerInterval); _modoTallerInterval = null;
+  }
+  if (typeof _modoTallerRelojInterval !== 'undefined' && _modoTallerRelojInterval) {
+    clearInterval(_modoTallerRelojInterval); _modoTallerRelojInterval = null;
+  }
+  document.body.classList.remove('modo-taller');
+  // Resetear página actual para evitar fugas entre sesiones
+  if (typeof currentPage !== 'undefined') currentPage = null;
+
   currentUser = null;
   currentPerfil = null;
   currentSuscripcion = null;
@@ -546,7 +573,7 @@ async function superAdminPanel() {
             </div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
               <span class="card-badge ${sub?.estado==='activa'?'badge-green':sub?.estado==='trial'?'badge-yellow':sub?.estado==='vencida'?'badge-red':'badge-blue'}">${sub?estadoLabel[sub.estado]||'?':'SIN PLAN'}</span>
-              <button onclick="modalGestionarTaller('${taller.id}','${h(taller.nombre)}')" style="font-size:.65rem;background:var(--accent);color:#000;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-weight:600">Gestionar</button>
+              <button onclick="modalGestionarTaller('${taller.id}','${hjs(taller.nombre)}')" style="font-size:.65rem;background:var(--accent);color:#000;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-weight:600">Gestionar</button>
             </div>
           </div>
         </div>`;
@@ -662,4 +689,4 @@ async function guardarConfigDatos() {
   toast('Taller actualizado','success');
   closeModal();
   navigate('dashboard');
-} 
+}
