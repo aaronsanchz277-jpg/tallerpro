@@ -448,11 +448,15 @@ async function handleAuth() {
       } else {
         // Sin código: trigger anti-escalada en perfiles solo permite insertar
         // rol='cliente' sin taller_id ni cliente_id. Es exactamente lo que necesitamos.
-        await sb.from('perfiles').upsert({
+        const { error: upsertErr } = await sb.from('perfiles').upsert({
           id: data.user.id,
           nombre,
           rol: 'cliente'
         });
+        if (upsertErr) {
+          console.error('[soy-cliente] upsert perfil falló:', upsertErr);
+          throw new Error('No pudimos crear tu perfil. Probá de nuevo o pedile el código al taller.');
+        }
         // Guardamos teléfono en metadata del usuario (no requiere columna nueva).
         if (telefono) {
           try { await sb.auth.updateUser({ data: { telefono } }); } catch(_) {}
