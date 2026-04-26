@@ -1676,9 +1676,14 @@ ALTER TABLE talleres ADD COLUMN IF NOT EXISTS pais           TEXT NOT NULL DEFAU
 ALTER TABLE talleres ADD COLUMN IF NOT EXISTS setup_completado       timestamptz;
 ALTER TABLE talleres ADD COLUMN IF NOT EXISTS setup_pasos_pendientes jsonb;
 
--- Marcar talleres preexistentes como completados (solo la primera vez).
+-- Marcar talleres preexistentes como completados.
+-- IMPORTANTE: la fecha de corte es FIJA (la fecha del deploy de Tarea #62).
+-- Antes usábamos `NOW() - INTERVAL '1 minute'` pero eso era inseguro: si la
+-- migración se reaplica meses después, podía auto-completar talleres
+-- legítimamente nuevos. Con la fecha fija, re-correr este script es 100%
+-- idempotente: solo afecta a los que ya existían el día del deploy.
 UPDATE talleres
-   SET setup_completado = COALESCE(created_at, NOW())
+   SET setup_completado = COALESCE(created_at, '2026-04-26'::timestamptz)
  WHERE setup_completado IS NULL
    AND created_at IS NOT NULL
-   AND created_at < NOW() - INTERVAL '1 minute';
+   AND created_at < '2026-04-26'::timestamptz;

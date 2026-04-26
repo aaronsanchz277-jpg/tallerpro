@@ -852,6 +852,16 @@ Disparador: `iniciarAsistenteSetup()` se llama desde `showApp()` con
 guardado en `setup_pasos_pendientes`, retoma desde el primer pendiente
 en lugar de empezar de cero.
 
+Navegación: además de "Siguiente" y "Saltar", desde el paso 2 en
+adelante hay un botón "← Atrás" para revisar/corregir lo que ya se
+cargó. No re-persiste; el estado del paso anterior ya quedó guardado
+cuando avanzamos.
+
+Migración segura ante re-aplicaciones: el `UPDATE` que marca talleres
+preexistentes usa una **fecha fija** (`'2026-04-26'::timestamptz`) en
+vez de `NOW() - INTERVAL '1 minute'`. Así, si el SQL se reaplica
+meses después, talleres legítimamente nuevos NO se auto-completan.
+
 Banner de éxito al final: pantalla completa con dos botones — uno
 primario "🔧 Cargá tu primer trabajo" que abre directamente
 `modalNuevaReparacionSimple()` del wizard de reparaciones, y uno

@@ -188,6 +188,7 @@ function _setupRender() {
           ${esUltimo ? '✅ Terminar' : 'Siguiente →'}
         </button>
         ${!esDatos ? `<button class="btn-secondary" onclick="_setupSaltar()">Saltar este paso</button>` : ''}
+        ${_setupIdx > 0 ? `<button class="btn-secondary" onclick="_setupAtras()" style="background:transparent;border:1px solid var(--border);color:var(--text2)">← Atrás</button>` : ''}
       </div>
 
       <div style="text-align:center;font-size:.68rem;color:var(--text2);padding:.5rem 0 1rem">
@@ -483,6 +484,15 @@ async function _setupSaltar() {
   }
 }
 
+// Volver al paso anterior. No se persiste (el estado del paso anterior
+// ya quedó guardado cuando avanzamos), solo navegamos hacia atrás. Si
+// está en el primer paso, no hace nada (el botón ni se renderiza).
+function _setupAtras() {
+  if (_setupIdx <= 0) return;
+  _setupIdx--;
+  _setupRender();
+}
+
 // ─── FINALIZACIÓN ───────────────────────────────────────────────────────────
 // El estado ya se persistió tras el último paso, así que solo cerramos el
 // modal y mostramos el banner final con el CTA pedido por la spec
@@ -668,6 +678,7 @@ window.reanudarAsistenteSetup           = reanudarAsistenteSetup;
 window.getSetupPendienteCard            = getSetupPendienteCard;
 window._setupSiguiente                  = _setupSiguiente;
 window._setupSaltar                     = _setupSaltar;
+window._setupAtras                      = _setupAtras;
 window._setupInstalarPWA                = _setupInstalarPWA;
 window._setupAbrirSoloPaso              = _setupAbrirSoloPaso;
 window._setupCerrarBanner               = _setupCerrarBanner;
