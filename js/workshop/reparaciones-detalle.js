@@ -3,7 +3,6 @@
 // - TIPO_ICONS (de reparaciones-core.js)
 // - cargarItemsReparacion, renderItemsReparacion (de reparaciones-items.js)
 // - repMecanicos_cargar, repMecanicos_renderChips (de hr/mecanicos.js)
-// - obtenerCategoriaFinanciera (de finances/categorias.js)
 
 async function detalleReparacion(id) {
   const { data: r, error: qErr } = await safeQuery(() => sb.from('reparaciones').select('*, vehiculos(patente,marca,modelo), clientes(nombre,telefono)').eq('id', id).single());
