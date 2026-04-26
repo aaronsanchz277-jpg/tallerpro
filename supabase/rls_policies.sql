@@ -334,37 +334,81 @@ CREATE TRIGGER reparaciones_proteger_cliente_update_trg
 
 
 -- ---- INVENTARIO / AGENDA / MANTENIMIENTOS / PRESUPUESTOS / VENTAS ----
+-- Solo aplica el patrón genérico (filter por `taller_id`) a las tablas que
+-- realmente tengan esa columna. Las tablas hijas que heredan tenancy de su
+-- padre (p.ej. `reparacion_mecanicos` vía `reparacion_id`) tienen policies
+-- dedicadas más abajo.
 DO $$
 DECLARE
   t text;
-  -- Nombres reales verificados con `rg "from\('([a-z_]+)'" js/`. Si una
-  -- tabla no existe en este taller, IF EXISTS la salta sin error.
   staff_tables text[] := ARRAY[
     'inventario','movimientos_inventario','historial_precios','ubicaciones',
     'agenda','citas','feriados','google_calendar_tokens',
     'mantenimientos','presupuestos',
     -- 'presupuestos_v2' tiene policies dedicadas más abajo (lectura cliente).
-    'reparacion_mecanicos','reparacion_items','items_reparacion',
-    'fotos','fotos_reparacion','checklist_recepcion','checklist_plantillas',
+    'reparacion_items',
+    'checklist_recepcion','checklist_plantillas',
     'trabajos_empleado'
   ];
 BEGIN
   FOREACH t IN ARRAY staff_tables LOOP
-    -- saltar si la tabla no existe (algunos talleres no la usan todavía)
-    IF EXISTS (SELECT 1 FROM information_schema.tables
-               WHERE table_schema='public' AND table_name=t) THEN
-      EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
-      EXECUTE format('DROP POLICY IF EXISTS "%I_staff_all" ON %I', t, t);
-      EXECUTE format($f$
-        CREATE POLICY "%I_staff_all" ON %I
-          FOR ALL TO authenticated
-          USING (taller_id = public.taller_id_actual()
-                 AND public.rol_actual() IN ('admin','empleado'))
-          WITH CHECK (taller_id = public.taller_id_actual()
-                      AND public.rol_actual() IN ('admin','empleado'))
-      $f$, t, t);
+    -- saltar si la tabla no existe
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables
+                   WHERE table_schema='public' AND table_name=t) THEN
+      CONTINUE;
     END IF;
+    -- saltar si la tabla no tiene columna taller_id (se protege vía padre)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema='public' AND table_name=t AND column_name='taller_id') THEN
+      RAISE NOTICE 'Tabla % no tiene taller_id; saltando patrón genérico (debe protegerse vía padre).', t;
+      CONTINUE;
+    END IF;
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('DROP POLICY IF EXISTS "%I_staff_all" ON %I', t, t);
+    EXECUTE format($f$
+      CREATE POLICY "%I_staff_all" ON %I
+        FOR ALL TO authenticated
+        USING (taller_id = public.taller_id_actual()
+               AND public.rol_actual() IN ('admin','empleado'))
+        WITH CHECK (taller_id = public.taller_id_actual()
+                    AND public.rol_actual() IN ('admin','empleado'))
+    $f$, t, t);
   END LOOP;
+END $$;
+
+
+-- ---- REPARACION_MECANICOS (sin taller_id; herencia vía reparacion_id) ----
+-- Cada fila pertenece a una reparación; el chequeo se hace contra el
+-- taller_id de la reparación padre. Solo staff (admin/empleado) lee y escribe.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='reparacion_mecanicos') THEN
+
+    EXECUTE 'ALTER TABLE reparacion_mecanicos ENABLE ROW LEVEL SECURITY';
+
+    EXECUTE 'DROP POLICY IF EXISTS "reparacion_mecanicos_staff_all" ON reparacion_mecanicos';
+    EXECUTE $f$
+      CREATE POLICY "reparacion_mecanicos_staff_all" ON reparacion_mecanicos
+        FOR ALL TO authenticated
+        USING (
+          public.rol_actual() IN ('admin','empleado')
+          AND EXISTS (
+            SELECT 1 FROM reparaciones r
+              WHERE r.id = reparacion_mecanicos.reparacion_id
+                AND r.taller_id = public.taller_id_actual()
+          )
+        )
+        WITH CHECK (
+          public.rol_actual() IN ('admin','empleado')
+          AND EXISTS (
+            SELECT 1 FROM reparaciones r
+              WHERE r.id = reparacion_mecanicos.reparacion_id
+                AND r.taller_id = public.taller_id_actual()
+          )
+        )
+    $f$;
+  END IF;
 END $$;
 
 
