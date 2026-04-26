@@ -347,6 +347,17 @@ async function validarYResumirImport() {
         return; // omitir la fila completa
       }
 
+      // Si la patente ya existe en el sistema, omitimos la fila ENTERA —
+      // no procesamos al cliente tampoco. De lo contrario una fila como
+      // "cliente nuevo + patente ya existente" crearía un cliente
+      // fantasma sin vehículo (el vehículo no se reasigna y el cliente
+      // queda flotando). El admin que quiera cambiar el dueño del
+      // vehículo puede hacerlo manualmente desde su ficha.
+      if (patN && idxVehPorPat.has(patN)) {
+        cntVehExist++;
+        return;
+      }
+
       // ─── Resolver cliente (ya sin problemas) ───
       let clienteIdParaVehiculo = null;
       if (nombre) {
@@ -382,14 +393,8 @@ async function validarYResumirImport() {
         }
       }
 
-      // ─── Resolver vehículo (ya sin problemas) ───
+      // ─── Resolver vehículo (ya sin problemas; patente no existe en BD) ───
       if (patN) {
-        if (idxVehPorPat.has(patN)) {
-          cntVehExist++;
-          // Si la fila tiene un cliente nuevo y el vehículo existe sin propietario,
-          // NO lo reasignamos automáticamente; sería destructivo.
-          return;
-        }
         if (vehiculosNuevosKey.has(patN)) {
           // Patente repetida dentro del mismo Excel — primera gana.
           errores.push({ fila: filaNum, motivo: `Patente "${patN}" duplicada dentro del Excel (se importa la primera aparición)` });
