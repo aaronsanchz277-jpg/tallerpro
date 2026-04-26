@@ -1111,6 +1111,51 @@ END $$;
 
 
 -- =====================================================================
+-- 3.D · Asignación de responsable a citas y link inventario↔ítem (Tarea #29)
+-- =====================================================================
+-- Para que la vista "Para hoy" del empleado muestre solo SUS turnos del
+-- día y para detectar cuándo un repuesto pedido llega al stock.
+--   • citas.responsable_id → empleado a cargo del turno (opcional).
+--   • reparacion_items.inventario_id → producto del catálogo del que
+--     salió el ítem (cuando se elige "del inventario"). Permite cruzar
+--     contra movimientos_inventario tipo='entrada' para avisar cuando
+--     el repuesto que esperaba la reparación entró al stock.
+-- Ambas columnas son opcionales; el código JS hace fallback si faltan.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='citas') THEN
+    EXECUTE 'ALTER TABLE citas ADD COLUMN IF NOT EXISTS responsable_id uuid';
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
+                   WHERE table_schema='public'
+                     AND table_name='citas'
+                     AND constraint_name='citas_responsable_id_fkey') THEN
+      EXECUTE 'ALTER TABLE citas
+                 ADD CONSTRAINT citas_responsable_id_fkey
+                 FOREIGN KEY (responsable_id) REFERENCES empleados(id) ON DELETE SET NULL';
+    END IF;
+    EXECUTE 'CREATE INDEX IF NOT EXISTS citas_responsable_fecha_idx
+               ON citas (responsable_id, fecha) WHERE responsable_id IS NOT NULL';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='reparacion_items') THEN
+    EXECUTE 'ALTER TABLE reparacion_items ADD COLUMN IF NOT EXISTS inventario_id uuid';
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
+                   WHERE table_schema='public'
+                     AND table_name='reparacion_items'
+                     AND constraint_name='reparacion_items_inventario_id_fkey') THEN
+      EXECUTE 'ALTER TABLE reparacion_items
+                 ADD CONSTRAINT reparacion_items_inventario_id_fkey
+                 FOREIGN KEY (inventario_id) REFERENCES inventario(id) ON DELETE SET NULL';
+    END IF;
+    EXECUTE 'CREATE INDEX IF NOT EXISTS reparacion_items_inventario_idx
+               ON reparacion_items (inventario_id) WHERE inventario_id IS NOT NULL';
+  END IF;
+END $$;
+
+
+-- =====================================================================
 -- 4) Tabla `planes` (catálogo público)
 -- =====================================================================
 DO $$

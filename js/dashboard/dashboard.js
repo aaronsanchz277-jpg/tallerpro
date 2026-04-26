@@ -339,6 +339,18 @@ async function dashboard() {
       ${getSuscripcionBanner()}
       ${typeof getPushBanner === 'function' ? getPushBanner() : ''}
 
+      ${(currentPerfil?.rol === 'admin' || currentPerfil?.rol === 'empleado') ? `
+      <div onclick="navigate('para-hoy')" style="background:linear-gradient(145deg, rgba(0,229,255,.10), rgba(0,229,255,.04));border:1px solid rgba(0,229,255,.35);border-radius:12px;padding:.85rem 1rem;margin-bottom:1rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:.6rem">
+        <div style="display:flex;align-items:center;gap:.65rem">
+          <div style="width:38px;height:38px;border-radius:10px;background:rgba(0,229,255,.12);display:flex;align-items:center;justify-content:center;font-size:1.2rem">📋</div>
+          <div>
+            <div style="font-family:var(--font-head);font-size:.95rem;color:var(--accent)">Para hoy</div>
+            <div style="font-size:.72rem;color:var(--text2)">Tus pendientes del día en un toque</div>
+          </div>
+        </div>
+        <span style="font-size:1.1rem;color:var(--accent)">→</span>
+      </div>` : ''}
+
       <div class="search-box" style="margin-bottom:1.25rem">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input type="text" placeholder="${t('dashBuscarPatente')}" class="form-input" style="padding-left:2.5rem;text-transform:uppercase;letter-spacing:2px" oninput="buscarPatente(this.value)">

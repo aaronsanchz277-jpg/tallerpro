@@ -48,6 +48,11 @@ async function detalleCita(id) {
   if (!c) return;
   const tel = c.clientes?.telefono?.replace(/\D/g,'');
   const tallerNombre = currentPerfil?.talleres?.nombre || 'TallerPro';
+  let respNombre = '';
+  if (c.responsable_id) {
+    const { data: emp } = await sb.from('empleados').select('nombre').eq('id', c.responsable_id).maybeSingle();
+    respNombre = emp?.nombre || '';
+  }
 
   document.getElementById('main-content').innerHTML = `
     <div class="detail-header">
@@ -60,6 +65,7 @@ async function detalleCita(id) {
       <div class="info-item"><div class="label">${t('agendaHora')}</div><div class="value">${c.hora?c.hora.slice(0,5):'-'}</div></div>
       <div class="info-item"><div class="label">${t('lblCliente')}</div><div class="value">${c.clientes?h(c.clientes.nombre):'-'}</div></div>
       <div class="info-item"><div class="label">${t('lblVehiculo')}</div><div class="value">${c.vehiculos?h(c.vehiculos.patente):'-'}</div></div>
+      <div class="info-item"><div class="label">Responsable</div><div class="value">${respNombre ? h(respNombre) : '<span style="color:var(--text2)">— Sin asignar —</span>'}</div></div>
     </div>
     ${c.notas?`<div class="info-item" style="margin-bottom:1rem"><div class="label">${t('lblNotas')}</div><div class="value">${h(c.notas)}</div></div>`:''}
     <div style="display:flex;gap:.5rem;flex-wrap:wrap">
@@ -121,15 +127,17 @@ async function quickAgendarCita(clienteId) {
 window.quickAgendarCita = quickAgendarCita;
 
 async function modalNuevaCita() {
-  const [{ data:vehs }, { data:cls }, { data:config }] = await Promise.all([
+  const [{ data:vehs }, { data:cls }, { data:config }, { data:emps }] = await Promise.all([
     sb.from('vehiculos').select('id,patente,marca').eq('taller_id',tid()).order('patente'),
     sb.from('clientes').select('id,nombre').eq('taller_id',tid()).order('nombre'),
-    sb.from('config_taller').select('*').eq('taller_id',tid()).maybeSingle()
+    sb.from('config_taller').select('*').eq('taller_id',tid()).maybeSingle(),
+    sb.from('empleados').select('id,nombre').eq('taller_id',tid()).eq('activo',true).order('nombre')
   ]);
   const durDef = config?.duracion_turno || 60;
   const clienteSelect = await renderClienteSelect('f-cliente', null, true);
   const vehiculoSelect = await renderVehiculoSelect('f-vehiculo', null, null, true);
-  
+  const respDef = currentPerfil?.empleado_id || '';
+
   openModal(`
     <div class="modal-title">${t('agendaNueva')}</div>
     <div class="form-group"><label class="form-label">${t('agendaDescripcion')}</label><input class="form-input" id="f-desc" placeholder="Cambio de aceite"></div>
@@ -140,6 +148,12 @@ async function modalNuevaCita() {
     <div class="form-group"><label class="form-label">Duración (min)</label><input class="form-input" id="f-duracion" type="number" value="${durDef}" min="15" step="15"></div>
     <div class="form-group"><label class="form-label">${t('lblCliente')}</label>${clienteSelect}</div>
     <div class="form-group"><label class="form-label">${t('lblVehiculo')}</label>${vehiculoSelect}</div>
+    <div class="form-group"><label class="form-label">Responsable</label>
+      <select class="form-input" id="f-responsable">
+        <option value="">— Sin asignar —</option>
+        ${(emps||[]).map(e => `<option value="${e.id}" ${e.id===respDef?'selected':''}>${h(e.nombre)}</option>`).join('')}
+      </select>
+    </div>
     <div class="form-group"><label class="form-label">${t('lblNotas')}</label><textarea class="form-input" id="f-notas" rows="2"></textarea></div>
     <button class="btn-primary" onclick="guardarCitaConSafeCall()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
@@ -223,11 +237,21 @@ async function guardarCita() {
     duracion,
     cliente_id: document.getElementById('f-cliente').value || null,
     vehiculo_id: document.getElementById('f-vehiculo').value || null,
+    responsable_id: document.getElementById('f-responsable')?.value || null,
     notas: document.getElementById('f-notas').value,
     taller_id: tid()
   };
   
-  const { error } = await offlineInsert('citas', data);
+  let { error } = await offlineInsert('citas', data);
+  if (error) {
+    const msg = (error.message || '') + ' ' + (error.details || '') + ' ' + (error.hint || '');
+    const colMissing = /responsable_id/i.test(msg) && /column|does not exist|schema cache|undefined/i.test(msg);
+    if (colMissing) {
+      // Migración 3.D no aplicada todavía: reintentar sin el campo.
+      const { responsable_id, ...rest } = data;
+      ({ error } = await offlineInsert('citas', rest));
+    }
+  }
   if (error) { toast('Error: '+error.message,'error'); return; }
   
   toast('Cita agendada','success');

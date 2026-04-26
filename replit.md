@@ -365,3 +365,59 @@ y se le perdían". Ahora hay dos vistas únicas que centralizan todo:
 
 No requiere correr SQL nuevo. Reusa todas las tablas, triggers y
 permisos existentes.
+
+## Vista "Para hoy" personal (Tarea #29)
+
+Para que el empleado/admin entre a la app y arranque sin tener que
+cazar pestañas, hay una vista única que junta los tres pendientes más
+frecuentes del día.
+
+1. **Pantalla "Para hoy"** (`paraHoy` en `js/workshop/para-hoy.js`,
+   ruta `para-hoy`). Accesible desde:
+   - Sidebar → PRINCIPAL → "📋 Para hoy" (admin y empleado).
+   - Tarjeta destacada arriba del dashboard staff con el mismo título.
+
+2. **Tres bloques en la misma pantalla**:
+   - **Mis trabajos en curso**: reparaciones en estado `pendiente` o
+     `en_progreso` asignadas al usuario via `reparacion_mecanicos`
+     (match por `empleado_id = currentPerfil.empleado_id` o por
+     `mecanico_id = auth.uid()`, mismo criterio que `misTrabajos` y
+     `miCobro`). Cada card incluye el botón **✓ HECHO HOY** que pasa
+     la reparación a `finalizado` con un toque (`paraHoy_marcarHecho`,
+     usa `offlineUpdate` + `clearCache`). Para admin sin asignaciones
+     propias, muestra todas las reparaciones activas del taller con
+     un badge "overview taller".
+   - **Mis turnos de hoy**: `citas` con `fecha = hoy` y
+     `estado IN (pendiente, confirmada)` filtradas por
+     `responsable_id = currentPerfil.empleado_id` (empleado) o
+     mostradas todas con la etiqueta del responsable (admin). El
+     selector de responsable se completa al crear la cita
+     (`modalNuevaCita` en `js/workshop/agenda.js`), por defecto
+     proponiendo al usuario actual si está vinculado a un empleado.
+   - **Repuestos llegaron** + **Esperan repuestos**: las reparaciones
+     en `esperando_repuestos` se parten en dos. Para detectar que un
+     repuesto llegó, se cruzan los `reparacion_items` de cada
+     reparación contra `movimientos_inventario` tipo='entrada' de los
+     últimos 7 días, primero por `inventario_id` (agregado en el
+     ítem cuando se elige del inventario) y, como fallback, por
+     `descripcion` normalizada contra `inventario.nombre`. Las que
+     tienen al menos una entrada matching aparecen arriba con el
+     banner verde "📦 Llegó al stock: …, hace X días"; el resto va
+     debajo en "Esperan repuestos" con el badge "X días esperando"
+     (amarillo ≥7d, rojo ≥14d).
+
+3. **Migración de schema** (`supabase/rls_policies.sql` sección 3.D):
+   - `citas.responsable_id uuid` con FK a `empleados(id) ON DELETE
+     SET NULL` y `índice (responsable_id, fecha)`.
+   - `reparacion_items.inventario_id uuid` con FK a `inventario(id)
+     ON DELETE SET NULL` e índice parcial.
+   El JS hace fallback graceful si las columnas todavía no fueron
+   migradas (los inserts reintentan sin el campo si Postgres rechaza
+   por columna inexistente, las queries de turnos caen a "vista
+   taller-wide" y se muestra un banner de aviso al admin).
+
+Las consultas respetan RLS:
+`reparacion_mecanicos_empleado_select_own`, `citas`, `reparaciones`,
+`reparacion_items`, `movimientos_inventario`, `empleados`, `inventario`
+filtran por `taller_id` (o por `reparacion_id` para
+`reparacion_mecanicos`).

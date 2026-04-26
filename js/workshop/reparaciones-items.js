@@ -58,17 +58,28 @@ async function guardarItemReparacion(repId) {
     const precio = parseFloat(document.getElementById('item-precio').value) || 0;
     if (!validateRequired(desc, 'Descripción')) return;
     
-    const { error } = await sb.from('reparacion_items').insert({
+    const invId = document.getElementById('item-inv').value;
+    const itemRow = {
       reparacion_id: repId,
       tipo,
       descripcion: desc,
       cantidad: cant,
       precio_unitario: precio,
       taller_id: tid()
-    });
+    };
+    if (invId) itemRow.inventario_id = invId;
+    let { error } = await sb.from('reparacion_items').insert(itemRow);
+    if (error) {
+      const msg = (error.message || '') + ' ' + (error.details || '') + ' ' + (error.hint || '');
+      const colMissing = /inventario_id/i.test(msg) && /column|does not exist|schema cache|undefined/i.test(msg);
+      if (colMissing) {
+        // Migración 3.D no aplicada todavía: reintentar sin el link.
+        delete itemRow.inventario_id;
+        ({ error } = await sb.from('reparacion_items').insert(itemRow));
+      }
+    }
     if (error) { toast('Error: '+error.message,'error'); return; }
     
-    const invId = document.getElementById('item-inv').value;
     if (invId && tipo === 'producto') {
       const { data: inv } = await sb.from('inventario').select('cantidad').eq('id', invId).single();
       if (inv) {
