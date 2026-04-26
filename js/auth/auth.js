@@ -434,6 +434,17 @@ async function handleAuth() {
       if (error) throw new Error(error.message);
       if (!data.user) throw new Error('Error al crear la cuenta');
 
+      // Si el proyecto Supabase tiene "Confirm email" activado, signUp NO devuelve
+      // sesión activa: los siguientes upsert/RPC fallarían en RLS porque corren
+      // como anon. Cortamos acá con un mensaje claro; el usuario completará el
+      // setup (código del taller, datos de contacto) después de confirmar el email,
+      // vía showCodigoPrompt cuando entre por primera vez.
+      if (!data.session) {
+        switchLoginTab('login');
+        toast('Te enviamos un email para confirmar tu cuenta. Confirmalo y volvé a entrar para terminar el registro.', 'info');
+        return;
+      }
+
       if (codigo) {
         // Aplica el código → vincula el perfil con el taller (y opcionalmente con un cliente).
         const { data: result, error: rpcError } = await sb.rpc('aplicar_codigo', { p_codigo: codigo, p_user_id: data.user.id });
