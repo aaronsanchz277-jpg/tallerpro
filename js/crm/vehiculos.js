@@ -47,7 +47,20 @@ async function detalleVehiculo(id) {
   const isAdmin = currentPerfil?.rol==='admin';
   const canEdit = ['admin','empleado'].includes(currentPerfil?.rol);
   const totalGastado = (reps||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
-  const totalGanancia = (reps||[]).reduce((s,r)=>s+parseFloat(r.costo||0)-parseFloat(r.costo_repuestos||0),0);
+  // Para calcular la ganancia REAL hay que restar también lo pagado a los
+  // mecánicos asignados a cada reparación (campo `pago` en
+  // `reparacion_mecanicos`). Lo traemos en una sola query agrupado por
+  // reparación y armamos un mapa repId -> total pagado.
+  const repIds = (reps||[]).map(r => r.id);
+  const pagoMecPorRep = {};
+  if (repIds.length > 0) {
+    const { data: rmecs } = await sb.from('reparacion_mecanicos').select('reparacion_id,pago').in('reparacion_id', repIds);
+    (rmecs||[]).forEach(rm => {
+      pagoMecPorRep[rm.reparacion_id] = (pagoMecPorRep[rm.reparacion_id] || 0) + parseFloat(rm.pago || 0);
+    });
+  }
+  const gananciaDeRep = r => parseFloat(r.costo||0) - parseFloat(r.costo_repuestos||0) - (pagoMecPorRep[r.id] || 0);
+  const totalGanancia = (reps||[]).reduce((s,r)=>s+gananciaDeRep(r),0);
 
   document.getElementById('main-content').innerHTML = `
     <div class="detail-header">
@@ -72,7 +85,7 @@ async function detalleVehiculo(id) {
     <div class="sub-section">
       <div class="sub-section-title">📋 HISTORIAL COMPLETO (${(reps||[]).length + (mants||[]).length})</div>
       ${(reps||[]).length===0 && (mants||[]).length===0 ? '<p style="color:var(--text2);font-size:.85rem">Sin historial</p>' : ''}
-      ${(reps||[]).map(r => `<div class="card" style="margin-bottom:.5rem" onclick="detalleReparacion('${r.id}')"><div class="card-header"><div class="card-avatar">🔧</div><div class="card-info"><div class="card-name">${h(r.descripcion)}</div><div class="card-sub">₲${gs(r.costo)}${r.costo_repuestos?' · Ganancia: ₲'+gs(r.costo-r.costo_repuestos):''} · ${formatFecha(r.fecha)}</div></div><span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span></div></div>`).join('')}
+      ${(reps||[]).map(r => { const tieneCostos = parseFloat(r.costo_repuestos||0) > 0 || (pagoMecPorRep[r.id] || 0) > 0; return `<div class="card" style="margin-bottom:.5rem" onclick="detalleReparacion('${r.id}')"><div class="card-header"><div class="card-avatar">🔧</div><div class="card-info"><div class="card-name">${h(r.descripcion)}</div><div class="card-sub">₲${gs(r.costo)}${tieneCostos?' · Ganancia: ₲'+gs(gananciaDeRep(r)):''} · ${formatFecha(r.fecha)}</div></div><span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span></div></div>`; }).join('')}
       ${(mants||[]).map(m => `<div class="card" style="margin-bottom:.5rem"><div class="card-header"><div class="card-avatar">🛡️</div><div class="card-info"><div class="card-name">${h(m.tipo||'Mantenimiento')}</div><div class="card-sub">${m.kilometraje?m.kilometraje+' km · ':''}${m.fecha_realizado?formatFecha(m.fecha_realizado):''}</div></div><span class="card-badge badge-blue">Preventivo</span></div></div>`).join('')}
     </div>`;
 }

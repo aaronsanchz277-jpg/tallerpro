@@ -35,9 +35,17 @@ async function detalleReparacion(id) {
   const aprobLabel = aprobacion === 'aprobado' ? '✓ Aprobado' : aprobacion === 'rechazado' ? '✕ Rechazado' : '⏳ Pendiente';
 
   const items = await cargarItemsReparacion(id);
-  const { data: pagos } = await sb.from('pagos_reparacion').select('monto').eq('reparacion_id', id);
+  const [{ data: pagos }, { data: mecPagos }] = await Promise.all([
+    sb.from('pagos_reparacion').select('monto').eq('reparacion_id', id),
+    sb.from('reparacion_mecanicos').select('pago').eq('reparacion_id', id)
+  ]);
   const totalPagado = (pagos || []).reduce((s, p) => s + parseFloat(p.monto || 0), 0);
   const saldo = parseFloat(r.costo || 0) - totalPagado;
+  const totalPagoMecanicos = (mecPagos || []).reduce((s, m) => s + parseFloat(m.pago || 0), 0);
+  const costoRep = parseFloat(r.costo_repuestos || 0);
+  const cobrado = parseFloat(r.costo || 0);
+  const gananciaReal = cobrado - costoRep - totalPagoMecanicos;
+  const pctGanancia = cobrado > 0 ? Math.round((gananciaReal / cobrado) * 100) : 0;
 
   const ORIGENES_VALIDOS = ['reparaciones','mis-trabajos','mis-reparaciones','dashboard','panel-trabajo'];
   const fallbackOrigen = isCliente ? 'mis-reparaciones' : 'reparaciones';
@@ -73,15 +81,20 @@ async function detalleReparacion(id) {
         <span style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px">COBRADO AL CLIENTE</span>
         <span style="font-family:var(--font-head);font-size:1.4rem;color:var(--success)">₲${gs(r.costo)}</span>
       </div>
-      ${r.costo_repuestos && puedeVerCostos ? `
+      ${costoRep > 0 && puedeVerCostos ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border)">
         <span style="font-size:.78rem;color:var(--text2)">Repuestos gastados</span>
-        <span style="font-size:.85rem;color:var(--danger)">-₲${gs(r.costo_repuestos)}</span>
+        <span style="font-size:.85rem;color:var(--danger)">-₲${gs(costoRep)}</span>
       </div>` : ''}
-      ${r.costo_repuestos && puedeVerGanancia ? `
+      ${totalPagoMecanicos > 0 && puedeVerCostos ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border)">
-        <span style="font-size:.78rem;font-weight:600">Tu ganancia</span>
-        <span style="font-family:var(--font-head);font-size:1.1rem;color:${(r.costo - r.costo_repuestos) > 0 ? 'var(--accent)' : 'var(--danger)'}">₲${gs(r.costo - r.costo_repuestos)} <span style="font-size:.7rem;color:var(--text2)">(${r.costo > 0 ? Math.round(((r.costo - r.costo_repuestos) / r.costo) * 100) : 0}%)</span></span>
+        <span style="font-size:.78rem;color:var(--text2)">Mano de obra (mecánicos)</span>
+        <span style="font-size:.85rem;color:var(--danger)">-₲${gs(totalPagoMecanicos)}</span>
+      </div>` : ''}
+      ${(costoRep > 0 || totalPagoMecanicos > 0) && puedeVerGanancia ? `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border)">
+        <span style="font-size:.78rem;font-weight:600">Ganancia real</span>
+        <span style="font-family:var(--font-head);font-size:1.1rem;color:${gananciaReal > 0 ? 'var(--accent)' : 'var(--danger)'}">₲${gs(gananciaReal)} <span style="font-size:.7rem;color:var(--text2)">(${pctGanancia}%)</span></span>
       </div>` : ''}
       ${saldo > 0 ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border);margin-top:.4rem">
