@@ -255,12 +255,17 @@ function porCobrar_cobrarReparacion(repId) {
     return;
   }
   modalPagosReparacion(repId, null, () => {
-    if (typeof navigate === 'function' && currentPage === 'por-cobrar') {
-      porCobrar();
-    } else {
-      porCobrar();
-    }
+    porCobrar();
+    _pcRefrescarBadges();
   });
+}
+
+// Refresca los contadores del menú lateral después de cualquier cobro/pago.
+// Evita el caso "cobré pero el badge sigue mostrando el viejo número".
+function _pcRefrescarBadges() {
+  if (typeof cargarBadgesNav === 'function') {
+    setTimeout(() => { try { cargarBadgesNav(); } catch(_){} }, 0);
+  }
 }
 
 let _pcCobrandoFiado = false;
@@ -281,6 +286,7 @@ async function porCobrar_marcarFiadoPagado(fiadoId) {
       if (!actualizados || actualizados.length === 0) {
         toast('Este fiado ya estaba cobrado', 'info');
         porCobrar();
+        _pcRefrescarBadges();
         return;
       }
       // El trigger en Supabase ya inserta el ingreso en movimientos_financieros.
@@ -288,6 +294,7 @@ async function porCobrar_marcarFiadoPagado(fiadoId) {
       clearCache('finanzas');
       toast('Fiado cobrado', 'success');
       porCobrar();
+      _pcRefrescarBadges();
     }, null, 'No se pudo marcar como pagado');
   } finally {
     _pcCobrandoFiado = false;
@@ -492,6 +499,7 @@ async function porPagar_pagarCuenta(id) {
       clearCache('finanzas');
       toast('Cuenta pagada — egreso registrado', 'success');
       porPagar();
+      _pcRefrescarBadges();
     }, null, 'No se pudo marcar como pagada');
   } finally {
     _pcPagandoCuenta = false;
@@ -516,12 +524,14 @@ async function porPagar_pagarSueldo(liquidacionId) {
       if (!actualizadas || actualizadas.length === 0) {
         toast('Esta liquidación ya estaba pagada', 'info');
         porPagar();
+        _pcRefrescarBadges();
         return;
       }
       // El trigger en Supabase inserta el egreso en movimientos_financieros.
       clearCache('finanzas');
       toast('✓ Sueldo pagado', 'success');
       porPagar();
+      _pcRefrescarBadges();
     }, null, 'No se pudo registrar el pago');
   } finally {
     _pcPagandoSueldo = false;
