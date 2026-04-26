@@ -88,10 +88,11 @@ async function porCobrar() {
       .order('created_at', { ascending: true })
       .limit(FIADO_LIMIT),
     sb.from('movimientos_financieros')
-      .select('monto,tipo')
+      .select('id,monto,descripcion,referencia_tabla,created_at')
       .eq('taller_id', tallerId)
       .eq('tipo', 'ingreso')
-      .eq('fecha', hoy),
+      .eq('fecha', hoy)
+      .order('created_at', { ascending: false }),
   ]);
 
   // Si CUALQUIERA falla, preferimos mostrar error explícito antes que
@@ -196,6 +197,25 @@ async function porCobrar() {
           </div>
         </div>`;
       }).join('')}
+    ` : ''}
+
+    ${movHoy.length > 0 ? `
+      <div style="font-size:.7rem;color:var(--success);letter-spacing:1.5px;font-family:var(--font-head);margin:1.5rem 0 .5rem">
+        ✓ COBROS DE HOY (${movHoy.length})
+      </div>
+      <div style="background:rgba(0,255,136,.04);border:1px solid rgba(0,255,136,.15);border-radius:10px;padding:.4rem .6rem;margin-bottom:1rem">
+        ${movHoy.slice(0, 20).map(m => {
+          const hora = m.created_at ? new Date(m.created_at).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' }) : '';
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.35rem 0;border-bottom:1px solid rgba(0,255,136,.08)">
+            <div style="min-width:0;flex:1">
+              <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.descripcion || 'Ingreso')}</div>
+              <div style="font-size:.65rem;color:var(--text2)">${hora}${m.referencia_tabla?' · '+h(m.referencia_tabla):''}</div>
+            </div>
+            <div style="font-family:var(--font-head);color:var(--success);font-size:.85rem;flex-shrink:0;margin-left:.5rem">+₲${gs(m.monto)}</div>
+          </div>`;
+        }).join('')}
+        ${movHoy.length > 20 ? `<div style="text-align:center;font-size:.7rem;color:var(--text2);padding:.4rem 0">… y ${movHoy.length - 20} más. Ver todos en <a href="javascript:navigate('finanzas-movimientos')" style="color:var(--accent)">Movimientos</a></div>` : ''}
+      </div>
     ` : ''}
 
     ${fiados.length > 0 ? `
