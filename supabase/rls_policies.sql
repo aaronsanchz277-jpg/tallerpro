@@ -504,6 +504,17 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'Solo el admin del taller puede vincular cuentas');
   END IF;
 
+  -- Si se pasa cliente_id, validar que pertenezca al taller del admin
+  -- (evita cross-taller referential inconsistencies).
+  IF p_cliente_id IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM clientes
+        WHERE id = p_cliente_id AND taller_id = v_admin_taller
+    ) THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'Ese cliente no pertenece a tu taller');
+    END IF;
+  END IF;
+
   -- Buscar el user_id por email exacto (case-insensitive).
   SELECT id INTO v_user_id
     FROM auth.users
