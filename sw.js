@@ -1,6 +1,6 @@
 // ─── SERVICE WORKER - TallerPro ───────────────────────────────────────────────
 // Incrementar en cada deploy para invalidar caché viejo
-const CACHE_NAME = 'tallerpro-v4';
+const CACHE_NAME = 'tallerpro-v5';
 
 // Solo el shell mínimo — JS y CSS NO van aquí (se manejan network-first)
 const SHELL_URLS = [
@@ -58,9 +58,15 @@ self.addEventListener('fetch', event => {
   let pathname = '';
   try { pathname = new URL(url).pathname; } catch { return; }
 
+  // Toda navegación (incluye URLs sin extensión tipo /algo) cae al app-shell.
+  // Esto cubre rutas SPA y el caso "abro un link nuevo offline".
+  const isNavigation =
+    event.request.mode === 'navigate' ||
+    (event.request.headers.get('accept') || '').includes('text/html');
+
   const isJS   = pathname.endsWith('.js');
   const isCSS  = pathname.endsWith('.css');
-  const isHTML = pathname.endsWith('.html') || pathname.endsWith('/');
+  const isHTML = isNavigation || pathname.endsWith('.html') || pathname.endsWith('/');
 
   // ── JS y CSS: Network-first ──────────────────────────────────────────────
   if (isJS || isCSS) {
@@ -94,6 +100,12 @@ self.addEventListener('fetch', event => {
           return networkResponse;
         })
         .catch(async () => {
+          // Para navegaciones SPA a rutas no cacheadas, devolver siempre el
+          // app-shell para que la app pueda arrancar y resolver la ruta.
+          if (isNavigation) {
+            const shell = await caches.match('./index.html');
+            if (shell) return shell;
+          }
           const cached = await caches.match(event.request);
           return cached || caches.match('./index.html');
         })
