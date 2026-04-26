@@ -1682,8 +1682,11 @@ ALTER TABLE talleres ADD COLUMN IF NOT EXISTS setup_pasos_pendientes jsonb;
 -- migración se reaplica meses después, podía auto-completar talleres
 -- legítimamente nuevos. Con la fecha fija, re-correr este script es 100%
 -- idempotente: solo afecta a los que ya existían el día del deploy.
+--
+-- Cubrimos también el caso atípico `created_at IS NULL` (talleres antiguos
+-- migrados sin timestamp): los marcamos como completados con la fecha de
+-- corte para que no les aparezca el wizard.
 UPDATE talleres
    SET setup_completado = COALESCE(created_at, '2026-04-26'::timestamptz)
  WHERE setup_completado IS NULL
-   AND created_at IS NOT NULL
-   AND created_at < '2026-04-26'::timestamptz;
+   AND (created_at IS NULL OR created_at < '2026-04-26'::timestamptz);
