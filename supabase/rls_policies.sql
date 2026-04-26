@@ -1189,84 +1189,394 @@ END $$;
 
 
 -- =====================================================================
--- 3.F · Egreso atómico al pagar una cuenta a proveedor (Tarea #35)
+-- 3.F · Triggers de movimientos financieros automáticos (Tarea #44)
 -- =====================================================================
--- Antes: el cliente hacía dos pasos (UPDATE cuentas_pagar.pagada = true,
--- luego INSERT en movimientos_financieros) con rollback manual si fallaba
--- el segundo. No es a prueba de cortes de red en el medio.
+-- Estos 7 triggers ya existen y funcionan en producción desde hace
+-- tiempo. Esta sección los versiona en el repo para que un Supabase
+-- nuevo (clonado o recreado) los tenga desde el día uno.
 --
--- Ahora: un trigger AFTER UPDATE en cuentas_pagar inserta el egreso en
--- la misma transacción. Si la transición de pagada=false→true se commitea,
--- el movimiento financiero también; si falla algo, se aborta todo. Mismo
--- patrón que el trigger de liquidaciones (sueldos) y reparaciones.
+-- Reemplaza al trigger `trg_cuenta_pagar_egreso` de la Tarea #35, que
+-- se sumó al SQL sin saber que ya existía `trigger_cuenta_pagada`
+-- haciendo lo mismo. El de #35 nunca llegó a correrse en producción.
 --
--- Idempotencia: solo dispara cuando OLD.pagada IS DISTINCT FROM TRUE y
--- NEW.pagada = TRUE. Adicionalmente, el INSERT del egreso se saltea si
--- ya existe un movimiento_financieros con referencia a esta cuenta
--- (defensa para reproyecciones o reactivaciones).
+-- ---------------------------------------------------------------------
+--  Tabla origen       | Evento  | Función                                | Trigger
+--  ------------------ | ------- | -------------------------------------- | -----------------------------------
+--  cuentas_pagar      | UPDATE  | registrar_movimiento_cuenta_pagada     | trigger_cuenta_pagada
+--  liquidaciones      | UPDATE  | registrar_movimiento_sueldo            | trigger_sueldo_pagado
+--  pagos_reparacion   | INSERT  | registrar_movimiento_pago_reparacion   | trigger_pago_reparacion_movimiento
+--  gastos_taller      | INSERT  | registrar_movimiento_gasto             | trigger_gasto_movimiento
+--  ventas             | INSERT  | registrar_movimiento_venta             | trigger_venta_movimiento
+--  fiados             | INSERT  | registrar_movimiento_credito_otorgado  | trigger_credito_otorgado
+--  fiados             | UPDATE  | registrar_movimiento_pago_credito      | trigger_pago_credito
+-- ---------------------------------------------------------------------
 --
--- La categoría "Repuestos" se autocrea si no existe en ese taller, para
--- que el trigger nunca pueda fallar por catálogo faltante.
+-- Reglas para el JS:
+--
+--   1. NUNCA inserta directo en `movimientos_financieros`. La tabla
+--      existe sólo para que la lean los reportes; quien escribe son
+--      estos 7 triggers (más, en el caso de gastos manuales del admin,
+--      el INSERT en `gastos_taller` que dispara `trigger_gasto_movimiento`).
+--
+--   2. La columna correcta en `movimientos_financieros` se llama
+--      `concepto` (no `descripcion`). Insertar a mano con `descripcion`
+--      tira un error que las pantallas envuelven en try/catch silencioso
+--      → la caja no descuenta y el bug no se ve hasta el cierre del día.
+--      Tareas #43 y #48 son casos reales de este bug.
+--
+--   3. Los 7 triggers son IDEMPOTENTES vía
+--      `ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING`. Eso
+--      requiere un UNIQUE INDEX sobre esas dos columnas; lo declaramos
+--      en 3.F.0 abajo.
+--
+--   4. Los 7 triggers AUTOCREAN su categoría en `categorias_financieras`
+--      si no existe (Ventas, Reparaciones, Sueldos, Repuestos,
+--      "Cobro de créditos", "Créditos otorgados", o el nombre que venga
+--      en `gastos_taller.categoria`). Por eso no hace falta sembrar
+--      categorías al crear un taller nuevo.
+--
+--   5. Cada trigger se aplica con CREATE OR REPLACE FUNCTION + DROP
+--      TRIGGER IF EXISTS + CREATE TRIGGER, así correr este SQL en una
+--      base que ya los tiene es seguro (idempotente).
+
+
+-- 3.F.0 · UNIQUE índice sobre (referencia_id, referencia_tabla)
+-- ---------------------------------------------------------------------
+-- Sin este índice, el `ON CONFLICT` de los 7 triggers tira error. En
+-- producción el índice ya existe (los triggers funcionan), pero lo
+-- declaramos acá para que un Supabase nuevo lo tenga.
+--
+-- Postgres permite múltiples filas con NULL en columnas de un UNIQUE
+-- INDEX, así que los movimientos manuales viejos sin referencia siguen
+-- conviviendo sin problema.
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables
-             WHERE table_schema='public' AND table_name='cuentas_pagar')
-     AND EXISTS (SELECT 1 FROM information_schema.tables
-                 WHERE table_schema='public' AND table_name='movimientos_financieros')
-     AND EXISTS (SELECT 1 FROM information_schema.tables
-                 WHERE table_schema='public' AND table_name='categorias_financieras') THEN
+             WHERE table_schema='public' AND table_name='movimientos_financieros') THEN
+    EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS movimientos_financieros_referencia_unico
+               ON movimientos_financieros (referencia_id, referencia_tabla)';
+  END IF;
+END $$;
 
-    CREATE OR REPLACE FUNCTION public.cuenta_pagar_egreso()
-    RETURNS trigger
-    LANGUAGE plpgsql
-    SECURITY DEFINER
-    SET search_path = public
-    AS $fn$
-    DECLARE
-      v_categoria_id uuid;
-    BEGIN
-      IF (OLD.pagada IS DISTINCT FROM TRUE) AND NEW.pagada = TRUE THEN
-        -- Filtramos por tipo IN ('egreso','ambos') para no asociar el
-        -- egreso a una eventual categoría homónima de tipo 'ingreso'.
-        SELECT id INTO v_categoria_id
-          FROM categorias_financieras
-         WHERE taller_id = NEW.taller_id
-           AND nombre = 'Repuestos'
-           AND tipo IN ('egreso', 'ambos')
-         ORDER BY (tipo = 'egreso') DESC
-         LIMIT 1;
 
-        IF v_categoria_id IS NULL THEN
-          INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
-          VALUES (NEW.taller_id, 'Repuestos', 'egreso', true)
-          RETURNING id INTO v_categoria_id;
-        END IF;
+-- 3.F.1 · cuentas_pagar (UPDATE) → egreso "Repuestos"
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.registrar_movimiento_cuenta_pagada()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+BEGIN
+  IF NEW.pagada = true AND OLD.pagada = false THEN
+    SELECT id INTO cat_id FROM categorias_financieras
+    WHERE taller_id = NEW.taller_id AND nombre = 'Repuestos' AND tipo = 'egreso'
+    LIMIT 1;
 
-        IF NOT EXISTS (
-          SELECT 1 FROM movimientos_financieros
-           WHERE referencia_tabla = 'cuentas_pagar'
-             AND referencia_id = NEW.id
-        ) THEN
-          INSERT INTO movimientos_financieros (
-            taller_id, tipo, categoria_id, monto, descripcion,
-            fecha, referencia_id, referencia_tabla
-          ) VALUES (
-            NEW.taller_id, 'egreso', v_categoria_id, NEW.monto,
-            'Pago proveedor: ' || COALESCE(NEW.proveedor, ''),
-            COALESCE(NEW.fecha_pago, CURRENT_DATE),
-            NEW.id, 'cuentas_pagar'
-          );
-        END IF;
-      END IF;
-      RETURN NEW;
-    END;
-    $fn$;
+    IF cat_id IS NULL THEN
+      INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+      VALUES (NEW.taller_id, 'Repuestos', 'egreso', true)
+      RETURNING id INTO cat_id;
+    END IF;
 
-    DROP TRIGGER IF EXISTS trg_cuenta_pagar_egreso ON cuentas_pagar;
-    CREATE TRIGGER trg_cuenta_pagar_egreso
-      AFTER UPDATE ON cuentas_pagar
-      FOR EACH ROW
-      EXECUTE FUNCTION public.cuenta_pagar_egreso();
+    INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+    VALUES (NEW.taller_id, 'egreso', cat_id, NEW.monto,
+            'Pago proveedor: ' || NEW.proveedor,
+            COALESCE(NEW.fecha_pago, CURRENT_DATE), NEW.id, 'cuentas_pagar', true)
+    ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+DO $$
+BEGIN
+  -- Limpiar el trigger redundante de la Tarea #35 si ya fue creado en
+  -- alguna base por error. Su función `cuenta_pagar_egreso` se borra
+  -- también para no dejar artefactos huérfanos.
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='cuentas_pagar') THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trg_cuenta_pagar_egreso ON cuentas_pagar';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname='cuenta_pagar_egreso') THEN
+    EXECUTE 'DROP FUNCTION IF EXISTS public.cuenta_pagar_egreso()';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='cuentas_pagar') THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trigger_cuenta_pagada ON cuentas_pagar';
+    EXECUTE 'CREATE TRIGGER trigger_cuenta_pagada
+               AFTER UPDATE ON cuentas_pagar
+               FOR EACH ROW
+               EXECUTE FUNCTION public.registrar_movimiento_cuenta_pagada()';
+  END IF;
+END $$;
+
+
+-- 3.F.2 · liquidaciones (UPDATE) → egreso "Sueldos"
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.registrar_movimiento_sueldo()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+  liq RECORD;
+BEGIN
+  IF NEW.estado = 'pagado' AND OLD.estado != 'pagado' THEN
+    SELECT * INTO liq FROM liquidaciones WHERE id = NEW.id;
+
+    SELECT id INTO cat_id FROM categorias_financieras
+    WHERE taller_id = liq.taller_id AND nombre = 'Sueldos' AND tipo = 'egreso'
+    LIMIT 1;
+
+    IF cat_id IS NULL THEN
+      INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+      VALUES (liq.taller_id, 'Sueldos', 'egreso', true)
+      RETURNING id INTO cat_id;
+    END IF;
+
+    INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+    VALUES (liq.taller_id, 'egreso', cat_id, liq.total_liquidado,
+            'Pago de sueldo a ' || (SELECT nombre FROM empleados WHERE id = liq.empleado_id),
+            COALESCE(NEW.fecha_pago, CURRENT_DATE), NEW.id, 'liquidaciones', true)
+    ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='liquidaciones') THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trigger_sueldo_pagado ON liquidaciones';
+    EXECUTE 'CREATE TRIGGER trigger_sueldo_pagado
+               AFTER UPDATE ON liquidaciones
+               FOR EACH ROW
+               EXECUTE FUNCTION public.registrar_movimiento_sueldo()';
+  END IF;
+END $$;
+
+
+-- 3.F.3 · pagos_reparacion (INSERT) → ingreso "Reparaciones"
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.registrar_movimiento_pago_reparacion()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+  rep_desc TEXT;
+BEGIN
+  IF NEW.metodo != 'Crédito' AND NEW.monto > 0 THEN
+    SELECT id INTO cat_id FROM categorias_financieras
+    WHERE taller_id = NEW.taller_id AND nombre = 'Reparaciones' AND tipo = 'ingreso'
+    LIMIT 1;
+
+    IF cat_id IS NULL THEN
+      INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+      VALUES (NEW.taller_id, 'Reparaciones', 'ingreso', true)
+      RETURNING id INTO cat_id;
+    END IF;
+
+    SELECT descripcion INTO rep_desc FROM reparaciones WHERE id = NEW.reparacion_id;
+
+    INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+    VALUES (NEW.taller_id, 'ingreso', cat_id, NEW.monto,
+            'Pago: ' || COALESCE(rep_desc, 'reparación') || ' (' || COALESCE(NEW.metodo, 'Efectivo') || ')',
+            NEW.fecha, NEW.id, 'pagos_reparacion', true)
+    ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='pagos_reparacion') THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trigger_pago_reparacion_movimiento ON pagos_reparacion';
+    EXECUTE 'CREATE TRIGGER trigger_pago_reparacion_movimiento
+               AFTER INSERT ON pagos_reparacion
+               FOR EACH ROW
+               EXECUTE FUNCTION public.registrar_movimiento_pago_reparacion()';
+  END IF;
+END $$;
+
+
+-- 3.F.4 · gastos_taller (INSERT) → egreso por categoría dinámica
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.registrar_movimiento_gasto()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+  concepto_final TEXT;
+BEGIN
+  SELECT id INTO cat_id FROM categorias_financieras
+  WHERE taller_id = NEW.taller_id AND nombre = COALESCE(NEW.categoria, 'Otros egresos') AND tipo = 'egreso'
+  LIMIT 1;
+
+  IF cat_id IS NULL THEN
+    INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+    VALUES (NEW.taller_id, COALESCE(NEW.categoria, 'Otros egresos'), 'egreso', false)
+    RETURNING id INTO cat_id;
+  END IF;
+
+  concepto_final := COALESCE(NEW.descripcion, 'Gasto');
+  IF NEW.proveedor IS NOT NULL AND NEW.proveedor != '' THEN
+    concepto_final := concepto_final || ' - ' || NEW.proveedor;
+  END IF;
+
+  INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+  VALUES (NEW.taller_id, 'egreso', cat_id, NEW.monto,
+          concepto_final, NEW.fecha, NEW.id, 'gastos_taller', true)
+  ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  RETURN NEW;
+END;
+$function$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='gastos_taller') THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trigger_gasto_movimiento ON gastos_taller';
+    EXECUTE 'CREATE TRIGGER trigger_gasto_movimiento
+               AFTER INSERT ON gastos_taller
+               FOR EACH ROW
+               EXECUTE FUNCTION public.registrar_movimiento_gasto()';
+  END IF;
+END $$;
+
+
+-- 3.F.5 · ventas (INSERT) → ingreso "Ventas"
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.registrar_movimiento_venta()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+BEGIN
+  IF NEW.estado = 'completado' AND NEW.total > 0 THEN
+    SELECT id INTO cat_id FROM categorias_financieras
+    WHERE taller_id = NEW.taller_id AND nombre = 'Ventas' AND tipo = 'ingreso'
+    LIMIT 1;
+
+    IF cat_id IS NULL THEN
+      INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+      VALUES (NEW.taller_id, 'Ventas', 'ingreso', true)
+      RETURNING id INTO cat_id;
+    END IF;
+
+    INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+    VALUES (NEW.taller_id, 'ingreso', cat_id, NEW.total,
+            COALESCE(NEW.descripcion, 'Venta POS'),
+            NEW.created_at::date, NEW.id, 'ventas', true)
+    ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='ventas') THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trigger_venta_movimiento ON ventas';
+    EXECUTE 'CREATE TRIGGER trigger_venta_movimiento
+               AFTER INSERT ON ventas
+               FOR EACH ROW
+               EXECUTE FUNCTION public.registrar_movimiento_venta()';
+  END IF;
+END $$;
+
+
+-- 3.F.6 · fiados (INSERT) → ingreso "Créditos otorgados" (no afecta caja)
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.registrar_movimiento_credito_otorgado()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+BEGIN
+  SELECT id INTO cat_id FROM categorias_financieras
+  WHERE taller_id = NEW.taller_id AND nombre = 'Créditos otorgados' AND tipo = 'ingreso'
+  LIMIT 1;
+
+  IF cat_id IS NULL THEN
+    INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+    VALUES (NEW.taller_id, 'Créditos otorgados', 'ingreso', true)
+    RETURNING id INTO cat_id;
+  END IF;
+
+  INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+  VALUES (NEW.taller_id, 'ingreso', cat_id, NEW.monto,
+          'Crédito otorgado: ' || COALESCE(NEW.descripcion, ''),
+          NEW.fecha, NEW.id, 'fiados', false)
+  ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  RETURN NEW;
+END;
+$function$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='fiados') THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trigger_credito_otorgado ON fiados';
+    EXECUTE 'CREATE TRIGGER trigger_credito_otorgado
+               AFTER INSERT ON fiados
+               FOR EACH ROW
+               EXECUTE FUNCTION public.registrar_movimiento_credito_otorgado()';
+  END IF;
+END $$;
+
+
+-- 3.F.7 · fiados (UPDATE) → ingreso "Cobro de créditos" (afecta caja)
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.registrar_movimiento_pago_credito()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+  cred RECORD;
+BEGIN
+  IF NEW.pagado = true AND OLD.pagado = false THEN
+    SELECT * INTO cred FROM fiados WHERE id = NEW.id;
+
+    SELECT id INTO cat_id FROM categorias_financieras
+    WHERE taller_id = cred.taller_id AND nombre = 'Cobro de créditos' AND tipo = 'ingreso'
+    LIMIT 1;
+
+    IF cat_id IS NULL THEN
+      INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+      VALUES (cred.taller_id, 'Cobro de créditos', 'ingreso', true)
+      RETURNING id INTO cat_id;
+    END IF;
+
+    INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+    VALUES (cred.taller_id, 'ingreso', cat_id, cred.monto,
+            'Cobro de crédito: ' || COALESCE(cred.descripcion, ''),
+            CURRENT_DATE, cred.id, 'fiados', true)
+    ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='fiados') THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trigger_pago_credito ON fiados';
+    EXECUTE 'CREATE TRIGGER trigger_pago_credito
+               AFTER UPDATE ON fiados
+               FOR EACH ROW
+               EXECUTE FUNCTION public.registrar_movimiento_pago_credito()';
   END IF;
 END $$;
 

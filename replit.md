@@ -534,3 +534,65 @@ Idempotencia total: si se corre dos veces seguidas, la segunda no
 inserta nada (la verificación previa al insert lo evita). No requiere
 correr SQL nuevo: usa el catálogo de categorías y la tabla
 `movimientos_financieros` que ya existían.
+
+## Triggers financieros automáticos en Supabase (Tarea #44)
+
+La tabla `movimientos_financieros` es **de sólo lectura para el JS en el
+caso normal**. La escriben 7 triggers en Postgres que se disparan
+automáticamente cuando el JS escribe en la tabla de origen del evento.
+Vivían en la base de producción desde hace tiempo pero no estaban
+versionados; ahora `supabase/rls_policies.sql` (sección **3.F**) los
+crea con `CREATE OR REPLACE FUNCTION + DROP TRIGGER IF EXISTS`, así que
+correrlo en una base que ya los tiene es seguro y en una base nueva los
+crea desde cero.
+
+| Tabla origen      | Evento  | Trigger                              | Movimiento que inserta                       |
+|-------------------|---------|--------------------------------------|----------------------------------------------|
+| `cuentas_pagar`   | UPDATE  | `trigger_cuenta_pagada`              | egreso "Repuestos" (paga proveedor)          |
+| `liquidaciones`   | UPDATE  | `trigger_sueldo_pagado`              | egreso "Sueldos" (paga liquidación)          |
+| `pagos_reparacion`| INSERT  | `trigger_pago_reparacion_movimiento` | ingreso "Reparaciones" (cobro de OT)         |
+| `gastos_taller`   | INSERT  | `trigger_gasto_movimiento`           | egreso por `categoria` del gasto             |
+| `ventas`          | INSERT  | `trigger_venta_movimiento`           | ingreso "Ventas" (cuando `estado=completado`)|
+| `fiados`          | INSERT  | `trigger_credito_otorgado`           | ingreso "Créditos otorgados" (no afecta caja)|
+| `fiados`          | UPDATE  | `trigger_pago_credito`               | ingreso "Cobro de créditos" (cuando se paga) |
+
+Reglas de oro:
+
+1. **El JS NUNCA debería hacer `insert` directo a `movimientos_financieros`**
+   para reflejar uno de estos 7 eventos: el trigger ya lo hace y
+   duplicarlo solo agrega trabajo (la unicidad evita el doble cobro,
+   pero no el doble código). Lugares actuales con insert directo,
+   auditados:
+
+   | Archivo | Caso | Compite con trigger? |
+   |---|---|---|
+   | `js/finances/finanzas.js` | Modal "Nuevo movimiento" del admin | No, no tiene tabla origen. |
+   | `js/hr/empleados.js` | Vale/adelanto al empleado | No, `vales_empleado` no tiene trigger. |
+   | `js/finances/cuentas.js` | Reparador retroactivo de cuentas viejas (Tarea #42) | Sí superficialmente, pero está pensado para cubrir cuentas anteriores a que existiera el trigger. |
+   | `js/finances/conciliador.js` | Reparador genérico de movimientos faltantes en un día | Sí superficialmente. Igual que arriba: protegido por la doble verificación previa al insert. |
+   | `js/workshop/reparaciones-detalle.js` | Cobro completo al finalizar la OT | Sí: competiría con `trigger_pago_reparacion_movimiento` si el mismo flujo crea un `pagos_reparacion`. Hoy convive porque el insert directo usa `referencia_tabla='reparaciones'` y el trigger usa `'pagos_reparacion'`, así que el `ON CONFLICT` no matchea (oportunidad futura: simplificar). |
+   | `js/workshop/inventario.js` | Egreso por compra al contado (sin pasar por `cuentas_pagar`) | No compite con triggers. **Bug abierto**: usa la columna `descripcion` en vez de `concepto` y el insert revienta en silencio. Cubierto por la Tarea #48. |
+
+   Si tenés que sumar uno nuevo, primero preguntate si el evento ya
+   tiene un trigger; si lo tiene, **no lo dupliques** — escribí en la
+   tabla origen y dejá que el trigger se encargue.
+2. **La columna correcta del concepto se llama `concepto`**, no
+   `descripcion`. El bug típico es copiar un insert de otra tabla y
+   dejar `descripcion`. Postgres tira error y el `try/catch` silencioso
+   se lo come (caso real: tareas #43 y #48). Si tenés que agregar un
+   insert manual, copiá el shape del modal de Finanzas, no de otro lado.
+3. **Idempotencia** vía `ON CONFLICT (referencia_id, referencia_tabla)
+   DO NOTHING`. Por eso la sección 3.F crea un `UNIQUE INDEX
+   movimientos_financieros_referencia_unico` sobre esas dos columnas.
+   Ese índice ya existe en producción (los triggers lo necesitan para
+   funcionar) pero el SQL lo declara explícitamente para que un
+   Supabase nuevo lo tenga.
+4. **Categorías autocreadas**: cada trigger crea su categoría en
+   `categorias_financieras` si no existe. No hace falta sembrar nada al
+   crear un taller.
+5. **Resta el trigger redundante de #35**: `trg_cuenta_pagar_egreso` y
+   su función `cuenta_pagar_egreso` quedaron obsoletos porque
+   `trigger_cuenta_pagada` ya cubría el caso. La sección 3.F los borra
+   con `DROP TRIGGER IF EXISTS` y `DROP FUNCTION IF EXISTS` antes de
+   crear el bloque nuevo, así una base que llegó a aplicar el SQL de #35
+   queda limpia.
