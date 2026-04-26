@@ -443,6 +443,13 @@ async function guardarEntrada() {
   toast(`✓ Entrada registrada: ${qty} x ${nombreProducto} — Total: ₲${gs(totalCompra)}`, 'success');
   closeModal();
   inventario();
+
+  // Tarea #30: si esta entrada cubre repuestos esperados por una reparación,
+  // marcamos la reparación como "repuesto disponible" y ofrecemos avisar al
+  // cliente por WhatsApp. El chequeo es best-effort (no bloquea la entrada).
+  if (typeof repuestoLlego_chequear === 'function') {
+    repuestoLlego_chequear([itemId], [nombreProducto]);
+  }
 }
 
 async function modalGestionarZonas() {

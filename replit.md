@@ -421,3 +421,61 @@ Las consultas respetan RLS:
 `reparacion_items`, `movimientos_inventario`, `empleados`, `inventario`
 filtran por `taller_id` (o por `reparacion_id` para
 `reparacion_mecanicos`).
+
+## Aviso "repuesto llegó" al cliente (Tarea #30)
+
+Cierra el ciclo del badge "X días esperando" (#25) avisando al cliente
+en cuanto el repuesto entra al stock.
+
+1. **Detección automática post-entrada** (`js/workshop/repuesto-llego.js`,
+   helper `repuestoLlego_chequear`). Cuando `guardarEntrada()` en
+   `js/workshop/inventario.js` termina de registrar una compra a
+   proveedor, llama al helper con el `inventario_id` y el nombre del
+   producto. El helper:
+   - Busca todas las reparaciones del taller en estado
+     `esperando_repuestos`.
+   - Cruza sus `reparacion_items` contra el id que acaba de entrar (o
+     por nombre normalizado si el ítem no tiene `inventario_id`).
+   - Marca las reparaciones cruzadas con
+     `reparaciones.repuesto_disponible_at = now()` (sin pisar si ya
+     estaba) y abre un modal con la lista de reparaciones afectadas y
+     un botón "💬 Avisar al cliente" por cada una.
+
+2. **Botón en la ficha de la reparación**
+   (`js/workshop/reparaciones-detalle.js`):
+   - Banner verde "📦 REPUESTO DISPONIBLE" cuando
+     `repuesto_disponible_at` está seteado y la reparación todavía
+     está en `esperando_repuestos`, con CTA "💬 Avisar".
+   - Botón siempre visible "📦 Avisar al cliente que llegó el
+     repuesto" cuando la reparación está en `esperando_repuestos` y
+     el cliente tiene teléfono (permite mandar el aviso aunque el
+     repuesto haya entrado antes de aplicar la migración o por una
+     vía no automatizada).
+   - Ambos disparan `repuestoLlego_enviarWhatsApp(repId)`, que arma
+     un mensaje configurable con la plantilla `repuesto_listo` de
+     `js/integrations/recordatorios.js` (variables `{cliente}`,
+     `{vehiculo}`, `{descripcion}`, `{taller}`, `{link}`) y abre
+     `wa.me/595…`. El `{link}` es un deep-link al portal del cliente
+     (`<origin>/?rep=<id>`); si la plantilla configurada no lo incluye,
+     se anexa al final del mensaje para garantizar que el WhatsApp
+     siempre lleve el enlace de agendamiento.
+
+3. **Indicador en listados**:
+   - `js/workshop/reparaciones-list.js` muestra un sub-badge verde
+     "📦 Repuesto disponible — avisar al cliente" en cada card en
+     estado `esperando_repuestos` con `repuesto_disponible_at`.
+   - `js/workshop/kanban.js` agrega la misma marca en la columna
+     "ESPERANDO REPUESTOS" del panel de trabajo.
+
+4. **Migración de schema** (`supabase/rls_policies.sql` sección 3.E):
+   - `reparaciones.repuesto_disponible_at timestamptz` + índice
+     parcial donde no es null.
+   El JS hace fallback graceful si la columna no existe: el helper
+   intenta el update y, si Postgres responde con error de columna
+   inexistente, sigue funcionando (sin marca persistente, pero el
+   modal de aviso y el botón manual siguen activos).
+
+5. **Plantilla configurable**: `MENSAJES_PREDEFINIDOS.repuesto_listo`
+   en `js/integrations/recordatorios.js`. Aparece como pestaña
+   "Repuesto llegó" dentro de "📨 Configurar mensajes automáticos"
+   y se puede personalizar (se persiste en `localStorage`).

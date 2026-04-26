@@ -1,6 +1,6 @@
 // ─── SERVICE WORKER - TallerPro ───────────────────────────────────────────────
 // Incrementar en cada deploy para invalidar caché viejo
-const CACHE_NAME = 'tallerpro-v5';
+const CACHE_NAME = 'tallerpro-v6';
 
 // Solo el shell mínimo — JS y CSS NO van aquí (se manejan network-first)
 const SHELL_URLS = [

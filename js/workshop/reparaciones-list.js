@@ -141,6 +141,12 @@ async function reparaciones({ filtro='todos', search='', offset=0, tipo='', meca
             espera = `<div class="card-sub" style="color:${color};font-weight:600">⏱ ${dias} días esperando</div>`;
           }
         }
+        // Badge "Repuesto disponible" cuando el repuesto ya entró al stock
+        // y todavía no se cerró el trabajo (Tarea #30).
+        let dispo = '';
+        if (r.estado === 'esperando_repuestos' && r.repuesto_disponible_at) {
+          dispo = `<div class="card-sub" style="color:var(--success);font-weight:600">📦 Repuesto disponible — avisar al cliente</div>`;
+        }
         return `
       <div class="card" onclick="detalleReparacion('${r.id}')">
         <div class="card-header">
@@ -149,6 +155,7 @@ async function reparaciones({ filtro='todos', search='', offset=0, tipo='', meca
             <div class="card-name">${h(r.descripcion)}</div>
             <div class="card-sub">${r.tipo_trabajo?h(r.tipo_trabajo)+' · ':''}${r.vehiculos?h(r.vehiculos.marca)+' '+h(r.vehiculos.patente):''} ${r.clientes?' · '+h(r.clientes.nombre):''}</div>
             <div class="card-sub">₲${gs(r.costo)} · ${formatFecha(r.fecha)}</div>
+            ${dispo}
             ${espera}
           </div>
           <span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span>

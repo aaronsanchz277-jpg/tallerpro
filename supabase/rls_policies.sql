@@ -1156,6 +1156,25 @@ END $$;
 
 
 -- =====================================================================
+-- 3.E · Aviso de "repuesto disponible" en reparaciones (Tarea #30)
+-- =====================================================================
+-- Cuando entra al stock un repuesto que una reparación estaba esperando,
+-- marcamos la reparación con la marca temporal `repuesto_disponible_at`
+-- para resaltarla en el listado del taller y poder avisar al cliente.
+-- Es informativa: la lógica que la setea vive en JS (inventario.js).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='reparaciones') THEN
+    EXECUTE 'ALTER TABLE reparaciones ADD COLUMN IF NOT EXISTS repuesto_disponible_at timestamptz';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS reparaciones_repuesto_disponible_idx
+               ON reparaciones (repuesto_disponible_at)
+               WHERE repuesto_disponible_at IS NOT NULL';
+  END IF;
+END $$;
+
+
+-- =====================================================================
 -- 4) Tabla `planes` (catálogo público)
 -- =====================================================================
 DO $$

@@ -58,6 +58,16 @@ async function detalleReparacion(id) {
       ${r.combustible_ingreso ? `<div class="info-item"><div class="label">Combustible</div><div class="value">${h(r.combustible_ingreso)}</div></div>` : ''}
     </div>
 
+    ${r.estado === 'esperando_repuestos' && r.repuesto_disponible_at ? `
+    <div style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.3);border-radius:12px;padding:.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.75rem">
+      <div style="font-size:1.4rem">📦</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-family:var(--font-head);font-size:.82rem;color:var(--success);letter-spacing:.5px">REPUESTO DISPONIBLE</div>
+        <div style="font-size:.72rem;color:var(--text2)">Llegó al stock hace ${Math.max(0, Math.floor((Date.now() - new Date(r.repuesto_disponible_at).getTime()) / 86400000))} día(s). Avisale al cliente para coordinar la instalación.</div>
+      </div>
+      ${canEdit && r.clientes?.telefono ? `<button onclick="repuestoLlego_enviarWhatsApp('${id}')" style="background:rgba(37,211,102,.15);color:#25d366;border:1px solid rgba(37,211,102,.35);border-radius:8px;padding:.5rem .75rem;font-family:var(--font-head);font-size:.72rem;cursor:pointer;white-space:nowrap">💬 Avisar</button>` : ''}
+    </div>` : ''}
+
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
         <span style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px">COBRADO AL CLIENTE</span>
@@ -159,6 +169,8 @@ async function detalleReparacion(id) {
     </div>
     ${aprobacion === 'pendiente' && r.clientes?.telefono ? `
     <button onclick="enviarAprobacionWhatsApp('${id}')" style="width:100%;background:rgba(37,211,102,.15);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:10px;padding:.6rem;font-family:var(--font-head);font-size:.85rem;cursor:pointer;margin-bottom:.5rem">💬 Pedir aprobación por WhatsApp</button>` : ''}
+    ${r.estado === 'esperando_repuestos' && r.clientes?.telefono ? `
+    <button onclick="repuestoLlego_enviarWhatsApp('${id}')" style="width:100%;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.3);border-radius:10px;padding:.6rem;font-family:var(--font-head);font-size:.85rem;cursor:pointer;margin-bottom:.5rem">📦 Avisar al cliente que llegó el repuesto</button>` : ''}
     <div style="display:flex;gap:.5rem">
       <button class="btn-secondary" style="margin:0" onclick="modalEditarReparacion('${id}')">${t('editarBtn')}</button>
       ${isAdmin ? `<button class="btn-danger" style="margin:0" onclick="eliminarReparacion('${id}')">${t('eliminarBtn')}</button>` : ''}

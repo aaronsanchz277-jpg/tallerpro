@@ -316,6 +316,15 @@ function showApp() {
     if (typeof stockRealtime_init === 'function') stockRealtime_init();
     if (typeof fab_actualizarVisibilidad === 'function') fab_actualizarVisibilidad();
     navigate('dashboard');
+    // Deep-link: si la URL trae ?rep=<uuid>, abrimos esa reparación.
+    // Lo usa, entre otros, el aviso "repuesto llegó" por WhatsApp (Tarea #30)
+    // para que el cliente toque el link y caiga directo en la ficha.
+    try {
+      const repDeep = urlParams.get('rep');
+      if (repDeep && /^[a-f0-9-]{20,}$/i.test(repDeep) && typeof detalleReparacion === 'function') {
+        setTimeout(() => detalleReparacion(repDeep), 200);
+      }
+    } catch (_) { /* no-op */ }
   });
 }
 function showAuthError(msg) {

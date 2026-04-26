@@ -15,6 +15,8 @@ async function panelTrabajo() {
 
     function kanbanCard(r) {
       const mecanicos = (r.reparacion_mecanicos || []).map(m => m.nombre_mecanico).filter(Boolean);
+      const repuestoListo = r.estado === 'esperando_repuestos' && r.repuesto_disponible_at
+        ? `<div style="font-size:.65rem;color:var(--success);margin-top:2px;font-weight:600">📦 Repuesto disponible</div>` : '';
       return `<div class="card" style="margin-bottom:.5rem;cursor:pointer" onclick="detalleReparacion('${r.id}')">
         <div style="display:flex;justify-content:space-between;align-items:start">
           <div style="flex:1;min-width:0">
@@ -22,6 +24,7 @@ async function panelTrabajo() {
             <div style="font-size:.72rem;color:var(--text2);margin-top:2px">${r.vehiculos ? h(r.vehiculos.marca) + ' ' + h(r.vehiculos.patente) : ''}</div>
             ${r.clientes ? `<div style="font-size:.7rem;color:var(--text2)">${h(r.clientes.nombre)}</div>` : ''}
             ${mecanicos.length ? `<div style="font-size:.68rem;color:var(--accent);margin-top:2px">${mecanicos.join(', ')}</div>` : ''}
+            ${repuestoListo}
           </div>
           <div style="text-align:right;flex-shrink:0;margin-left:.5rem">
             <div style="font-family:var(--font-head);font-size:.85rem;color:var(--accent)">₲${gs(r.costo || 0)}</div>
