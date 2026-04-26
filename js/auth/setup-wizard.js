@@ -31,10 +31,15 @@ const SETUP_SERVICIOS_TIPICOS = [
 ];
 
 // ─── ESTADO DEL WIZARD ──────────────────────────────────────────────────────
+// El estado fuente de verdad es `talleres.setup_pasos_pendientes` (jsonb):
+// un array con las claves de los pasos que todavía no se completaron. Tras
+// cada paso lo persistimos a la BD, así si el usuario cierra el navegador
+// a la mitad puede retomar exactamente desde donde se fue.
 let _setupPasos = [];          // array de claves de pasos a mostrar (en orden)
-let _setupIdx = 0;             // índice del paso actual
-let _setupPasosSaltados = new Set();   // claves de pasos saltados/no completados
+let _setupIdx = 0;             // índice del paso actual dentro de _setupPasos
+let _setupPendientes = new Set();   // claves todavía sin completar (la verdad)
 let _setupActivo = false;
+let _setupModoIndividual = false;   // true = se abrió 1 solo paso desde la tarjeta
 
 // ─── DETECCIÓN DE FEATURES ──────────────────────────────────────────────────
 function _setupTieneMoneda() {
@@ -53,7 +58,8 @@ function _setupTienePWA() {
 }
 
 // ─── DECISIÓN: ¿corre el wizard? ────────────────────────────────────────────
-// Devuelve true si el admin del taller todavía no completó el setup.
+// Devuelve true si el admin del taller todavía no completó el setup
+// (queda al menos un paso pendiente, incluyendo el obligatorio "datos").
 function setupPendiente() {
   if (currentPerfil?.rol !== 'admin') return false;
   const taller = currentPerfil?.talleres;
@@ -65,23 +71,69 @@ function setupPendiente() {
   return taller.setup_completado === null || taller.setup_completado === undefined;
 }
 
+// Construye la lista completa de pasos disponibles según las features que
+// estén activas en el ambiente (moneda solo si la columna existe; pwa solo
+// si la app no está ya instalada).
+function _setupListaCompleta() {
+  const lista = ['datos'];
+  if (_setupTieneMoneda()) lista.push('moneda');
+  lista.push('servicios');
+  if (_setupTienePWA())    lista.push('pwa');
+  return lista;
+}
+
+// Persiste a la BD el estado actual de pendientes. Si quedó vacío, marca
+// también `setup_completado` con la fecha. Si "datos" ya no está pendiente,
+// marca `setup_completado` aunque queden otros pasos saltados (la única
+// condición obligatoria para considerar el setup mínimo es haber cargado
+// datos fiscales). Es tolerante al fallo (ej: columna inexistente).
+async function _setupPersistir() {
+  const pendientes = Array.from(_setupPendientes);
+  const datosListos = !_setupPendientes.has('datos');
+  const patch = { setup_pasos_pendientes: pendientes };
+  if (datosListos && currentPerfil?.talleres && !currentPerfil.talleres.setup_completado) {
+    patch.setup_completado = new Date().toISOString();
+  }
+  try {
+    await sb.from('talleres').update(patch).eq('id', tid());
+  } catch (e) {
+    console.warn('[setup] no se pudo persistir estado:', e);
+  }
+  if (currentPerfil?.talleres) {
+    currentPerfil.talleres.setup_pasos_pendientes = pendientes;
+    if (patch.setup_completado) {
+      currentPerfil.talleres.setup_completado = patch.setup_completado;
+    }
+  }
+}
+
 // ─── DISPARADOR ─────────────────────────────────────────────────────────────
 // Llamado desde showApp() después de cargar el perfil. Si no aplica, no hace
-// nada (no rompe el flujo normal del dashboard).
+// nada (no rompe el flujo normal del dashboard). Si hay un estado parcial
+// guardado en `setup_pasos_pendientes`, retomamos desde el primer pendiente.
 function iniciarAsistenteSetup() {
   if (_setupActivo) return;
   if (!setupPendiente()) return;
 
   _setupActivo = true;
+  _setupModoIndividual = false;
   _setupIdx = 0;
-  _setupPasosSaltados = new Set();
 
-  // Construir lista de pasos según features disponibles. "datos" siempre va
-  // primero y es el único obligatorio.
-  _setupPasos = ['datos'];
-  if (_setupTieneMoneda()) _setupPasos.push('moneda');
-  _setupPasos.push('servicios');
-  if (_setupTienePWA())    _setupPasos.push('pwa');
+  const lista = _setupListaCompleta();
+  // Si ya teníamos un array de pendientes guardado (resume), usamos esos;
+  // si no (primer ingreso), todos los pasos arrancan pendientes.
+  const guardados = currentPerfil?.talleres?.setup_pasos_pendientes;
+  if (Array.isArray(guardados) && guardados.length > 0) {
+    _setupPendientes = new Set(guardados.filter(k => lista.includes(k)));
+  } else {
+    _setupPendientes = new Set(lista);
+  }
+
+  // Mostramos solo los pasos que siguen pendientes (preservando el orden
+  // canónico). Si por algún motivo quedó vacío pero el wizard se disparó,
+  // mostramos al menos "datos" para no abrir un wizard vacío.
+  _setupPasos = lista.filter(k => _setupPendientes.has(k));
+  if (_setupPasos.length === 0) _setupPasos = ['datos'];
 
   _setupRender();
 }
@@ -267,8 +319,10 @@ async function _setupGuardarServicios() {
     .map(x => x.s);
 
   if (seleccion.length === 0) {
-    // Si no marca ninguno, lo tratamos como "saltado" pero seguimos.
-    return true;
+    // Si no marca ninguno, NO completamos el paso: lo dejamos pendiente
+    // para que aparezca en la tarjeta del dashboard. Devolvemos un objeto
+    // con la marca `pendiente` para que _setupSiguiente lo respete.
+    return { ok: true, pendiente: true };
   }
 
   // Para evitar duplicados si el wizard se reabre (Tarea #62: el usuario
@@ -302,6 +356,17 @@ async function _setupGuardarServicios() {
     return false;
   }
   return true;
+}
+
+// Para el paso PWA: solo lo damos por completado si la app está realmente
+// instalada (display-mode standalone). Si el usuario aprieta "Terminar"
+// sin instalarla, devolvemos {ok:true, pendiente:true} para que quede en
+// la tarjeta del dashboard.
+function _setupGuardarPWA() {
+  if (typeof _appInstalled !== 'undefined' && _appInstalled) {
+    return { ok: true, pendiente: false };
+  }
+  return { ok: true, pendiente: true };
 }
 
 // ─── PASO: INSTALAR PWA ─────────────────────────────────────────────────────
@@ -362,30 +427,54 @@ async function _setupInstalarPWA() {
 async function _setupSiguiente() {
   const paso = _setupPasos[_setupIdx];
   const btn = document.getElementById('setup-btn-siguiente');
+  const esUltimo = _setupIdx === _setupPasos.length - 1;
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
 
-  let ok = true;
+  // Cada handler retorna `true` (completado), `false` (error / no avanzar)
+  // o `{ ok:true, pendiente:true }` (avanzamos pero el paso queda en la
+  // tarjeta de pendientes — caso PWA no instalada o servicios sin elegir).
+  let res = true;
   try {
-    if (paso === 'datos')     ok = await _setupGuardarDatos();
-    if (paso === 'moneda')    ok = await _setupGuardarMoneda();
-    if (paso === 'servicios') ok = await _setupGuardarServicios();
-    // 'pwa' no necesita guardar nada en BD — es solo informativo.
+    if (paso === 'datos')     res = await _setupGuardarDatos();
+    if (paso === 'moneda')    res = await _setupGuardarMoneda();
+    if (paso === 'servicios') res = await _setupGuardarServicios();
+    if (paso === 'pwa')       res = _setupGuardarPWA();
   } catch (e) {
     console.error('[setup] error guardando paso ' + paso + ':', e);
-    ok = false;
+    res = false;
   }
+
+  const ok = res === true || (res && res.ok);
+  const dejarPendiente = res && typeof res === 'object' && res.pendiente;
 
   if (!ok) {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = _setupIdx === _setupPasos.length - 1 ? '✅ Terminar' : 'Siguiente →';
+      btn.textContent = esUltimo ? '✅ Terminar' : 'Siguiente →';
     }
     return;
   }
 
-  // Si el paso se completó (no se saltó), lo quitamos de pendientes.
-  _setupPasosSaltados.delete(paso);
+  // Actualizamos el estado: quitamos de pendientes si se completó, dejamos
+  // si quedó pendiente (caso PWA / servicios vacíos).
+  if (!dejarPendiente) _setupPendientes.delete(paso);
+  await _setupPersistir();
 
+  if (!esUltimo) {
+    _setupIdx++;
+    _setupRender();
+  } else {
+    await _setupFinalizar();
+  }
+}
+
+async function _setupSaltar() {
+  const paso = _setupPasos[_setupIdx];
+  if (paso === 'datos') return; // no se puede saltar
+  // Saltar = dejar como pendiente. Persistimos por si el usuario cierra el
+  // navegador justo después.
+  _setupPendientes.add(paso);
+  await _setupPersistir();
   if (_setupIdx < _setupPasos.length - 1) {
     _setupIdx++;
     _setupRender();
@@ -394,55 +483,83 @@ async function _setupSiguiente() {
   }
 }
 
-function _setupSaltar() {
-  const paso = _setupPasos[_setupIdx];
-  if (paso === 'datos') return; // no se puede saltar
-  _setupPasosSaltados.add(paso);
-  if (_setupIdx < _setupPasos.length - 1) {
-    _setupIdx++;
-    _setupRender();
-  } else {
-    _setupFinalizar();
-  }
-}
-
 // ─── FINALIZACIÓN ───────────────────────────────────────────────────────────
+// El estado ya se persistió tras el último paso, así que solo cerramos el
+// modal y mostramos el banner final con el CTA pedido por la spec
+// ("Cargá tu primer trabajo" → abre el wizard de nueva reparación).
 async function _setupFinalizar() {
-  // Marcamos setup_completado y guardamos qué pasos quedaron pendientes.
-  // Si la columna no existe (migración no aplicada), el update silencia el
-  // error y simplemente cerramos el wizard sin persistir.
-  const pendientes = Array.from(_setupPasosSaltados);
-  try {
-    await sb.from('talleres').update({
-      setup_completado: new Date().toISOString(),
-      setup_pasos_pendientes: pendientes
-    }).eq('id', tid());
-  } catch (e) {
-    console.warn('[setup] no se pudo persistir setup_completado:', e);
+  // Asegurarnos que setup_completado quedó marcado (caso borde: el usuario
+  // saltó todo lo opcional pero "datos" no es saltable, así que en el flujo
+  // normal ya quedó marcado por _setupPersistir tras completar datos).
+  if (currentPerfil?.talleres && !currentPerfil.talleres.setup_completado) {
+    await _setupPersistir();
   }
 
-  if (currentPerfil?.talleres) {
-    currentPerfil.talleres.setup_completado = new Date().toISOString();
-    currentPerfil.talleres.setup_pasos_pendientes = pendientes;
-  }
-
+  const fueIndividual = _setupModoIndividual;
   _setupActivo = false;
+  _setupModoIndividual = false;
   const overlay = document.getElementById('setup-wizard-overlay');
   if (overlay) overlay.remove();
 
-  if (pendientes.length === 0) {
-    toast('🎉 ¡Tu taller está listo! Cargá tu primer trabajo.', 'success');
-  } else {
-    toast('Listo. Lo que saltaste lo podés completar desde el dashboard.', 'success');
+  if (fueIndividual) {
+    // Volvió a completar/saltar un solo paso desde la tarjeta del dashboard:
+    // refrescamos el dashboard sin banner de bienvenida.
+    toast('✓ Listo', 'success');
+    if (typeof navigate === 'function') navigate('dashboard');
+    return;
   }
 
-  // Refrescamos el dashboard para que muestre la tarjeta de pendientes.
+  // Primer wizard completo: mostramos el banner con CTA "Cargá tu primer
+  // trabajo" como pide la spec.
+  const pendientes = Array.from(_setupPendientes);
+  _setupBannerExito(pendientes);
+}
+
+// Banner de éxito a pantalla completa con CTA al wizard de reparaciones.
+// Reemplaza el toast porque la spec pide un banner con botón directo a
+// "Cargá tu primer trabajo" (modalNuevaReparacionSimple).
+function _setupBannerExito(pendientes) {
+  const overlay = document.createElement('div');
+  overlay.id = 'setup-wizard-exito';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.7);
+    display:flex;align-items:center;justify-content:center;padding:1rem;
+  `;
+  const restantes = pendientes.length;
+  const txtPend = restantes === 0
+    ? '¡Tu taller está listo!'
+    : `Listo lo principal. Te quedan ${restantes} ${restantes === 1 ? 'paso opcional' : 'pasos opcionales'} para completar cuando quieras.`;
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.5rem;max-width:420px;width:100%;text-align:center">
+      <div style="font-size:3rem;margin-bottom:.5rem">🎉</div>
+      <div style="font-family:var(--font-head);font-size:1.2rem;color:var(--accent);margin-bottom:.5rem">¡Bienvenido a TallerPro!</div>
+      <div style="font-size:.85rem;color:var(--text);line-height:1.5;margin-bottom:1.2rem">${h(txtPend)}</div>
+      <div style="display:flex;flex-direction:column;gap:.5rem">
+        <button class="btn-primary" onclick="_setupCerrarBannerYNuevoTrabajo()" style="background:var(--success);color:#000">🔧 Cargá tu primer trabajo</button>
+        <button class="btn-secondary" onclick="_setupCerrarBanner()">Ir al dashboard</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function _setupCerrarBanner() {
+  const o = document.getElementById('setup-wizard-exito');
+  if (o) o.remove();
   if (typeof navigate === 'function') navigate('dashboard');
+}
+
+function _setupCerrarBannerYNuevoTrabajo() {
+  _setupCerrarBanner();
+  if (typeof modalNuevaReparacionSimple === 'function') {
+    modalNuevaReparacionSimple();
+  }
 }
 
 // ─── TARJETA "CONFIGURACIÓN PENDIENTE" PARA DASHBOARD ───────────────────────
 // Devuelve HTML vacío si no aplica (no admin, sin pendientes, o columna
-// inexistente). Se invoca desde dashboard().
+// inexistente). Cada ítem es un botón con su propio onclick que abre
+// directamente ese paso (no todo el wizard).
 function getSetupPendienteCard() {
   if (currentPerfil?.rol !== 'admin') return '';
   const taller = currentPerfil?.talleres;
@@ -458,28 +575,62 @@ function getSetupPendienteCard() {
     pwa:       { icon: '📲', txt: 'Instalar la app en tu celular' }
   };
 
-  const items = pendientes
-    .filter(k => labels[k])
-    .map(k => `<div style="display:flex;align-items:center;gap:.5rem;padding:.4rem 0;font-size:.82rem;color:var(--text)">
-      <span style="font-size:1rem">${labels[k].icon}</span>
-      <span>${labels[k].txt}</span>
-    </div>`).join('');
+  // Filtramos los pendientes según features actuales (ej: si ya instalaron
+  // la PWA desde el botón del header, no mostrar ese ítem).
+  const aplicables = pendientes.filter(k => {
+    if (!labels[k]) return false;
+    if (k === 'pwa'    && !_setupTienePWA())    return false;
+    if (k === 'moneda' && !_setupTieneMoneda()) return false;
+    return true;
+  });
+  if (aplicables.length === 0) return '';
 
-  if (!items) return '';
+  const items = aplicables.map(k => `
+    <button onclick="event.stopPropagation();_setupAbrirSoloPaso('${k}')" style="display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.55rem .7rem;margin-top:.4rem;cursor:pointer;color:var(--text);font-size:.82rem;text-align:left">
+      <span style="display:flex;align-items:center;gap:.5rem">
+        <span style="font-size:1rem">${labels[k].icon}</span>
+        <span>${labels[k].txt}</span>
+      </span>
+      <span style="color:var(--accent);font-size:.75rem">Hacerlo →</span>
+    </button>
+  `).join('');
 
   return `
-    <div onclick="reanudarAsistenteSetup()" style="background:linear-gradient(145deg, rgba(0,229,255,.08), rgba(0,229,255,.02));border:1px solid rgba(0,229,255,.3);border-radius:12px;padding:.85rem 1rem;margin-bottom:1rem;cursor:pointer">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
+    <div style="background:linear-gradient(145deg, rgba(0,229,255,.08), rgba(0,229,255,.02));border:1px solid rgba(0,229,255,.3);border-radius:12px;padding:.85rem 1rem;margin-bottom:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.2rem">
         <div style="font-family:var(--font-head);font-size:.85rem;color:var(--accent);letter-spacing:1px">⚙️ CONFIGURACIÓN PENDIENTE</div>
-        <span style="font-size:.7rem;color:var(--accent)">Completar →</span>
+        <span style="font-size:.7rem;color:var(--text2)">${aplicables.length} ${aplicables.length === 1 ? 'tarea' : 'tareas'}</span>
       </div>
       ${items}
     </div>
   `;
 }
 
-// Reabre el wizard solo con los pasos que quedaron pendientes. Se llama
-// desde la tarjeta del dashboard.
+// Abre el wizard mostrando UN solo paso (el que el usuario tocó en la
+// tarjeta de pendientes). Al completarlo, lo quita de pendientes y vuelve
+// al dashboard sin mostrar el banner de éxito.
+function _setupAbrirSoloPaso(clave) {
+  if (_setupActivo) return;
+  const taller = currentPerfil?.talleres;
+  if (!taller) return;
+  // Filtros de aplicabilidad por las dudas (ej: clic muy viejo después de
+  // que el usuario ya instaló la PWA).
+  if (clave === 'moneda' && !_setupTieneMoneda()) return;
+  if (clave === 'pwa'    && !_setupTienePWA())    return;
+
+  _setupActivo = true;
+  _setupModoIndividual = true;
+  _setupIdx = 0;
+  // Sembrar `_setupPendientes` desde la BD para no perder lo que ya estaba.
+  const guardados = Array.isArray(taller.setup_pasos_pendientes) ? taller.setup_pasos_pendientes : [];
+  _setupPendientes = new Set(guardados);
+  _setupPasos = [clave];
+  _setupRender();
+}
+
+// Reabre el wizard completo con todos los pasos pendientes. Se mantiene
+// como función pública por compatibilidad pero ya no se usa desde la
+// tarjeta — quedó para casos puntuales donde se quiera reabrir todo.
 function reanudarAsistenteSetup() {
   if (_setupActivo) return;
   const taller = currentPerfil?.talleres;
@@ -487,26 +638,22 @@ function reanudarAsistenteSetup() {
   if (!Array.isArray(pendientes) || pendientes.length === 0) return;
 
   _setupActivo = true;
+  _setupModoIndividual = false;
   _setupIdx = 0;
-  _setupPasosSaltados = new Set();
+  _setupPendientes = new Set(pendientes);
 
-  // Reconstruimos la lista de pasos solo con los pendientes que siguen
-  // siendo aplicables (ej: si la PWA ya se instaló desde el botón del
-  // header, no la mostramos).
-  const aplicables = [];
-  for (const k of pendientes) {
-    if (k === 'moneda'    && !_setupTieneMoneda())  continue;
-    if (k === 'pwa'       && !_setupTienePWA())     continue;
-    aplicables.push(k);
-  }
+  const aplicables = pendientes.filter(k => {
+    if (k === 'moneda' && !_setupTieneMoneda()) return false;
+    if (k === 'pwa'    && !_setupTienePWA())    return false;
+    return true;
+  });
 
   if (aplicables.length === 0) {
     // Limpiamos pendientes residuales que ya no aplican y refrescamos.
-    sb.from('talleres').update({ setup_pasos_pendientes: [] }).eq('id', tid())
-      .then(() => {
-        if (currentPerfil?.talleres) currentPerfil.talleres.setup_pasos_pendientes = [];
-        if (typeof navigate === 'function') navigate('dashboard');
-      });
+    _setupPendientes = new Set();
+    _setupPersistir().then(() => {
+      if (typeof navigate === 'function') navigate('dashboard');
+    });
     _setupActivo = false;
     return;
   }
@@ -516,9 +663,12 @@ function reanudarAsistenteSetup() {
 }
 
 // Exponemos para uso desde HTML inline y otros módulos.
-window.iniciarAsistenteSetup    = iniciarAsistenteSetup;
-window.reanudarAsistenteSetup   = reanudarAsistenteSetup;
-window.getSetupPendienteCard    = getSetupPendienteCard;
-window._setupSiguiente          = _setupSiguiente;
-window._setupSaltar             = _setupSaltar;
-window._setupInstalarPWA        = _setupInstalarPWA;
+window.iniciarAsistenteSetup            = iniciarAsistenteSetup;
+window.reanudarAsistenteSetup           = reanudarAsistenteSetup;
+window.getSetupPendienteCard            = getSetupPendienteCard;
+window._setupSiguiente                  = _setupSiguiente;
+window._setupSaltar                     = _setupSaltar;
+window._setupInstalarPWA                = _setupInstalarPWA;
+window._setupAbrirSoloPaso              = _setupAbrirSoloPaso;
+window._setupCerrarBanner               = _setupCerrarBanner;
+window._setupCerrarBannerYNuevoTrabajo  = _setupCerrarBannerYNuevoTrabajo;

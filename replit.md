@@ -813,12 +813,17 @@ wizard-overlay">` con z-index 500 (sobre `modal-overlay`).
 
 Estado en `talleres`:
 
-- `setup_completado timestamptz` — `NULL` = wizard pendiente; fecha =
-  cerrado/completado. Los talleres preexistentes se marcan con
-  `created_at` en la migración para no molestarlos.
-- `setup_pasos_pendientes jsonb` — array con las claves saltadas
-  (`['moneda','servicios','pwa']`). Vacío = todo listo. Maneja la
-  tarjeta de "Configuración pendiente" del dashboard.
+- `setup_completado timestamptz` — `NULL` = "datos" (paso obligatorio)
+  todavía no se completó. Se setea automáticamente la primera vez que
+  el admin guarda los datos fiscales (no al final del wizard), así si
+  cierra el navegador a mitad del flujo el wizard no se vuelve a abrir
+  desde cero. Los talleres preexistentes se marcan con `created_at` en
+  la migración para no molestarlos.
+- `setup_pasos_pendientes jsonb` — fuente de verdad del progreso. Es
+  un array con las claves de los pasos todavía no completados (datos,
+  moneda, servicios, pwa). Se persiste tras CADA paso (completar o
+  saltar), no solo al finalizar — clave para el resume y para que la
+  tarjeta del dashboard refleje el estado real.
 
 La migración (idempotente, fin de `supabase/rls_policies.sql`) usa
 `ADD COLUMN IF NOT EXISTS`. `loadPerfil`/`aplicarCodigo`/
@@ -835,22 +840,30 @@ Pasos (filtrados dinámicamente):
 3. **Servicios típicos** — lista hardcodeada de 12 servicios mecánicos
    (Cambio de aceite, Alineación, Balanceo, etc.) en
    `SETUP_SERVICIOS_TIPICOS`. Al confirmar inserta en `inventario`
-   con `categoria='Servicios'`, `unidad='servicio'`, `cantidad=999`.
+   con `categoria='Servicios'`, `unidad='servicio'`, `cantidad=999`,
+   filtrando por nombre+taller_id para evitar duplicados si el wizard
+   se repite. Si el usuario destilda todos, el paso queda pendiente.
 4. **Instalar PWA** — solo si la app no está ya en standalone. Reusa
-   `installApp()` y la detección de iOS de `js/core/pwa.js`.
+   `installApp()` y la detección de iOS de `js/core/pwa.js`. Si el
+   usuario aprieta "Terminar" sin haber instalado, queda pendiente.
 
 Disparador: `iniciarAsistenteSetup()` se llama desde `showApp()` con
-`setTimeout(300)` después de `navigate('dashboard')`, así el wizard
-queda por encima de un dashboard ya pintado y al cerrarlo la tarjeta
-de pendientes ya está visible debajo.
+`setTimeout(300)` después de `navigate('dashboard')`. Si hay un array
+guardado en `setup_pasos_pendientes`, retoma desde el primer pendiente
+en lugar de empezar de cero.
+
+Banner de éxito al final: pantalla completa con dos botones — uno
+primario "🔧 Cargá tu primer trabajo" que abre directamente
+`modalNuevaReparacionSimple()` del wizard de reparaciones, y uno
+secundario "Ir al dashboard". Reemplaza el toast simple para empujar
+al usuario hacia la primera carga real.
 
 Tarjeta de pendientes en dashboard: `getSetupPendienteCard()` se
-inserta entre los banners (justo antes de `getInstallBanner()`).
-Click en la tarjeta llama a `reanudarAsistenteSetup()`, que filtra
-los pasos según las features actuales (ej: si la PWA ya se instaló
-desde el header, ese paso desaparece) y vuelve a abrir el wizard
-solo con lo que falta. Cuando todo queda en cero, la tarjeta se
-oculta sola.
+inserta entre los banners (justo antes de `getInstallBanner()`). Cada
+ítem es un botón individual que llama a `_setupAbrirSoloPaso(clave)`
+y abre el wizard mostrando solo ese paso. Al completarlo, vuelve al
+dashboard sin el banner de bienvenida (toast corto). Cuando todos los
+pendientes se completaron, la tarjeta desaparece sola.
 
 **Fuera de scope**: crear primer empleado, importar clientes, foto del
 local, redes sociales, horarios, tour del dashboard (lo cubre el
