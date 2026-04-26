@@ -245,11 +245,11 @@ async function detalleEmpleado(id) {
       </div>
       ${trabajosMecanico.length === 0
         ? '<div style="font-size:.78rem;color:var(--text2);padding:.4rem 0">Todavía no tiene trabajos asignados.</div>'
-        : visiblesHTML + ocultosHTML + `
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.6rem;padding-top:.5rem;border-top:1px solid var(--border)">
-            <div style="font-size:.72rem;color:var(--text2);line-height:1.2">Total del período<br><span style="font-size:.62rem;color:var(--text2)">(${periodoLabel})</span></div>
-            <span style="font-family:var(--font-head);color:var(--success);font-size:1rem">₲${gs(totalComisionesPeriodo)}</span>
-          </div>`}
+        : visiblesHTML + ocultosHTML}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.6rem;padding-top:.5rem;border-top:1px solid var(--border)">
+        <div style="font-size:.72rem;color:var(--text2);line-height:1.2">Total comisiones del período actual<br><span style="font-size:.62rem;color:var(--text2)">(${periodoLabel})</span></div>
+        <span style="font-family:var(--font-head);color:var(--success);font-size:1rem">₲${gs(totalComisionesPeriodo)}</span>
+      </div>
     </div>`;
 
   document.getElementById('main-content').innerHTML = `
