@@ -158,10 +158,22 @@ CREATE POLICY "perfiles_update_propio_o_admin" ON perfiles
     OR (public.es_admin() AND taller_id = public.taller_id_actual())
   );
 
+-- INSERT del propio perfil tras signup. Restringido a campos seguros: el
+-- usuario nuevo SOLO puede insertarse como rol='cliente' sin taller, sin
+-- vínculos y sin permisos. La elevación a admin/empleado pasa siempre por
+-- las RPCs SECURITY DEFINER (`crear_taller_y_admin`, `aplicar_codigo`),
+-- que corren con rol owner y no son afectadas por esta policy.
 DROP POLICY IF EXISTS "perfiles_insert_propio" ON perfiles;
 CREATE POLICY "perfiles_insert_propio" ON perfiles
   FOR INSERT TO authenticated
-  WITH CHECK (id = auth.uid());
+  WITH CHECK (
+    id = auth.uid()
+    AND COALESCE(rol, 'cliente') = 'cliente'
+    AND taller_id IS NULL
+    AND empleado_id IS NULL
+    AND cliente_id IS NULL
+    AND (permisos IS NULL OR permisos = '{}'::jsonb)
+  );
 
 DROP POLICY IF EXISTS "perfiles_delete_admin" ON perfiles;
 CREATE POLICY "perfiles_delete_admin" ON perfiles
@@ -464,12 +476,15 @@ BEGIN
 
     EXECUTE 'ALTER TABLE fiados ENABLE ROW LEVEL SECURITY';
 
+    -- Solo admin lee. La UI de créditos también está bloqueada a admin
+    -- (`creditos()` requireAdmin), así que un empleado no debe poder leer
+    -- saldos de fiado ni vía API directa.
     EXECUTE 'DROP POLICY IF EXISTS "fiados_select_staff" ON fiados';
+    EXECUTE 'DROP POLICY IF EXISTS "fiados_select_admin" ON fiados';
     EXECUTE $f$
-      CREATE POLICY "fiados_select_staff" ON fiados
+      CREATE POLICY "fiados_select_admin" ON fiados
         FOR SELECT TO authenticated
-        USING (taller_id = public.taller_id_actual()
-               AND public.rol_actual() IN ('admin','empleado'))
+        USING (taller_id = public.taller_id_actual() AND public.es_admin())
     $f$;
 
     EXECUTE 'DROP POLICY IF EXISTS "fiados_insert_perm" ON fiados';
