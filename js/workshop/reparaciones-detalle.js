@@ -198,7 +198,7 @@ async function cambiarEstado(id, estado) {
             tipo: 'ingreso',
             categoria_id: categoriaId,
             monto: rep.costo,
-            descripcion: 'Trabajo: ' + (rep.descripcion || '') + (rep.clientes ? ' — ' + rep.clientes.nombre : ''),
+            concepto: 'Trabajo: ' + (rep.descripcion || '') + (rep.clientes ? ' — ' + rep.clientes.nombre : ''),
             fecha: new Date().toISOString().split('T')[0],
             referencia_id: id,
             referencia_tabla: 'reparaciones'

@@ -1,4 +1,6 @@
 // ─── PAGOS DE REPARACIÓN ────────────────────────────────────────────────────
+let _registrandoPago = false;
+
 async function modalPagosReparacion(repId, montoSugerido = null) {
   // Solo admin o empleado con permiso explícito de "registrar_cobros"
   if (typeof esAdmin === 'function' && !esAdmin()
@@ -55,7 +57,7 @@ async function modalPagosReparacion(repId, montoSugerido = null) {
       </div>
     </div>
     <div class="form-group"><label class="form-label">Nota (opcional)</label><input class="form-input" id="f-pago-notas" placeholder="Seña, cuota 1/3..."></div>
-    <button class="btn-primary" onclick="guardarPagoReparacion('${repId}')">Registrar Pago</button>` : '<div style="text-align:center;color:var(--success);font-size:.9rem;padding:.5rem">✓ Totalmente pagado</div>'}
+    <button class="btn-primary" id="btn-registrar-pago" onclick="guardarPagoReparacion('${repId}')">Registrar Pago</button>` : '<div style="text-align:center;color:var(--success);font-size:.9rem;padding:.5rem">✓ Totalmente pagado</div>'}
     <button class="btn-secondary" onclick="closeModal()">Cerrar</button>`);
 }
 
@@ -65,45 +67,91 @@ async function guardarPagoReparacion(repId) {
     if (typeof toast === 'function') toast('No tenés permisos para registrar cobros', 'error');
     return;
   }
-  await safeCall(async () => {
-    const monto = parseFloat(document.getElementById('f-pago-monto').value);
-    if (!validatePositiveNumber(monto, 'Monto')) return;
-    
-    const metodo = document.getElementById('f-pago-metodo').value;
-    const notas = document.getElementById('f-pago-notas').value;
-    const fecha = new Date().toISOString().split('T')[0];
-    
-    const { data: pago, error } = await sb.from('pagos_reparacion').insert({
-      reparacion_id: repId,
-      monto,
-      metodo,
-      notas,
-      fecha,
-      taller_id: tid()
-    }).select('id').single();
-    
-    if (error) { toast('Error: '+error.message,'error'); return; }
-    
-    // NOTA: La inserción en movimientos_financieros ahora la hace un TRIGGER en Supabase
-    // (ver script SQL proporcionado)
-    
-    if (metodo === 'Crédito') {
-      const { data: rep } = await sb.from('reparaciones').select('cliente_id,descripcion').eq('id',repId).single();
-      if (rep?.cliente_id) {
-        await sb.from('fiados').insert({
-          cliente_id: rep.cliente_id,
-          monto,
-          descripcion: 'Crédito: ' + (rep.descripcion||''),
-          pagado: false,
-          taller_id: tid()
-        });
-        clearCache('creditos');
+  // Anti-doble-click: si ya hay una inserción en curso, salir
+  if (_registrandoPago) return;
+  _registrandoPago = true;
+  const btn = document.getElementById('btn-registrar-pago');
+  const btnTextOrig = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Registrando…'; btn.style.opacity = '.6'; }
+
+  const restaurarBtn = () => {
+    _registrandoPago = false;
+    if (btn) { btn.disabled = false; btn.textContent = btnTextOrig || 'Registrar Pago'; btn.style.opacity = ''; }
+  };
+
+  try {
+    await safeCall(async () => {
+      const monto = parseFloat(document.getElementById('f-pago-monto').value);
+      if (!validatePositiveNumber(monto, 'Monto')) { restaurarBtn(); return; }
+
+      const metodo = document.getElementById('f-pago-metodo').value;
+      const notas = document.getElementById('f-pago-notas').value;
+      const fecha = new Date().toISOString().split('T')[0];
+
+      // Validar contra el saldo real (puede haber cambiado mientras el modal estaba abierto)
+      const [repRes, pagosRes] = await Promise.all([
+        sb.from('reparaciones').select('costo').eq('id', repId).single(),
+        sb.from('pagos_reparacion').select('monto').eq('reparacion_id', repId)
+      ]);
+      if (repRes.error || !repRes.data) {
+        toast('No se pudo verificar el saldo, intentá de nuevo', 'error');
+        restaurarBtn();
+        return;
       }
-    }
-    
-    clearCache('reparaciones');
-    toast('Pago registrado', 'success');
-    closeModal();
-    detalleReparacion(repId);
-  }, null, 'No se pudo registrar el pago');
+      const totalPrev = (pagosRes.data || []).reduce((s, p) => s + parseFloat(p.monto || 0), 0);
+      const saldoActual = parseFloat(repRes.data.costo || 0) - totalPrev;
+
+      if (saldoActual <= 0.01) {
+        toast('Esta reparación ya está totalmente pagada', 'error');
+        restaurarBtn();
+        return;
+      }
+
+      if (monto > saldoActual + 0.01) {
+        const exceso = monto - saldoActual;
+        const ok = confirm(`Te estás pasando ₲${gs(exceso)} del saldo (queda ₲${gs(saldoActual)}).\n\n¿Es propina o vale extra del cliente?`);
+        if (!ok) { restaurarBtn(); return; }
+      }
+
+      const { data: pago, error } = await sb.from('pagos_reparacion').insert({
+        reparacion_id: repId,
+        monto,
+        metodo,
+        notas,
+        fecha,
+        taller_id: tid()
+      }).select('id').single();
+
+      if (error) { toast('Error: '+error.message,'error'); restaurarBtn(); return; }
+
+      // NOTA: La inserción en movimientos_financieros ahora la hace un TRIGGER en Supabase
+      // (ver script SQL proporcionado)
+
+      if (metodo === 'Crédito') {
+        const { data: rep2 } = await sb.from('reparaciones').select('cliente_id,descripcion').eq('id',repId).single();
+        if (rep2?.cliente_id) {
+          await sb.from('fiados').insert({
+            cliente_id: rep2.cliente_id,
+            monto,
+            descripcion: 'Crédito: ' + (rep2.descripcion||''),
+            pagado: false,
+            taller_id: tid()
+          });
+          clearCache('creditos');
+        }
+      }
+
+      clearCache('reparaciones');
+      _registrandoPago = false;
+      toast('Pago registrado', 'success');
+      closeModal();
+      detalleReparacion(repId);
+    }, null, 'No se pudo registrar el pago');
+  } catch (e) {
+    restaurarBtn();
+    throw e;
+  } finally {
+    // Si el flujo falló silenciosamente o safeCall no llamó closeModal, restauramos
+    if (_registrandoPago) restaurarBtn();
+  }
 }
