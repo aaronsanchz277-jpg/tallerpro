@@ -79,20 +79,20 @@ async function reparaciones({ filtro='todos', search='', offset=0, tipo='', meca
     </div>
     <div class="search-box">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" placeholder="Buscar trabajo..." value="${h(search)}" oninput="debounce('rep',()=>reparaciones({filtro:'${filtro}',search:this.value,tipo:'${tipo}',mecanico:'${mecanico}'}))" class="form-input" style="padding-left:2.5rem">
+      <input type="text" placeholder="Buscar trabajo..." value="${h(search)}" oninput="debounce('rep',()=>reparaciones({filtro:'${hjs(filtro)}',search:this.value,tipo:'${hjs(tipo)}',mecanico:'${hjs(mecanico)}'}))" class="form-input" style="padding-left:2.5rem">
     </div>
     <div class="tabs">
-      <button class="tab ${filtro==='todos'?'active':''}" onclick="reparaciones({filtro:'todos',tipo:'${tipo}',mecanico:'${mecanico}'})">Todos</button>
-      <button class="tab ${filtro==='pendiente'?'active':''}" onclick="reparaciones({filtro:'pendiente',tipo:'${tipo}',mecanico:'${mecanico}'})">Pendiente</button>
-      <button class="tab ${filtro==='en_progreso'?'active':''}" onclick="reparaciones({filtro:'en_progreso',tipo:'${tipo}',mecanico:'${mecanico}'})">En progreso</button>
-      <button class="tab ${filtro==='esperando_repuestos'?'active':''}" onclick="reparaciones({filtro:'esperando_repuestos',tipo:'${tipo}',mecanico:'${mecanico}'})">Esp. repuestos</button>
-      <button class="tab ${filtro==='finalizado'?'active':''}" onclick="reparaciones({filtro:'finalizado',tipo:'${tipo}',mecanico:'${mecanico}'})">Finalizado</button>
+      <button class="tab ${filtro==='todos'?'active':''}" onclick="reparaciones({filtro:'todos',tipo:'${hjs(tipo)}',mecanico:'${hjs(mecanico)}'})">Todos</button>
+      <button class="tab ${filtro==='pendiente'?'active':''}" onclick="reparaciones({filtro:'pendiente',tipo:'${hjs(tipo)}',mecanico:'${hjs(mecanico)}'})">Pendiente</button>
+      <button class="tab ${filtro==='en_progreso'?'active':''}" onclick="reparaciones({filtro:'en_progreso',tipo:'${hjs(tipo)}',mecanico:'${hjs(mecanico)}'})">En progreso</button>
+      <button class="tab ${filtro==='esperando_repuestos'?'active':''}" onclick="reparaciones({filtro:'esperando_repuestos',tipo:'${hjs(tipo)}',mecanico:'${hjs(mecanico)}'})">Esp. repuestos</button>
+      <button class="tab ${filtro==='finalizado'?'active':''}" onclick="reparaciones({filtro:'finalizado',tipo:'${hjs(tipo)}',mecanico:'${hjs(mecanico)}'})">Finalizado</button>
     </div>
     ${tipo ? `<div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem">
       <span style="font-size:.78rem;color:var(--text2)">Filtro: ${TIPO_ICONS[tipo]||'📋'} ${h(tipo)}</span>
-      <button onclick="reparaciones({filtro:'${filtro}',mecanico:'${mecanico}'})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.8rem">✕</button>
+      <button onclick="reparaciones({filtro:'${hjs(filtro)}',mecanico:'${hjs(mecanico)}'})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.8rem">✕</button>
     </div>` : `<div style="display:flex;gap:.3rem;margin-bottom:.5rem;overflow-x:auto;padding-bottom:.3rem">
-      ${TIPOS_TRABAJO.map(tp => `<button onclick="reparaciones({filtro:'${filtro}',tipo:'${tp}',mecanico:'${mecanico}'})" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.25rem .5rem;font-size:.65rem;cursor:pointer;white-space:nowrap;color:var(--text2)">${TIPO_ICONS[tp]||'📋'} ${tp}</button>`).join('')}
+      ${TIPOS_TRABAJO.map(tp => `<button onclick="reparaciones({filtro:'${hjs(filtro)}',tipo:'${tp}',mecanico:'${hjs(mecanico)}'})" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.25rem .5rem;font-size:.65rem;cursor:pointer;white-space:nowrap;color:var(--text2)">${TIPO_ICONS[tp]||'📋'} ${tp}</button>`).join('')}
     </div>`}
     ${(data||[]).length===0 ? `<div class="empty"><p>${mecanico ? 'Este mecánico no tiene reparaciones asignadas' : 'No hay trabajos'}</p></div>` :
       (data||[]).map(r => `
@@ -107,7 +107,7 @@ async function reparaciones({ filtro='todos', search='', offset=0, tipo='', meca
           <span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span>
         </div>
       </div>`).join('')}
-    ${renderPagination(count||0, offset, `()=>reparaciones({offset:${offset},filtro:'${filtro}',search:'${search}',tipo:'${tipo}',mecanico:'${mecanico}'})`)}`;
+    ${renderPagination(count||0, offset, `()=>reparaciones({offset:${offset},filtro:'${hjs(filtro)}',search:'${hjs(search)}',tipo:'${hjs(tipo)}',mecanico:'${hjs(mecanico)}'})`)}`;
 }
 
 function _navRep(o) { reparaciones({offset:o}); }

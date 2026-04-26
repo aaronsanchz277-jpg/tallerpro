@@ -27,7 +27,7 @@ async function inventario({ search='', offset=0, zona='' }={}) {
     </div>` : ''}
     <div class="search-box">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" placeholder="${t('invBuscar')}" value="${h(search)}" oninput="debounce('inv',()=>inventario({search:this.value,zona:'${zona}'}))" class="form-input" style="padding-left:2.5rem">
+      <input type="text" placeholder="${t('invBuscar')}" value="${h(search)}" oninput="debounce('inv',()=>inventario({search:this.value,zona:'${hjs(zona)}'}))" class="form-input" style="padding-left:2.5rem">
     </div>
     ${(data||[]).length===0 ? `<div class="empty"><p>${t('invSinDatos')}</p></div>` :
       (data||[]).map(item => {
