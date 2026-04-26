@@ -607,7 +607,12 @@ function pasoFinalImport() {
     <button class="btn-primary" onclick="cerrarYRefrescarImport()">Cerrar y ver listado</button>
   `);
 
-  if (exito > 0) toast(`✓ ${exito} fila${exito===1?'':'s'} importada${exito===1?'':'s'}`, 'success');
+  if (exito > 0) {
+    const partes = [];
+    if (cliInsertados > 0) partes.push(`${cliInsertados} cliente${cliInsertados===1?'':'s'}`);
+    if (vehInsertados > 0) partes.push(`${vehInsertados} vehículo${vehInsertados===1?'':'s'}`);
+    toast(`✓ Importé ${partes.join(' y ')}`, 'success');
+  }
 }
 
 function cerrarYRefrescarImport() {
