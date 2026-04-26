@@ -26,8 +26,7 @@ async function empleados() {
 }
 
 async function detalleEmpleado(id) {
-  // Guardia: solo admin, o el propio empleado mirando lo suyo, o un empleado
-  // con permiso explícito de "ver_historial_otros".
+  // Guardia: solo admin o el propio empleado mirándose a sí mismo.
   if (typeof puedoVerEmpleado === 'function' && !puedoVerEmpleado(id)) {
     toast('No autorizado', 'error');
     navigate('dashboard');
@@ -156,8 +155,8 @@ async function detalleEmpleado(id) {
   // ¿Quién está mirando? Determina qué se muestra:
   //  - admin: ve todo (sueldo, vales, resumen, botones)
   //  - el propio empleado: ve todo lo suyo
-  //  - empleado con permiso "ver_historial_otros": NO ve sueldo ni vales
-  //    (solo trabajos / horas / reparaciones asignadas)
+  //  - cualquier otro empleado: NO debería llegar acá (puedoVerEmpleado
+  //    lo bloquea arriba) y RLS también bloquea el SELECT.
   const _esAdmin   = (typeof esAdmin === 'function') && esAdmin();
   const _esPropio  = currentPerfil?.empleado_id && currentPerfil.empleado_id === id;
   const verSensible = _esAdmin || _esPropio;
@@ -485,6 +484,7 @@ async function guardarEmpleadoConSafeCall() {
 }
 
 async function guardarEmpleado(id = null) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede crear o editar empleados')) return;
   const nombre = document.getElementById('f-nombre').value.trim();
   if (!validateRequired(nombre, 'Nombre')) return;
 
@@ -521,8 +521,7 @@ async function modalEditarEmpleado(id) {
     ver_ganancia: 'Ver ganancia neta del trabajo',
     registrar_cobros: 'Registrar cobros al cliente',
     anular_ventas: 'Anular ventas',
-    modificar_precios: 'Modificar precios cobrados al cliente',
-    ver_historial_otros: 'Ver historial de otros mecánicos'
+    modificar_precios: 'Modificar precios cobrados al cliente'
   };
 
   const permisosHTML = perfilVinculado ? `
@@ -559,7 +558,7 @@ async function guardarEmpleadoConPermisosConSafeCall(empleadoId, perfilId) {
 }
 
 async function guardarEmpleadoConPermisos(empleadoId, perfilId) {
-  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede modificar permisos')) return;
 
   // 1) Guardar datos básicos del empleado (igual que antes)
   const nombre = document.getElementById('f-nombre').value.trim();

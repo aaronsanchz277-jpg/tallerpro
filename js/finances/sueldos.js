@@ -60,6 +60,7 @@ async function guardarPeriodoConSafeCall() {
 }
 
 async function guardarPeriodo() {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede crear períodos de sueldo')) return;
   const inicio = document.getElementById('f-periodo-inicio').value;
   const fin = document.getElementById('f-periodo-fin').value;
   if (!inicio || !fin) { toast('Las fechas son obligatorias','error'); return; }
@@ -120,6 +121,7 @@ async function generarLiquidacionesConSafeCall(periodoId) {
 }
 
 async function generarLiquidaciones(periodoId) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede generar liquidaciones')) return;
   const { data: periodo } = await sb.from('periodos_sueldo').select('*').eq('id', periodoId).single();
   const { data: emps } = await sb.from('empleados').select('id,nombre,sueldo').eq('taller_id', tid());
   if (!emps?.length) { toast('No hay empleados registrados','error'); return; }
@@ -176,6 +178,7 @@ async function registrarPagoSueldoConSafeCall(liquidacionId) {
 }
 
 async function registrarPagoSueldo(liquidacionId) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede registrar pagos de sueldo')) return;
   const { data: liq, error: liqErr } = await sb.from('liquidaciones')
     .select('*, empleados(nombre), periodos_sueldo(fecha_inicio, fecha_fin)')
     .eq('id', liquidacionId).single();
@@ -201,6 +204,7 @@ async function cerrarPeriodoConSafeCall(periodoId) {
 }
 
 async function cerrarPeriodo(periodoId) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede cerrar el período')) return;
   await sb.from('periodos_sueldo').update({ estado:'cerrado' }).eq('id', periodoId);
   toast('Período cerrado','success');
   detallePeriodo(periodoId);

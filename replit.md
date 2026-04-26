@@ -62,6 +62,6 @@ pero **no hay seguridad real** hasta que se aplique.
 
 Claves del jsonb `permisos` (default todo en `false`):
 `ver_costos`, `ver_ganancia`, `registrar_cobros`, `anular_ventas`,
-`modificar_precios`, `ver_historial_otros`. Se editan desde el modal
+`modificar_precios`. Se editan desde el modal
 "Editar empleado" cuando el empleado tiene un usuario vinculado (vía
 **Usuarios → Vincular**).

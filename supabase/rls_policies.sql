@@ -539,9 +539,9 @@ ALTER TABLE empleados ENABLE ROW LEVEL SECURITY;
 
 -- empleados.sueldo es información SENSIBLE. Por eso esta policy es estricta:
 -- admin del taller, o el propio empleado mirándose a sí mismo. Ningún
--- empleado puede leer la fila de otro (ni con ver_historial_otros): si
--- mañana se quiere "ver historial de otros mecánicos" se hará vía vista
--- pública sin sueldo o vía la tabla `trabajos_empleado` (que sí es staff).
+-- empleado puede leer la fila de otro. Si mañana se quiere "ver historial
+-- de otros mecánicos" se hará vía vista pública sin sueldo o vía la tabla
+-- `trabajos_empleado` (que sí es staff).
 DROP POLICY IF EXISTS "empleados_select" ON empleados;
 CREATE POLICY "empleados_select" ON empleados
   FOR SELECT TO authenticated
