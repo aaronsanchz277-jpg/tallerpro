@@ -215,5 +215,184 @@ async function guardarConfigDatos() {
   navigate('dashboard');
 }
 
+// ─── MI COBRO (Empleado) ────────────────────────────────────────────────────
+// Tarea #17: pantalla del empleado para ver su sueldo base, comisiones del
+// período (suma de `pago` en reparacion_mecanicos del taller, vinculadas a
+// reparaciones cuya fecha cae dentro del período de sueldo activo), vales
+// tomados y total a cobrar. Requiere que el perfil esté vinculado a una
+// ficha de empleado (currentPerfil.empleado_id IS NOT NULL); de lo
+// contrario muestra un mensaje pidiendo al admin que lo vincule.
+//
+// Período: usa el `periodos_sueldo` con estado='abierto' (consistente con
+// el módulo Sueldos del admin). Si no hay ninguno abierto, cae al mes
+// corriente como fallback razonable.
+async function miCobro() {
+  if (currentPerfil?.rol !== 'empleado') { dashboard(); return; }
+
+  const main = document.getElementById('main-content');
+  const empId = currentPerfil?.empleado_id;
+
+  if (!empId) {
+    main.innerHTML = `
+      <div style="padding:.25rem 0">
+        <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text);margin-bottom:.5rem">💵 Mi Cobro</div>
+        <div class="card" style="cursor:default">
+          <div style="font-size:.85rem;color:var(--text2);line-height:1.5">
+            Tu cuenta todavía no está vinculada a una ficha de empleado del taller.
+            <br><br>
+            Pedile al administrador que la vincule desde <b>Configuración → Usuarios</b>
+            o desde la lista de empleados (botón <b>📨 Invitar</b>).
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // ─── Período activo ──────────────────────────────────────────────────────
+  // Buscamos un período abierto del taller (igual que hace Sueldos). Si no
+  // hay, fallback al mes corriente.
+  let inicio, fin, periodoLabel, periodoFuente;
+  try {
+    const { data: periodoAbierto } = await sb.from('periodos_sueldo')
+      .select('id, fecha_inicio, fecha_fin, estado')
+      .eq('taller_id', currentPerfil.taller_id)
+      .eq('estado', 'abierto')
+      .order('fecha_inicio', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (periodoAbierto && periodoAbierto.fecha_inicio && periodoAbierto.fecha_fin) {
+      inicio = periodoAbierto.fecha_inicio;
+      fin    = periodoAbierto.fecha_fin;
+      periodoLabel = `${formatFecha(inicio)} – ${formatFecha(fin)}`;
+      periodoFuente = 'periodo';
+    }
+  } catch (_e) { /* ignoramos: usaremos fallback */ }
+
+  if (!inicio || !fin) {
+    const hoy = new Date();
+    inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
+    fin    = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).toISOString().split('T')[0];
+    periodoLabel = hoy.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    periodoFuente = 'mes';
+  }
+
+  // ─── Datos en paralelo ───────────────────────────────────────────────────
+  // Comisiones: reparacion_mecanicos restringido por RLS a SUS filas
+  // (Tarea #17, policy `reparacion_mecanicos_empleado_select_own`).
+  const [empRes, valesRes, asignRes] = await Promise.all([
+    sb.from('empleados').select('nombre,sueldo,rol').eq('id', empId).maybeSingle(),
+    sb.from('vales_empleado').select('monto,fecha,concepto')
+      .eq('empleado_id', empId)
+      .gte('fecha', inicio).lte('fecha', fin)
+      .order('fecha', { ascending: false }),
+    sb.from('reparacion_mecanicos').select('pago,horas,reparacion_id,empleado_id,mecanico_id')
+  ]);
+
+  const emp = empRes.data;
+  const vales = valesRes.data || [];
+  const asignaciones = asignRes.data || [];
+
+  // Resolver fechas de las reparaciones para filtrar por período.
+  const repIds = [...new Set(asignaciones.map(a => a.reparacion_id).filter(Boolean))];
+  let repPorId = {};
+  if (repIds.length > 0) {
+    const { data: reps } = await sb.from('reparaciones')
+      .select('id,fecha,descripcion,vehiculos(patente)')
+      .in('id', repIds);
+    (reps || []).forEach(r => { repPorId[r.id] = r; });
+  }
+
+  const comisionesDelPeriodo = asignaciones
+    .map(a => {
+      const r = repPorId[a.reparacion_id];
+      if (!r || !r.fecha) return null;
+      if (r.fecha < inicio || r.fecha > fin) return null;
+      return {
+        pago: parseFloat(a.pago || 0),
+        horas: parseFloat(a.horas || 0),
+        rep: r
+      };
+    })
+    .filter(Boolean);
+
+  const totalSueldo     = parseFloat(emp?.sueldo || 0);
+  const totalComisiones = comisionesDelPeriodo.reduce((s, c) => s + c.pago, 0);
+  const totalHoras      = comisionesDelPeriodo.reduce((s, c) => s + c.horas, 0);
+  const totalVales      = vales.reduce((s, v) => s + parseFloat(v.monto || 0), 0);
+  const totalNeto       = totalSueldo + totalComisiones - totalVales;
+
+  const periodoBadge = periodoFuente === 'periodo'
+    ? `<span style="font-size:.62rem;background:rgba(0,255,136,.12);color:var(--success);border:1px solid rgba(0,255,136,.3);border-radius:6px;padding:2px 6px;font-family:var(--font-head);margin-left:.4rem">PERÍODO ABIERTO</span>`
+    : `<span style="font-size:.62rem;background:rgba(255,204,0,.12);color:var(--warning);border:1px solid rgba(255,204,0,.3);border-radius:6px;padding:2px 6px;font-family:var(--font-head);margin-left:.4rem">MES CORRIENTE</span>`;
+
+  main.innerHTML = `
+    <div style="padding:.25rem 0">
+      <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text);margin-bottom:.25rem">💵 Mi Cobro</div>
+      <div style="font-size:.78rem;color:var(--text2);margin-bottom:1rem;text-transform:capitalize">${periodoLabel}${periodoBadge}</div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
+          <div style="background:var(--surface2);border-radius:8px;padding:.6rem;text-align:center">
+            <div style="font-size:.6rem;color:var(--text2);letter-spacing:1px">SUELDO BASE</div>
+            <div style="font-family:var(--font-head);font-size:1rem;color:var(--success);margin-top:.2rem">₲${gs(totalSueldo)}</div>
+          </div>
+          <div style="background:rgba(0,229,255,.08);border-radius:8px;padding:.6rem;text-align:center">
+            <div style="font-size:.6rem;color:var(--accent);letter-spacing:1px">COMISIONES</div>
+            <div style="font-family:var(--font-head);font-size:1rem;color:var(--accent);margin-top:.2rem">+₲${gs(totalComisiones)}</div>
+          </div>
+          <div style="background:rgba(255,204,0,.08);border-radius:8px;padding:.6rem;text-align:center">
+            <div style="font-size:.6rem;color:var(--warning);letter-spacing:1px">VALES TOMADOS</div>
+            <div style="font-family:var(--font-head);font-size:1rem;color:var(--warning);margin-top:.2rem">-₲${gs(totalVales)}</div>
+          </div>
+          <div style="background:${totalNeto>=0?'rgba(0,255,136,.12)':'rgba(255,68,68,.12)'};border-radius:8px;padding:.6rem;text-align:center;border:1px solid ${totalNeto>=0?'rgba(0,255,136,.3)':'rgba(255,68,68,.3)'}">
+            <div style="font-size:.6rem;color:${totalNeto>=0?'var(--success)':'var(--danger)'};letter-spacing:1px">A COBRAR</div>
+            <div style="font-family:var(--font-head);font-size:1.1rem;color:${totalNeto>=0?'var(--success)':'var(--danger)'};margin-top:.2rem;font-weight:700">₲${gs(totalNeto)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-family:var(--font-head);font-size:.72rem;color:var(--text2);letter-spacing:1px;margin:.5rem 0 .4rem;display:flex;justify-content:space-between;align-items:baseline">
+        <span>🔧 COMISIONES DEL PERÍODO (${comisionesDelPeriodo.length})</span>
+        ${totalHoras > 0 ? `<span style="color:var(--accent);font-size:.7rem">⏱ ${totalHoras.toFixed(1)} hs</span>` : ''}
+      </div>
+      ${comisionesDelPeriodo.length === 0
+        ? `<div class="empty" style="padding:.75rem"><p style="font-size:.82rem">No tenés comisiones registradas en este período</p></div>`
+        : comisionesDelPeriodo.map(c => `
+          <div class="card" style="cursor:pointer" onclick="detalleReparacion('${c.rep.id}')">
+            <div class="card-header">
+              <div class="card-avatar">🔧</div>
+              <div class="card-info">
+                <div class="card-name">${h(c.rep.descripcion || 'Reparación')}</div>
+                <div class="card-sub">${c.rep.vehiculos ? h(c.rep.vehiculos.patente) + ' · ' : ''}${formatFecha(c.rep.fecha)}${c.horas > 0 ? ` · ⏱ ${c.horas} hs` : ''}</div>
+              </div>
+              <div style="font-family:var(--font-head);color:var(--accent);font-size:.95rem">+₲${gs(c.pago)}</div>
+            </div>
+          </div>`).join('')}
+
+      <div style="font-family:var(--font-head);font-size:.72rem;color:var(--text2);letter-spacing:1px;margin:1rem 0 .4rem">
+        💸 VALES TOMADOS (${vales.length})
+      </div>
+      ${vales.length === 0
+        ? `<div class="empty" style="padding:.75rem"><p style="font-size:.82rem">No tomaste vales este mes</p></div>`
+        : vales.map(v => `
+          <div class="card" style="cursor:default">
+            <div class="card-header">
+              <div class="card-avatar">💵</div>
+              <div class="card-info">
+                <div class="card-name">${h(v.concepto || 'Vale')}</div>
+                <div class="card-sub">${formatFecha(v.fecha)}</div>
+              </div>
+              <div style="font-family:var(--font-head);color:var(--warning);font-size:.95rem">-₲${gs(v.monto)}</div>
+            </div>
+          </div>`).join('')}
+
+      <div style="font-size:.7rem;color:var(--text2);margin-top:1rem;text-align:center;line-height:1.5">
+        Las comisiones surgen de las reparaciones donde el administrador te asignó un pago.<br>
+        Si ves números que no cuadran, hablalo con el dueño del taller.
+      </div>
+    </div>`;
+}
+
 // ✅ EXPONER GLOBALMENTE
 window.misTrabajos = misTrabajos;
+window.miCobro = miCobro;

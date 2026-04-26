@@ -387,12 +387,19 @@ BEGIN
 
     EXECUTE 'ALTER TABLE reparacion_mecanicos ENABLE ROW LEVEL SECURITY';
 
+    -- Tarea #17: separar las policies para que el empleado solo vea SUS
+    -- propias asignaciones (vital porque acá se guardan los pagos /
+    -- comisiones de cada uno). El admin sigue viendo y editando todo.
     EXECUTE 'DROP POLICY IF EXISTS "reparacion_mecanicos_staff_all" ON reparacion_mecanicos';
+    EXECUTE 'DROP POLICY IF EXISTS "reparacion_mecanicos_admin_all" ON reparacion_mecanicos';
+    EXECUTE 'DROP POLICY IF EXISTS "reparacion_mecanicos_empleado_select_own" ON reparacion_mecanicos';
+
+    -- Admin: full access en su taller.
     EXECUTE $f$
-      CREATE POLICY "reparacion_mecanicos_staff_all" ON reparacion_mecanicos
+      CREATE POLICY "reparacion_mecanicos_admin_all" ON reparacion_mecanicos
         FOR ALL TO authenticated
         USING (
-          public.rol_actual() IN ('admin','empleado')
+          public.es_admin()
           AND EXISTS (
             SELECT 1 FROM reparaciones r
               WHERE r.id = reparacion_mecanicos.reparacion_id
@@ -400,11 +407,31 @@ BEGIN
           )
         )
         WITH CHECK (
-          public.rol_actual() IN ('admin','empleado')
+          public.es_admin()
           AND EXISTS (
             SELECT 1 FROM reparaciones r
               WHERE r.id = reparacion_mecanicos.reparacion_id
                 AND r.taller_id = public.taller_id_actual()
+          )
+        )
+    $f$;
+
+    -- Empleado: SELECT solo de filas que le corresponden a él.
+    -- Acepta tanto el FK moderno `empleado_id` como el legado
+    -- `mecanico_id = auth.uid()` para no romper datos antiguos.
+    EXECUTE $f$
+      CREATE POLICY "reparacion_mecanicos_empleado_select_own" ON reparacion_mecanicos
+        FOR SELECT TO authenticated
+        USING (
+          public.rol_actual() = 'empleado'
+          AND EXISTS (
+            SELECT 1 FROM reparaciones r
+              WHERE r.id = reparacion_mecanicos.reparacion_id
+                AND r.taller_id = public.taller_id_actual()
+          )
+          AND (
+            (empleado_id IS NOT NULL AND empleado_id = public.empleado_id_actual())
+            OR mecanico_id = auth.uid()
           )
         )
     $f$;
@@ -697,6 +724,24 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables
              WHERE table_schema='public' AND table_name='codigos_empleado') THEN
+    -- Tarea #17: el admin puede asociar el código a un empleado existente
+    -- para que, al aplicarlo, el perfil quede AUTO-VINCULADO con esa ficha
+    -- de empleado (perfiles.empleado_id). Si no hay empleado preasociado,
+    -- el código sigue funcionando como antes (vinculación manual posterior).
+    EXECUTE 'ALTER TABLE codigos_empleado ADD COLUMN IF NOT EXISTS empleado_id uuid';
+    -- FK opcional a empleados (si la tabla existe). ON DELETE SET NULL para
+    -- no romper códigos cuando se borra al empleado.
+    IF EXISTS (SELECT 1 FROM information_schema.tables
+               WHERE table_schema='public' AND table_name='empleados')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
+                       WHERE table_schema='public'
+                         AND table_name='codigos_empleado'
+                         AND constraint_name='codigos_empleado_empleado_id_fkey') THEN
+      EXECUTE 'ALTER TABLE codigos_empleado
+                 ADD CONSTRAINT codigos_empleado_empleado_id_fkey
+                 FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE SET NULL';
+    END IF;
+
     EXECUTE 'ALTER TABLE codigos_empleado ENABLE ROW LEVEL SECURITY';
     EXECUTE 'DROP POLICY IF EXISTS "codigos_empleado_admin_all" ON codigos_empleado';
     EXECUTE $f$
@@ -707,6 +752,93 @@ BEGIN
     $f$;
   END IF;
 END $$;
+
+
+-- ---- RPC: aplicar_codigo (vinculación post-signup) ─────────────────────────
+-- Se ejecuta desde el cliente cuando un usuario recién registrado introduce
+-- el código de invitación que le pasó el admin. Vincula el perfil del usuario
+-- al taller correspondiente y setea su rol (cliente o empleado).
+--
+-- Tarea #17: si el código tiene `empleado_id` (preasociado por el admin),
+-- también se setea `perfiles.empleado_id` en el mismo paso. Esto evita el
+-- "doble paso" de invitar primero y vincular después manualmente.
+--
+-- SECURITY DEFINER: el cliente JS no puede tocar perfiles.rol/taller_id/
+-- empleado_id (lo bloquea el trigger `perfiles_proteger_campos`), pero esta
+-- RPC corre como owner y por eso puede.
+CREATE OR REPLACE FUNCTION public.aplicar_codigo(
+  p_codigo text,
+  p_user_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_codigo record;
+  v_existe boolean;
+BEGIN
+  -- Validación básica.
+  IF p_codigo IS NULL OR length(trim(p_codigo)) = 0 THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Código vacío');
+  END IF;
+  IF p_user_id IS NULL OR p_user_id <> auth.uid() THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Usuario inválido');
+  END IF;
+
+  -- Buscar el código sin usar.
+  SELECT id, taller_id, tipo, empleado_id
+    INTO v_codigo
+    FROM codigos_empleado
+    WHERE upper(codigo) = upper(trim(p_codigo))
+      AND COALESCE(usado, false) = false
+    LIMIT 1;
+
+  IF v_codigo.id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Código inválido o ya utilizado');
+  END IF;
+
+  IF v_codigo.tipo NOT IN ('empleado','cliente') THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Tipo de código no soportado');
+  END IF;
+
+  -- Marcar el código como usado primero (single-use).
+  UPDATE codigos_empleado SET usado = true WHERE id = v_codigo.id;
+
+  -- Crear o actualizar el perfil con los datos del código.
+  SELECT EXISTS (SELECT 1 FROM perfiles WHERE id = p_user_id) INTO v_existe;
+
+  IF v_existe THEN
+    UPDATE perfiles
+       SET rol         = v_codigo.tipo,
+           taller_id   = v_codigo.taller_id,
+           empleado_id = CASE
+                          WHEN v_codigo.tipo = 'empleado' AND v_codigo.empleado_id IS NOT NULL
+                          THEN v_codigo.empleado_id
+                          ELSE empleado_id
+                        END
+     WHERE id = p_user_id;
+  ELSE
+    INSERT INTO perfiles (id, rol, taller_id, empleado_id)
+      VALUES (
+        p_user_id,
+        v_codigo.tipo,
+        v_codigo.taller_id,
+        CASE WHEN v_codigo.tipo = 'empleado' THEN v_codigo.empleado_id ELSE NULL END
+      );
+  END IF;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'rol', v_codigo.tipo,
+    'taller_id', v_codigo.taller_id,
+    'empleado_id', CASE WHEN v_codigo.tipo = 'empleado' THEN v_codigo.empleado_id ELSE NULL END
+  );
+END $$;
+
+REVOKE ALL ON FUNCTION public.aplicar_codigo(text, uuid) FROM public;
+GRANT EXECUTE ON FUNCTION public.aplicar_codigo(text, uuid) TO authenticated;
 
 
 -- ---- PAGOS DE REPARACION (sensible: gate por permiso `registrar_cobros`) ----

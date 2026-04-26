@@ -177,8 +177,9 @@ async function aplicarCodigo() {
     if (!result?.ok) throw new Error(result?.error || 'Código inválido o ya utilizado');
     
     const { data: perfil } = await sb.from('perfiles')
-      .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion)')
+      .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion)')
       .eq('id', currentUser.id).maybeSingle();
+    if (perfil && (!perfil.permisos || typeof perfil.permisos !== 'object')) perfil.permisos = {};
     currentPerfil = perfil;
     toast(result.rol === 'empleado' ? 'Registrado como empleado' : 'Registrado como cliente', 'success');
     showApp();

@@ -4,25 +4,52 @@ async function empleados() {
     sb.from('empleados').select('*').eq('taller_id', tid()).order('nombre')
   );
 
+  // Tarea #17: para mostrar el estado de vinculación por empleado, traemos
+  // los perfiles de este taller que ya tienen empleado_id seteado. Solo
+  // admin necesita esto.
+  let perfilPorEmp = {};
+  if (typeof esAdmin === 'function' && esAdmin()) {
+    const { data: perfilesEmp } = await sb.from('perfiles')
+      .select('id,nombre,empleado_id,rol')
+      .eq('taller_id', tid())
+      .eq('rol', 'empleado')
+      .not('empleado_id', 'is', null);
+    (perfilesEmp || []).forEach(p => { perfilPorEmp[p.empleado_id] = p; });
+  }
+
+  const _esAdminLista = (typeof esAdmin === 'function') && esAdmin();
+
   document.getElementById('main-content').innerHTML = `
     <div class="section-header">
       <div class="section-title">${t('empTitulo')}</div>
       <button class="btn-add" onclick="modalNuevoEmpleado()">${t('empNuevo')}</button>
     </div>
     ${(data || []).length === 0 ? `<div class="empty"><p>${t('empSinDatos')}</p></div>` :
-      (data || []).map(e => `
+      (data || []).map(e => {
+        const vinculado = perfilPorEmp[e.id];
+        const badgeVinculo = _esAdminLista
+          ? (vinculado
+              ? `<span style="font-size:.62rem;background:rgba(0,255,136,.1);color:var(--success);border:1px solid rgba(0,255,136,.25);border-radius:6px;padding:2px 6px;font-family:var(--font-head)">🔗 Vinculado</span>`
+              : `<span style="font-size:.62rem;background:rgba(255,204,0,.1);color:var(--warning);border:1px solid rgba(255,204,0,.25);border-radius:6px;padding:2px 6px;font-family:var(--font-head)">Sin usuario</span>`)
+          : '';
+        const btnInvitar = (_esAdminLista && !vinculado)
+          ? `<button onclick="event.stopPropagation();modalInvitarUsuario('${e.id}')" style="font-size:.65rem;background:rgba(255,107,53,.12);color:var(--accent2);border:1px solid rgba(255,107,53,.3);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:var(--font-head);margin-right:.4rem">📨 Invitar</button>`
+          : '';
+        return `
       <div class="card" onclick="detalleEmpleado('${e.id}')">
         <div class="card-header">
           <div class="card-avatar" style="overflow:hidden;padding:0">
             ${e.foto_url ? `<img src="${safeFotoUrl(e.foto_url)}" style="width:100%;height:100%;object-fit:cover">` : `<span style="font-size:1.3rem">${h(e.nombre).charAt(0).toUpperCase()}</span>`}
           </div>
           <div class="card-info">
-            <div class="card-name">${h(e.nombre)}</div>
+            <div class="card-name">${h(e.nombre)} ${badgeVinculo}</div>
             <div class="card-sub">${e.rol || t('sinRol')} · ${h(e.telefono || t('cliSinTel'))}</div>
           </div>
+          ${btnInvitar}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><path d="M9 18l6-6-6-6"/></svg>
         </div>
-      </div>`).join('')}`;
+      </div>`;
+      }).join('')}`;
 }
 
 async function detalleEmpleado(id) {

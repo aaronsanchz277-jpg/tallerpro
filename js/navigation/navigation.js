@@ -43,6 +43,7 @@ function buildNav() {
   if (rol === 'empleado') {
     sidebarSections.push({ title: 'MIS DATOS', items: [
       { id:'mis-trabajos', label:'Mis Trabajos', icon:'<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>' },
+      { id:'mi-cobro', label:'Mi Cobro', icon:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
       { id:'mi-perfil', label:'Mi Perfil', icon:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' },
     ]});
   }
@@ -189,6 +190,7 @@ async function navigate(page, params = {}) {
     'mi-plan': miPlan, 
     'super-admin': superAdminPanel, 
     'mis-trabajos': misTrabajos,
+    'mi-cobro': miCobro,
     'mi-perfil': miPerfil, 
     ventas, 
     gastos, 

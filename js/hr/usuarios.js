@@ -5,29 +5,62 @@ async function usuarios() {
     if (typeof navigate === 'function') navigate('dashboard');
     return;
   }
-  const [{ data: perfiles }, { data: codigos }] = await Promise.all([
+  // Pedimos códigos con empleado_id (Tarea #17). Si la columna todavía no
+  // existe en la BD, fallback al select clásico para no romper.
+  let codigos = [];
+  {
+    const r = await sb.from('codigos_empleado')
+      .select('id,codigo,tipo,usado,empleado_id,created_at')
+      .eq('taller_id', tid()).eq('usado', false)
+      .order('created_at', {ascending:false});
+    if (r.error && /empleado_id/i.test(r.error.message || '')) {
+      const r2 = await sb.from('codigos_empleado').select('*').eq('taller_id', tid()).eq('usado', false).order('created_at', {ascending:false});
+      codigos = r2.data || [];
+    } else {
+      codigos = r.data || [];
+    }
+  }
+
+  const [{ data: perfiles }, { data: empleadosTaller }] = await Promise.all([
     sb.from('perfiles').select('*').eq('taller_id', tid()).order('nombre'),
-    sb.from('codigos_empleado').select('*').eq('taller_id', tid()).eq('usado', false).order('created_at', {ascending:false})
+    sb.from('empleados').select('id,nombre').eq('taller_id', tid()).order('nombre')
   ]);
+
+  const empMap = {};
+  (empleadosTaller || []).forEach(e => { empMap[e.id] = e.nombre; });
 
   const admins    = (perfiles||[]).filter(u => u.rol === 'admin');
   const empleados = (perfiles||[]).filter(u => u.rol === 'empleado');
   const clientes  = (perfiles||[]).filter(u => u.rol === 'cliente');
 
-  const renderCard = (u) => `
+  // Tarea #17: bandeja de empleados sin vincular (perfil rol=empleado y
+  // empleado_id IS NULL). Es cualquier perfil empleado que entró por código
+  // genérico (sin preasociar) y todavía no fue vinculado a una ficha.
+  const empleadosPendientes = empleados.filter(u => !u.empleado_id);
+
+  const renderCard = (u) => {
+    const nombreEmp = u.empleado_id ? (empMap[u.empleado_id] || '—') : null;
+    const subVinculo = u.rol === 'empleado'
+      ? (nombreEmp
+          ? `<div class="card-sub" style="font-size:.72rem;color:var(--success)">🔗 ${h(nombreEmp)}</div>`
+          : `<div class="card-sub" style="font-size:.72rem;color:var(--warning)">⚠️ Sin vincular a un empleado</div>`)
+      : '';
+    return `
     <div class="card">
       <div class="card-header">
         <div class="card-avatar">${u.nombre?u.nombre.charAt(0).toUpperCase():'?'}</div>
         <div class="card-info">
           <div class="card-name">${h(u.nombre||'Sin nombre')}${u.id===currentUser.id?' (Vos)':''}</div>
+          ${subVinculo}
         </div>
-        <div style="display:flex;gap:.4rem;align-items:center">
+        <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;justify-content:flex-end">
           ${u.id!==currentUser.id?`<button onclick="cambiarRol('${u.id}','${u.rol}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 8px;cursor:pointer">Rol</button>`:''}
           ${u.rol==='cliente'?`<button onclick="modalVincularVehiculo('${u.id}','${hjs(u.nombre)}')" style="font-size:.7rem;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.3);color:var(--accent);border-radius:6px;padding:3px 8px;cursor:pointer">🚗 Autos</button>`:''}
           ${(u.rol==='empleado'||u.rol==='admin')?`<button onclick="modalVincularEmpleado('${u.id}','${hjs(u.nombre)}')" style="font-size:.7rem;background:rgba(255,204,0,.1);border:1px solid rgba(255,204,0,.3);color:var(--warning);border-radius:6px;padding:3px 8px;cursor:pointer">👤 Vincular</button>`:''}
         </div>
       </div>
     </div>`;
+  };
 
   const renderSeccion = (titulo, color, lista) => lista.length === 0 ? '' : `
     <div style="font-size:.72rem;color:${color};font-family:var(--font-head);letter-spacing:1px;margin:.75rem 0 .4rem">${titulo} (${lista.length})</div>
@@ -39,6 +72,19 @@ async function usuarios() {
       <button class="btn-add" onclick="modalInvitarUsuario()">${t('usInvitar')}</button>
     </div>
 
+    ${empleadosPendientes.length > 0 ? `
+    <div style="background:rgba(255,204,0,.06);border:1px solid rgba(255,204,0,.25);border-radius:10px;padding:.75rem;margin-bottom:1rem">
+      <div style="font-size:.72rem;color:var(--warning);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.5rem">⚠️ EMPLEADOS PENDIENTES DE VINCULAR (${empleadosPendientes.length})</div>
+      <div style="font-size:.78rem;color:var(--text2);margin-bottom:.6rem">
+        Estos usuarios entraron como empleado pero todavía no están vinculados a una ficha de empleado. Vinculálos para que puedan ver su sueldo, comisiones y vales.
+      </div>
+      ${empleadosPendientes.map(u => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border)">
+          <div style="font-size:.85rem">${h(u.nombre || 'Sin nombre')}${u.id===currentUser.id?' (Vos)':''}</div>
+          <button onclick="modalVincularEmpleado('${u.id}','${hjs(u.nombre||'')}')" style="font-size:.72rem;background:rgba(255,204,0,.15);border:1px solid rgba(255,204,0,.35);color:var(--warning);border-radius:6px;padding:3px 10px;cursor:pointer;font-family:var(--font-head)">🔗 Vincular</button>
+        </div>`).join('')}
+    </div>` : ''}
+
     ${(codigos||[]).length > 0 ? `
     <div style="background:rgba(255,204,0,.05);border:1px solid rgba(255,204,0,.2);border-radius:10px;padding:.75rem;margin-bottom:1rem">
       <div style="font-size:.72rem;color:var(--warning);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.5rem">${t('usCodigosPend')}</div>
@@ -47,6 +93,7 @@ async function usuarios() {
           <div>
             <span style="font-family:var(--font-head);font-size:1.1rem;color:${c.tipo==='empleado'?'var(--accent2)':'var(--success)'};letter-spacing:3px">${h(c.codigo)}</span>
             <span style="font-size:.65rem;margin-left:.5rem;padding:2px 6px;border-radius:10px;background:${c.tipo==='empleado'?'rgba(255,107,53,.15)':'rgba(0,255,136,.15)'};color:${c.tipo==='empleado'?'var(--accent2)':'var(--success)'}">${c.tipo==='empleado'?'EMPLEADO':'CLIENTE'}</span>
+            ${c.empleado_id && empMap[c.empleado_id] ? `<span style="font-size:.7rem;margin-left:.4rem;color:var(--text2)">→ ${h(empMap[c.empleado_id])}</span>` : ''}
           </div>
           <button onclick="eliminarCodigoConSafeCall('${c.id}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 8px;cursor:pointer">✕</button>
         </div>`).join('')}
@@ -198,9 +245,18 @@ async function vincularPerfilEmpleado(perfilId) {
   usuarios();
 }
 
-function modalInvitarUsuario() {
+async function modalInvitarUsuario(empleadoIdPreseleccionado = null) {
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   const base = window.location.origin + window.location.pathname;
   const link = `${base}?taller=${tid()}`;
+
+  // Empleados existentes (Tarea #17) para preasociar el código.
+  const { data: empleadosTaller } = await sb.from('empleados')
+    .select('id,nombre').eq('taller_id', tid()).order('nombre');
+
+  const opcionesEmpleados = (empleadosTaller || []).map(e =>
+    `<option value="${e.id}" ${empleadoIdPreseleccionado===e.id?'selected':''}>${h(e.nombre)}</option>`
+  ).join('');
 
   openModal(`
     <div class="modal-title">${t("modInvitarUsuario")}</div>
@@ -210,9 +266,19 @@ function modalInvitarUsuario() {
     </div>
 
     <div id="invite-empleado">
-      <p style="color:var(--text2);font-size:.82rem;margin-bottom:1rem">
+      <p style="color:var(--text2);font-size:.82rem;margin-bottom:.6rem">
         Generá un código y enviáselo al empleado junto con el link de registro.
       </p>
+      <div class="form-group">
+        <label class="form-label">Vincular a un empleado existente (opcional)</label>
+        <select class="form-input" id="f-invite-empleado-id">
+          <option value="">— Sin preasociar —</option>
+          ${opcionesEmpleados}
+        </select>
+        <div style="font-size:.7rem;color:var(--text2);margin-top:.3rem">
+          Si elegís uno, el usuario va a quedar automáticamente vinculado a esa ficha al ingresar el código.
+        </div>
+      </div>
       <button class="btn-primary" onclick="generarCodigoConSafeCall('empleado')">GENERAR CÓDIGO</button>
       <div id="codigo-generado-empleado" style="display:none;margin-top:1rem">
         <div style="background:var(--surface2);border:1px solid var(--accent2);border-radius:10px;padding:1rem;text-align:center;margin-bottom:.75rem">
@@ -265,12 +331,26 @@ async function generarCodigoConSafeCall(tipo) {
 
 async function generarCodigo(tipo) {
   if (typeof requireAdmin === 'function' && !requireAdmin()) return;
+  // Tarea #17: si el modal de invitación trae un empleado preseleccionado,
+  // lo asociamos al código para auto-vincular el perfil al aplicarlo.
+  const empSel = document.getElementById('f-invite-empleado-id');
+  const empleadoId = (tipo === 'empleado' && empSel && empSel.value) ? empSel.value : null;
+
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   for (let intento = 0; intento < 3; intento++) {
     const arr = new Uint32Array(8);
     crypto.getRandomValues(arr);
     const codigo = Array.from(arr, v => chars[v % chars.length]).join('');
-    const { error } = await sb.from('codigos_empleado').insert({ codigo, taller_id: tid(), usado: false, tipo });
+    const payload = { codigo, taller_id: tid(), usado: false, tipo };
+    if (empleadoId) payload.empleado_id = empleadoId;
+    let { error } = await sb.from('codigos_empleado').insert(payload);
+    // Si falla porque la columna empleado_id todavía no existe en BD,
+    // reintentamos sin ese campo (degradación elegante).
+    if (error && empleadoId && /empleado_id/i.test(error.message || '')) {
+      const r = await sb.from('codigos_empleado').insert({ codigo, taller_id: tid(), usado: false, tipo });
+      error = r.error;
+      if (!error) toast('Código creado, pero no quedó preasociado al empleado (BD sin actualizar)', 'warning');
+    }
     if (!error) {
       const base = window.location.href.split('?')[0].split('#')[0];
       const link = `${base}?taller=${tid()}&codigo=${codigo}`;

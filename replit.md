@@ -130,3 +130,53 @@ escriben en su taller). El usuario tiene que correr el script en el
 SQL Editor de Supabase una sola vez para que la pantalla "Mis
 presupuestos" devuelva datos. Sin ejecutar el script la query devuelve
 [] sin romper la UI — el cliente igual ve sus reparaciones pendientes.
+
+## Empleado completo: vinculación y "Mi cobro" (Tarea #17)
+
+A partir de la Tarea #17, el flujo del rol **empleado** quedó cerrado:
+
+1. **Vinculación automática del perfil al empleado**. La tabla
+   `codigos_empleado` ahora tiene la columna opcional `empleado_id`
+   (FK a `empleados`). Cuando el admin genera un código desde la lista
+   de empleados (botón **📨 Invitar** por fila) o desde Configuración
+   → Usuarios eligiendo un empleado existente, el código queda
+   "preasociado". Al aplicarlo, la nueva RPC `aplicar_codigo` setea en
+   un solo paso `perfiles.rol`, `perfiles.taller_id` y
+   `perfiles.empleado_id`. La RPC es `SECURITY DEFINER` para sortear el
+   trigger que protege esos campos en la tabla `perfiles`.
+
+2. **Bandeja de pendientes**. En Configuración → Usuarios aparece un
+   recuadro "⚠️ Empleados pendientes de vincular" con cualquier perfil
+   de rol `empleado` que todavía no tenga `empleado_id`, con botón
+   directo a **🔗 Vincular**. Cada card de empleado muestra además a
+   qué ficha está vinculado (o "Sin vincular").
+
+3. **Pantalla "Mi cobro"** (`miCobro` en `js/auth/admin-v2.js`,
+   ruta `mi-cobro`). El empleado ve su sueldo base, comisiones del
+   período activo (suma de `pago` de `reparacion_mecanicos` cuyas
+   reparaciones tienen `fecha` dentro del rango), total de horas
+   trabajadas, vales tomados y total a cobrar. Cada comisión muestra
+   patente, fecha y horas. El período se resuelve buscando el
+   `periodos_sueldo` con `estado='abierto'` (mismo modelo que usa el
+   admin en Sueldos); si no hay ninguno abierto, cae al mes corriente
+   como fallback y se indica con un badge. Si el perfil aún no está
+   vinculado, muestra un mensaje pidiendo al admin que lo vincule en
+   lugar de fallar.
+
+4. **RLS de `reparacion_mecanicos` ajustada** para que el empleado
+   solo lea SUS propias filas (privacidad: ahí están las comisiones).
+   Se reemplazó la antigua `reparacion_mecanicos_staff_all` por dos
+   policies: `reparacion_mecanicos_admin_all` (admin sin restricción
+   en su taller) y `reparacion_mecanicos_empleado_select_own`
+   (empleado SELECT donde `empleado_id = empleado_id_actual()` o, por
+   compatibilidad con datos viejos, `mecanico_id = auth.uid()`).
+
+**SQL a correr**: el usuario tiene que volver a ejecutar
+`supabase/rls_policies.sql` en el SQL Editor de Supabase (es
+idempotente). Ese script agrega la columna `codigos_empleado.empleado_id`,
+su FK a `empleados`, la RPC `aplicar_codigo` y la nueva separación de
+policies en `reparacion_mecanicos`. Sin correrlo el botón "📨 Invitar"
+sigue funcionando pero el código no queda preasociado (degradación
+elegante: muestra un toast amarillo y se inserta sin la columna), y
+la pantalla "Mi cobro" igual carga porque la policy vieja también
+permite lectura al empleado.
