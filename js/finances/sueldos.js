@@ -23,14 +23,20 @@ async function sueldos() {
       }
     }
   }
+  // Tarea #58: cada par solapado tiene un botón "Resolver" que abre un mini-flujo
+  // para borrar el período (si no tiene liquidaciones pagadas) o achicarle las
+  // fechas para que deje de cruzarse. Ver `resolverSolapamiento()` abajo.
   const avisoSolapados = pares.length ? `
     <div style="background:#fff7d6;border:1px solid #e5b800;color:#7a5b00;border-radius:8px;padding:.85rem;margin-bottom:1rem">
       <div style="font-family:var(--font-head);font-size:1rem;margin-bottom:.4rem">⚠ Hay períodos de sueldo solapados</div>
       <div style="font-size:.85rem;margin-bottom:.4rem">
         Revisalos para no pagar vales/comisiones dos veces:
       </div>
-      <ul style="margin:.25rem 0 0 1.1rem;font-size:.85rem">
-        ${pares.map(([a,b]) => `<li>${formatFecha(a.fecha_inicio)} — ${formatFecha(a.fecha_fin)} ↔ ${formatFecha(b.fecha_inicio)} — ${formatFecha(b.fecha_fin)}</li>`).join('')}
+      <ul style="margin:.25rem 0 0 1.1rem;font-size:.85rem;list-style:none;padding:0">
+        ${pares.map(([a,b]) => `<li style="display:flex;align-items:center;gap:.5rem;margin-bottom:.35rem;flex-wrap:wrap">
+          <span style="flex:1;min-width:200px">${formatFecha(a.fecha_inicio)} — ${formatFecha(a.fecha_fin)} ↔ ${formatFecha(b.fecha_inicio)} — ${formatFecha(b.fecha_fin)}</span>
+          <button onclick="resolverSolapamiento('${a.id}','${b.id}')" style="background:#7a5b00;color:#fff7d6;border:none;border-radius:6px;padding:.25rem .6rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">Resolver</button>
+        </li>`).join('')}
       </ul>
     </div>` : '';
 
@@ -395,4 +401,170 @@ async function cerrarPeriodo(periodoId) {
 
 function verLiquidaciones(empleadoId) {
   navigate('sueldos');
+}
+
+// ─── TAREA #58: RESOLVER PERÍODOS SOLAPADOS ──────────────────────────────────
+// Mini-flujo lanzado desde el cartel amarillo de `sueldos()`. Trae los dos
+// períodos en conflicto + sus liquidaciones, los muestra lado a lado y deja
+// borrar el que no tenga pagadas o achicarle las fechas para romper el
+// solapamiento. Si el constraint EXCLUDE (Tarea #56) sigue rechazando el
+// ajuste, se traduce a un mensaje claro.
+async function resolverSolapamiento(idA, idB) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede resolver solapamientos')) return;
+  await safeCall(async () => {
+    const [pAResp, pBResp, liqAResp, liqBResp] = await Promise.all([
+      sb.from('periodos_sueldo').select('*').eq('id', idA).single(),
+      sb.from('periodos_sueldo').select('*').eq('id', idB).single(),
+      sb.from('liquidaciones').select('id, estado, total_liquidado, empleados(nombre)').eq('periodo_id', idA).order('created_at'),
+      sb.from('liquidaciones').select('id, estado, total_liquidado, empleados(nombre)').eq('periodo_id', idB).order('created_at'),
+    ]);
+    if (pAResp.error || pBResp.error || !pAResp.data || !pBResp.data) {
+      toast('No se encontraron los períodos','error'); return;
+    }
+    // Si falla el fetch de liquidaciones, abortamos: no quiero mostrar
+    // counts de "0 pagadas" que en realidad no sabemos, porque eso podría
+    // hacer que el admin habilite borrar un período que sí tiene pagadas.
+    if (liqAResp.error || liqBResp.error) {
+      toast('Error al traer liquidaciones: ' + ((liqAResp.error||liqBResp.error).message || ''),'error');
+      return;
+    }
+    abrirModalResolverSolapamiento(pAResp.data, pBResp.data, liqAResp.data || [], liqBResp.data || []);
+  }, null, 'No se pudo abrir el resolutor');
+}
+
+function abrirModalResolverSolapamiento(pA, pB, liqsA, liqsB) {
+  const pagadasA = liqsA.filter(l => l.estado === 'pagado').length;
+  const pagadasB = liqsB.filter(l => l.estado === 'pagado').length;
+  let aviso = '';
+  if (pagadasA && pagadasB) {
+    aviso = `<div style="background:#fff7d6;border:1px solid #e5b800;color:#7a5b00;border-radius:6px;padding:.5rem;margin-bottom:.75rem;font-size:.78rem">Los dos períodos ya tienen liquidaciones pagadas. No se puede borrar ni achicar ninguno desde acá sin riesgo de tocar pagos cerrados — primero anulá manualmente alguna liquidación pagada y volvé a entrar.</div>`;
+  } else if (pagadasA || pagadasB) {
+    const cual = pagadasA ? 'el de la izquierda' : 'el de la derecha';
+    const otro = pagadasA ? 'el de la derecha' : 'el de la izquierda';
+    aviso = `<div style="background:#fff7d6;border:1px solid #e5b800;color:#7a5b00;border-radius:6px;padding:.5rem;margin-bottom:.75rem;font-size:.78rem">${cual} ya tiene liquidaciones pagadas, así que no se puede tocar. Podés borrar ${otro} (si no tiene pagadas) o achicarle las fechas para que deje de pisarse.</div>`;
+  }
+  openModal(`
+    <div class="modal-title">Resolver solapamiento</div>
+    ${aviso}
+    <div style="display:flex;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px">${renderColumnaPeriodoSolapado(pA, liqsA, pA.id, pB.id)}</div>
+      <div style="flex:1;min-width:220px">${renderColumnaPeriodoSolapado(pB, liqsB, pA.id, pB.id)}</div>
+    </div>
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+function renderColumnaPeriodoSolapado(p, liqs, idA, idB) {
+  const pagadas = liqs.filter(l => l.estado === 'pagado');
+  const pendientes = liqs.filter(l => l.estado !== 'pagado');
+  const totalPag = pagadas.reduce((s,l) => s + parseFloat(l.total_liquidado||0), 0);
+  const totalPen = pendientes.reduce((s,l) => s + parseFloat(l.total_liquidado||0), 0);
+  // Regla del task: si el período tiene liquidaciones pagadas no se puede
+  // tocar (ni borrar ni achicar). El admin tiene que actuar sobre el otro.
+  const puedeTocar = pagadas.length === 0;
+  const detalle = liqs.length ? `
+    <details style="margin-bottom:.5rem;font-size:.72rem;color:var(--text2)">
+      <summary style="cursor:pointer">Ver liquidaciones (${liqs.length})</summary>
+      <ul style="margin:.25rem 0 0 .9rem;padding:0">
+        ${liqs.map(l => `<li>${h(l.empleados?.nombre||'?')} · ₲${gs(l.total_liquidado)} ${l.estado==='pagado'?'<span style="color:var(--success)">✓ pagada</span>':'<span style="color:var(--accent)">⏳ pendiente</span>'}</li>`).join('')}
+      </ul>
+    </details>` : '<div style="font-size:.72rem;color:var(--text2);margin-bottom:.5rem">Sin liquidaciones</div>';
+  const btnsBloqueados = `
+    <button disabled title="Tiene liquidaciones pagadas" style="width:100%;margin:0 0 .35rem 0;padding:.4rem;font-size:.78rem;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:8px;cursor:not-allowed;opacity:.6">🗑 Borrar (bloqueado)</button>
+    <button disabled title="Tiene liquidaciones pagadas" style="width:100%;margin:0;padding:.4rem;font-size:.78rem;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:8px;cursor:not-allowed;opacity:.6">✂ Achicar (bloqueado)</button>`;
+  const btnsActivos = `
+    <button class="btn-danger" style="width:100%;margin:0 0 .35rem 0;padding:.4rem;font-size:.78rem" onclick="confirmarBorrarPeriodoSolapado('${p.id}','${idA}','${idB}')">🗑 Borrar período</button>
+    <button class="btn-secondary" style="width:100%;margin:0;padding:.4rem;font-size:.78rem" onclick="abrirAchicarFechasSolapado('${p.id}','${idA}','${idB}')">✂ Achicar fechas</button>`;
+  return `<div style="border:1px solid var(--border);border-radius:8px;padding:.6rem;background:var(--surface)">
+    <div style="font-family:var(--font-head);font-size:.9rem;margin-bottom:.25rem">${formatFecha(p.fecha_inicio)} — ${formatFecha(p.fecha_fin)}</div>
+    <div style="font-size:.72rem;color:var(--text2);margin-bottom:.5rem">${p.estado==='cerrado'?'✓ Cerrado':'⏳ Abierto'}</div>
+    <div style="font-size:.75rem;margin-bottom:.5rem;line-height:1.4">
+      <div>Pagadas: <strong>${pagadas.length}</strong>${pagadas.length?` · ₲${gs(totalPag)}`:''}</div>
+      <div>Pendientes: <strong>${pendientes.length}</strong>${pendientes.length?` · ₲${gs(totalPen)}`:''}</div>
+    </div>
+    ${detalle}
+    ${puedeTocar ? btnsActivos : btnsBloqueados}
+  </div>`;
+}
+
+function confirmarBorrarPeriodoSolapado(periodoId, idA, idB) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede borrar períodos de sueldo')) return;
+  confirmar('¿Borrar este período? Se borran también sus liquidaciones pendientes. Los pagos ya registrados en Finanzas no se tocan.', async () => {
+    await safeCall(async () => {
+      if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede borrar períodos de sueldo')) return;
+      // Re-chequear que no haya pagadas (anti-condición de carrera).
+      const { data: pagadasAhora, error: chkErr } = await sb.from('liquidaciones')
+        .select('id', { count: 'exact', head: false }).eq('periodo_id', periodoId).eq('estado','pagado');
+      if (chkErr) { toast('Error: ' + chkErr.message,'error'); return; }
+      if ((pagadasAhora||[]).length) {
+        toast('Este período ya tiene liquidaciones pagadas. No se puede borrar.','error');
+        sueldos();
+        return;
+      }
+      const { error: liqErr } = await sb.from('liquidaciones').delete().eq('periodo_id', periodoId);
+      if (liqErr) { toast('Error al borrar liquidaciones: ' + liqErr.message,'error'); return; }
+      const { error: pErr } = await sb.from('periodos_sueldo').delete().eq('id', periodoId);
+      if (pErr) { toast('Error al borrar el período: ' + pErr.message,'error'); return; }
+      toast('✓ Período borrado','success');
+      closeModal();
+      sueldos();
+    }, null, 'No se pudo borrar el período');
+  });
+}
+
+async function abrirAchicarFechasSolapado(periodoIdAchicar, idA, idB) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede ajustar fechas de períodos')) return;
+  const otroId = periodoIdAchicar === idA ? idB : idA;
+  await safeCall(async () => {
+    const [pAchicarResp, pOtroResp] = await Promise.all([
+      sb.from('periodos_sueldo').select('*').eq('id', periodoIdAchicar).single(),
+      sb.from('periodos_sueldo').select('*').eq('id', otroId).single(),
+    ]);
+    if (pAchicarResp.error || pOtroResp.error || !pAchicarResp.data || !pOtroResp.data) {
+      toast('No se encontró el período','error'); return;
+    }
+    const pAchicar = pAchicarResp.data, pOtro = pOtroResp.data;
+    openModal(`
+      <div class="modal-title">Achicar fechas</div>
+      <div style="font-size:.8rem;color:var(--text2);margin-bottom:.4rem">
+        Período a achicar: <strong>${formatFecha(pAchicar.fecha_inicio)} — ${formatFecha(pAchicar.fecha_fin)}</strong>
+      </div>
+      <div style="font-size:.8rem;color:var(--text2);margin-bottom:.75rem">
+        Se cruza con: <strong>${formatFecha(pOtro.fecha_inicio)} — ${formatFecha(pOtro.fecha_fin)}</strong>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nueva fecha inicio</label>${renderFechaInput('f-achicar-inicio', pAchicar.fecha_inicio)}</div>
+        <div class="form-group"><label class="form-label">Nueva fecha fin</label>${renderFechaInput('f-achicar-fin', pAchicar.fecha_fin)}</div>
+      </div>
+      <button class="btn-primary" onclick="guardarAchicarFechasSolapado('${periodoIdAchicar}','${idA}','${idB}')">Guardar</button>
+      <button class="btn-secondary" onclick="resolverSolapamiento('${idA}','${idB}')">← Volver</button>
+    `);
+  }, null, 'No se pudo abrir el editor de fechas');
+}
+
+async function guardarAchicarFechasSolapado(periodoId, idA, idB) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede ajustar fechas de períodos')) return;
+  const inicio = document.getElementById('f-achicar-inicio').value;
+  const fin = document.getElementById('f-achicar-fin').value;
+  if (!inicio || !fin) { toast('Las fechas son obligatorias','error'); return; }
+  if (inicio > fin) { toast('La fecha de inicio no puede ser posterior a la fecha fin','error'); return; }
+  await safeCall(async () => {
+    const { error } = await sb.from('periodos_sueldo')
+      .update({ fecha_inicio: inicio, fecha_fin: fin })
+      .eq('id', periodoId);
+    if (error) {
+      // El constraint EXCLUDE de la Tarea #56 dispara este error si las
+      // nuevas fechas siguen pisando otro período del mismo taller.
+      const msg = String(error.message || '');
+      if (/periodos_sueldo_no_solapan_taller|exclude|conflicting key|overlap/i.test(msg)) {
+        toast('Las fechas siguen pisando otro período del taller. Achicalas más para que no se crucen.','error');
+      } else {
+        toast('Error: ' + msg,'error');
+      }
+      return;
+    }
+    toast('✓ Fechas actualizadas','success');
+    closeModal();
+    sueldos();
+  }, null, 'No se pudieron actualizar las fechas');
 }

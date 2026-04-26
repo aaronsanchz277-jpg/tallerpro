@@ -673,3 +673,33 @@ La Tarea #55 cierra el caso "mecánico que cobra solo a comisión
 No requiere correr SQL nuevo: `total_extra` y `reparacion_mecanicos.pago`
 ya existen, y la RLS `reparacion_mecanicos_admin_all` permite a la app
 leer las comisiones del taller al generar liquidaciones.
+
+## Períodos de sueldo solapados (Tareas #56 + #57 + #58)
+
+`periodos_sueldo` lleva un constraint EXCLUDE
+(`periodos_sueldo_no_solapan_taller`, definido en `supabase/rls_policies.sql`)
+que impide insertar dos rangos del mismo taller que se crucen. Para los
+pares viejos que ya estaban cargados antes del fix, `sueldos()` en
+`js/finances/sueldos.js` arma un cartel amarillo arriba listando los
+solapamientos detectados en memoria.
+
+La Tarea #58 agrega un botón **"Resolver"** a cada item del cartel
+(`resolverSolapamiento(idA, idB)`). Abre un modal con los dos períodos
+lado a lado, sus liquidaciones (pagadas vs pendientes con totales) y
+dos acciones por columna:
+
+- **🗑 Borrar período**: solo habilitado si el período no tiene
+  liquidaciones pagadas. Re-chequea pagadas en el momento (anti-carrera),
+  borra primero las liquidaciones pendientes del período y después el
+  período. Los egresos en `movimientos_financieros` que generó el
+  trigger `trigger_sueldo_pagado` no se tocan (no se borran liquidaciones
+  pagadas).
+- **✂ Achicar fechas**: abre un sub-modal con dos `renderFechaInput` para
+  el nuevo rango. El UPDATE puede chocar con el constraint EXCLUDE si
+  las nuevas fechas siguen pisando otro período; se traduce el error de
+  Postgres a "Las fechas siguen pisando otro período del taller. Achicalas
+  más para que no se crucen.".
+
+Si los dos períodos tienen pagadas, el modal lo explica y solo deja
+achicar fechas. El "Volver" del sub-modal de achicar re-abre el
+resolutor (vuelve a fetchear estado fresco).
