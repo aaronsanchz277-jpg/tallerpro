@@ -180,10 +180,10 @@ async function pushCheckMisCitas() {
       if (before !== c.estado) {
         const fechaTxt = (c.fecha || '') + (c.hora ? ' ' + c.hora.slice(0,5) : '');
         if (c.estado === 'confirmada') {
-          pushNotify(`✓ Tu turno fue confirmado`, `${c.descripcion || 'Turno'} — ${fechaTxt}`, 'cita-' + c.id, () => navigate('mis-turnos'));
+          pushNotify(`✓ Tu turno fue confirmado`, `${c.descripcion || 'Turno'} — ${fechaTxt}`, 'cita-' + c.id, () => navigate('mis-citas'));
           n++;
         } else if (c.estado === 'cancelada' || c.estado === 'rechazada') {
-          pushNotify(`✕ Tu turno fue rechazado`, `${c.descripcion || 'Turno'} — ${fechaTxt}`, 'cita-' + c.id, () => navigate('mis-turnos'));
+          pushNotify(`✕ Tu turno fue rechazado`, `${c.descripcion || 'Turno'} — ${fechaTxt}`, 'cita-' + c.id, () => navigate('mis-citas'));
           n++;
         }
       }

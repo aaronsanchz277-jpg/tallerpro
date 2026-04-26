@@ -400,9 +400,10 @@ BEGIN
                     AND public.rol_actual() IN ('admin','empleado'))
     $p$;
 
-    -- Cliente puede aprobar / rechazar SUS presupuestos formales (estado).
-    -- El trigger más abajo asegura que solo cambie el campo `estado` (y opcionalmente
-    -- `aprobado_por_cliente_at` si la columna existe).
+    -- Cliente puede aprobar / rechazar SUS presupuestos formales.
+    -- La policy permite UPDATE pero el trigger más abajo restringe los campos
+    -- modificables a `estado` y (si existe) `aprobado_por_cliente_at`, y limita
+    -- las transiciones de estado a generado→aprobado/rechazado.
     EXECUTE 'DROP POLICY IF EXISTS "presupuestos_v2_update_cliente" ON presupuestos_v2';
     EXECUTE $p$
       CREATE POLICY "presupuestos_v2_update_cliente" ON presupuestos_v2
@@ -416,9 +417,60 @@ BEGIN
           taller_id = public.taller_id_actual()
           AND public.rol_actual() = 'cliente'
           AND cliente_id = public.cliente_id_actual()
-          AND estado IN ('aprobado','rechazado','generado')
+          AND estado IN ('aprobado','rechazado')
         )
     $p$;
+  END IF;
+END $$;
+
+-- Trigger: cuando un cliente actualiza presupuestos_v2 directamente, solo
+-- puede cambiar `estado` (y opcionalmente `aprobado_por_cliente_at` si la
+-- columna existe). Cualquier cambio a `total`, `descripcion`, items, etc.
+-- aborta la operación. Misma lógica que el trigger de `reparaciones`.
+CREATE OR REPLACE FUNCTION public.presupuestos_v2_proteger_cliente_update()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  o jsonb := to_jsonb(OLD);
+  n jsonb := to_jsonb(NEW);
+  k text;
+  campos_permitidos text[] := ARRAY['estado','aprobado_por_cliente_at','updated_at'];
+BEGIN
+  -- RPCs SECURITY DEFINER y staff pasan sin chequeo.
+  IF current_user IS DISTINCT FROM 'authenticated' THEN RETURN NEW; END IF;
+  IF public.rol_actual() IN ('admin','empleado') THEN RETURN NEW; END IF;
+
+  -- Cliente: comparar fila vieja vs nueva, solo los campos permitidos pueden cambiar.
+  FOR k IN SELECT jsonb_object_keys(n) LOOP
+    IF NOT (k = ANY(campos_permitidos)) AND (o->k) IS DISTINCT FROM (n->k) THEN
+      RAISE EXCEPTION 'El cliente solo puede actualizar el estado del presupuesto, intentó cambiar: %', k;
+    END IF;
+  END LOOP;
+
+  -- Solo permitir transición desde estado actual generado/pendiente.
+  IF (o->>'estado') NOT IN ('generado','pendiente') THEN
+    RAISE EXCEPTION 'No se puede cambiar el estado del presupuesto desde %', (o->>'estado');
+  END IF;
+
+  -- Estado destino solo aprobado / rechazado.
+  IF (n->>'estado') NOT IN ('aprobado','rechazado') THEN
+    RAISE EXCEPTION 'El cliente solo puede aprobar o rechazar el presupuesto';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='presupuestos_v2') THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS presupuestos_v2_proteger_cliente_update_trg ON presupuestos_v2';
+    EXECUTE 'CREATE TRIGGER presupuestos_v2_proteger_cliente_update_trg
+             BEFORE UPDATE ON presupuestos_v2
+             FOR EACH ROW
+             EXECUTE FUNCTION public.presupuestos_v2_proteger_cliente_update()';
   END IF;
 END $$;
 

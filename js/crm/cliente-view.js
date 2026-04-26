@@ -179,8 +179,9 @@ async function descargarComprobanteCliente(repId) {
 async function aprobarPresupV2(id) {
   confirmar('¿Aprobar este presupuesto? El taller podrá empezar el trabajo.', async () => {
     await safeCall(async () => {
+      // Solo enviamos `estado`. El trigger BD se encarga de validar transición y campos.
       const { error } = await sb.from('presupuestos_v2')
-        .update({ estado: 'aprobado', aprobado_por_cliente_at: new Date().toISOString() })
+        .update({ estado: 'aprobado' })
         .eq('id', id);
       if (error) { toast('No se pudo aprobar: '+error.message, 'error'); return; }
       toast('✓ Presupuesto aprobado', 'success');
@@ -194,7 +195,7 @@ async function rechazarPresupV2(id) {
   confirmar('¿Rechazar este presupuesto?', async () => {
     await safeCall(async () => {
       const { error } = await sb.from('presupuestos_v2')
-        .update({ estado: 'rechazado', aprobado_por_cliente_at: new Date().toISOString() })
+        .update({ estado: 'rechazado' })
         .eq('id', id);
       if (error) { toast('No se pudo rechazar: '+error.message, 'error'); return; }
       toast('Presupuesto rechazado', 'success');
