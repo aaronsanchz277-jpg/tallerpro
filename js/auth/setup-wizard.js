@@ -94,12 +94,26 @@ async function _setupPersistir() {
   if (datosListos && currentPerfil?.talleres && !currentPerfil.talleres.setup_completado) {
     patch.setup_completado = new Date().toISOString();
   }
+  let okBD = false;
   try {
-    await sb.from('talleres').update(patch).eq('id', tid());
+    const { error } = await sb.from('talleres').update(patch).eq('id', tid());
+    if (error) {
+      // Si la columna no existe (migración Tarea #62 sin aplicar), no hay
+      // mucho que hacer: cerramos silenciosamente para no bloquear al
+      // usuario y NO mutamos el perfil en memoria — al recargar la app
+      // el wizard volverá a aparecer y eso está bien (la migración debería
+      // aplicarse antes del deploy).
+      console.warn('[setup] update falló:', error.message || error);
+    } else {
+      okBD = true;
+    }
   } catch (e) {
     console.warn('[setup] no se pudo persistir estado:', e);
   }
-  if (currentPerfil?.talleres) {
+  // Solo reflejamos en el perfil en memoria si la BD aceptó el cambio,
+  // para que el dashboard y la tarjeta de pendientes no muestren un
+  // estado inconsistente con lo que realmente está guardado.
+  if (okBD && currentPerfil?.talleres) {
     currentPerfil.talleres.setup_pasos_pendientes = pendientes;
     if (patch.setup_completado) {
       currentPerfil.talleres.setup_completado = patch.setup_completado;
