@@ -1,5 +1,11 @@
 // ─── PAGOS DE REPARACIÓN ────────────────────────────────────────────────────
 async function modalPagosReparacion(repId, montoSugerido = null) {
+  // Solo admin o empleado con permiso explícito de "registrar_cobros"
+  if (typeof esAdmin === 'function' && !esAdmin()
+      && !(typeof tienePerm === 'function' && tienePerm('registrar_cobros'))) {
+    if (typeof toast === 'function') toast('No tenés permisos para registrar cobros', 'error');
+    return;
+  }
   const [{ data: rep }, { data: pagos }] = await Promise.all([
     sb.from('reparaciones').select('costo,descripcion').eq('id', repId).single(),
     sb.from('pagos_reparacion').select('*').eq('reparacion_id', repId).order('fecha', {ascending:false})
@@ -54,6 +60,11 @@ async function modalPagosReparacion(repId, montoSugerido = null) {
 }
 
 async function guardarPagoReparacion(repId) {
+  if (typeof esAdmin === 'function' && !esAdmin()
+      && !(typeof tienePerm === 'function' && tienePerm('registrar_cobros'))) {
+    if (typeof toast === 'function') toast('No tenés permisos para registrar cobros', 'error');
+    return;
+  }
   await safeCall(async () => {
     const monto = parseFloat(document.getElementById('f-pago-monto').value);
     if (!validatePositiveNumber(monto, 'Monto')) return;

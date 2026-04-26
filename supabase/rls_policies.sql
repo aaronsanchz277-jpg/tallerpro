@@ -83,6 +83,57 @@ $$;
 
 
 -- ---------------------------------------------------------------------------
+-- 1.b) Trigger anti-escalada en perfiles
+-- ---------------------------------------------------------------------------
+-- El cliente JS tiene que poder editar su perfil (cambiar su nombre, etc.),
+-- pero NO puede tocar campos sensibles: rol, taller_id, permisos,
+-- empleado_id, cliente_id. Si lo hace, lo revertimos silenciosamente.
+--
+-- Las RPCs SECURITY DEFINER (`crear_taller_y_admin`, `aplicar_codigo`, etc.)
+-- corren con el rol del owner (postgres / supabase_admin), no con
+-- `authenticated`. Por eso este trigger las deja pasar: el chequeo
+-- `current_user = 'authenticated'` solo se cumple cuando el cliente JS
+-- escribe directo a la tabla.
+CREATE OR REPLACE FUNCTION public.perfiles_proteger_campos()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  -- Si la operación NO viene del rol authenticated (p.ej. una RPC SECURITY
+  -- DEFINER, un trigger del sistema, o un superuser), dejar pasar.
+  IF current_user IS DISTINCT FROM 'authenticated' THEN
+    RETURN NEW;
+  END IF;
+
+  -- Admin del mismo taller: puede modificar todo (incluido rol/permisos
+  -- de otros usuarios del taller).
+  IF public.es_admin()
+     AND COALESCE(NEW.taller_id, OLD.taller_id) = public.taller_id_actual() THEN
+    RETURN NEW;
+  END IF;
+
+  -- Cualquier otro caso (usuario no-admin editando su propio perfil):
+  -- forzamos que los campos sensibles NO cambien.
+  IF TG_OP = 'UPDATE' THEN
+    NEW.rol         := OLD.rol;
+    NEW.taller_id   := OLD.taller_id;
+    NEW.empleado_id := OLD.empleado_id;
+    NEW.cliente_id  := OLD.cliente_id;
+    NEW.permisos    := OLD.permisos;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS perfiles_proteger_campos_trg ON perfiles;
+CREATE TRIGGER perfiles_proteger_campos_trg
+  BEFORE UPDATE ON perfiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.perfiles_proteger_campos();
+
+
+-- ---------------------------------------------------------------------------
 -- 2) PERFILES y TALLERES (siempre RLS, lectura por taller)
 -- ---------------------------------------------------------------------------
 ALTER TABLE perfiles ENABLE ROW LEVEL SECURITY;
@@ -365,11 +416,27 @@ CREATE POLICY "movimientos_select_admin" ON movimientos_financieros
   );
 
 DROP POLICY IF EXISTS "movimientos_insert_staff" ON movimientos_financieros;
--- Empleado puede insertar (lo necesita el flujo de pagos / vales / ventas),
--- pero NO puede leer ni modificar movimientos financieros.
+-- Solo admin, o empleado con permiso explícito `registrar_cobros`, puede
+-- insertar movimientos financieros. Esto cubre el flujo de pagos del
+-- cliente. Para flujos de venta/vale, el insert es disparado por el admin.
+-- Aunque pueda insertar, el empleado NO puede leer ni modificar
+-- movimientos (políticas separadas más abajo).
 CREATE POLICY "movimientos_insert_staff" ON movimientos_financieros
   FOR INSERT TO authenticated
-  WITH CHECK (taller_id = public.taller_id_actual() AND public.rol_actual() IN ('admin','empleado'));
+  WITH CHECK (
+    taller_id = public.taller_id_actual()
+    AND (
+      public.es_admin()
+      OR (
+        public.rol_actual() = 'empleado'
+        AND COALESCE(
+          (SELECT (permisos->>'registrar_cobros')::boolean
+             FROM perfiles WHERE id = auth.uid()),
+          false
+        ) = true
+      )
+    )
+  );
 
 DROP POLICY IF EXISTS "movimientos_update_admin" ON movimientos_financieros;
 CREATE POLICY "movimientos_update_admin" ON movimientos_financieros
@@ -388,7 +455,7 @@ DO $$
 DECLARE
   t text;
   admin_tables text[] := ARRAY[
-    'gastos','sueldos','liquidaciones_sueldo','cuentas_pagar','creditos',
+    'gastos','sueldos','liquidaciones','liquidaciones_sueldo','cuentas_pagar','creditos',
     'balances','movimiento_balance','cierres_caja','categorias_financieras',
     'conciliaciones','suscripciones'
   ];
