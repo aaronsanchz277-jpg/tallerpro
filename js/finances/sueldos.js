@@ -64,10 +64,42 @@ async function guardarPeriodo() {
   const inicio = document.getElementById('f-periodo-inicio').value;
   const fin = document.getElementById('f-periodo-fin').value;
   if (!inicio || !fin) { toast('Las fechas son obligatorias','error'); return; }
+  if (inicio > fin) { toast('La fecha de inicio no puede ser posterior a la fecha fin','error'); return; }
+
+  // Tarea #56: avisar si las fechas se solapan con otro período del mismo
+  // taller (cerrado o abierto). Dos períodos solapados hacen que vales,
+  // trabajos manuales y comisiones que caen en el rango compartido se
+  // cuenten dos veces — una en cada liquidación.
+  // Solapan ⇔ inicio_otro ≤ fin_nuevo  AND  fin_otro ≥ inicio_nuevo.
+  const { data: solapados, error: solErr } = await sb.from('periodos_sueldo')
+    .select('id, fecha_inicio, fecha_fin, estado')
+    .eq('taller_id', tid())
+    .lte('fecha_inicio', fin)
+    .gte('fecha_fin', inicio)
+    .order('fecha_inicio');
+  if (solErr) { toast('Error: '+solErr.message,'error'); return; }
+
+  if ((solapados||[]).length) {
+    const lista = solapados.map(p =>
+      `${formatFecha(p.fecha_inicio)} — ${formatFecha(p.fecha_fin)} (${p.estado})`
+    ).join(', ');
+    confirmar(
+      `Este período se pisa con: ${lista}. Si creás los dos, los vales, trabajos y comisiones que caen en el rango compartido se cuentan dos veces. ¿Crear igual?`,
+      () => {
+        safeCall(async () => { await insertarPeriodo(inicio, fin); }, null, 'No se pudo crear el período');
+      }
+    );
+    return;
+  }
+
+  await insertarPeriodo(inicio, fin);
+}
+
+async function insertarPeriodo(inicio, fin) {
   const { error } = await sb.from('periodos_sueldo').insert({ fecha_inicio:inicio, fecha_fin:fin, taller_id:tid() });
   if (error) { toast('Error: '+error.message,'error'); return; }
   toast('Período creado','success');
-  closeModal(); 
+  closeModal();
   sueldos();
 }
 
@@ -120,6 +152,46 @@ async function generarLiquidacionesConSafeCall(periodoId) {
   }, null, 'No se pudieron generar las liquidaciones');
 }
 
+// Tarea #56: aviso amarillo INLINE arriba del contenido del período cuando
+// éste se cruza con otro y ambos comparten empleados ya liquidados. Se
+// inyecta al inicio de #main-content (no es modal) y devuelve una
+// promesa<boolean>: true si el admin igual quiere generar, false si cancela.
+function confirmarSolapamientoLiquidaciones(rangos, nombres) {
+  return new Promise((resolve) => {
+    const main = document.getElementById('main-content');
+    if (!main) { resolve(true); return; }
+    // Sacar un banner previo si quedó colgado
+    const prev = document.getElementById('aviso-solapamiento');
+    if (prev) prev.remove();
+    const lista = nombres.map(n => `<li>${h(n)}</li>`).join('');
+    const banner = document.createElement('div');
+    banner.id = 'aviso-solapamiento';
+    banner.style.cssText = 'background:#fff7d6;border:1px solid #e5b800;color:#7a5b00;border-radius:8px;padding:.85rem;margin-bottom:1rem';
+    banner.innerHTML = `
+      <div style="font-family:var(--font-head);font-size:1rem;margin-bottom:.4rem">⚠ Período solapado</div>
+      <div style="font-size:.85rem;margin-bottom:.5rem">
+        Este período se cruza con: <strong>${h(rangos)}</strong>.
+      </div>
+      <div style="font-size:.85rem;margin-bottom:.4rem">
+        Estos empleados ya tienen una liquidación en el período cruzado y
+        volverían a recibir vales, trabajos y comisiones del rango compartido:
+      </div>
+      <ul style="margin:.25rem 0 .75rem 1.1rem;font-size:.85rem">${lista}</ul>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn-secondary" id="btn-solap-cancel" style="margin:0;flex:1">Cancelar</button>
+        <button class="btn-primary" id="btn-solap-ok" style="margin:0;flex:1">Generar igual</button>
+      </div>`;
+    main.prepend(banner);
+    banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('btn-solap-cancel').addEventListener('click', () => {
+      banner.remove(); resolve(false);
+    });
+    document.getElementById('btn-solap-ok').addEventListener('click', () => {
+      banner.remove(); resolve(true);
+    });
+  });
+}
+
 async function generarLiquidaciones(periodoId) {
   if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede generar liquidaciones')) return;
   const { data: periodo } = await sb.from('periodos_sueldo').select('*').eq('id', periodoId).single();
@@ -128,14 +200,17 @@ async function generarLiquidaciones(periodoId) {
 
   const empIds = emps.map(e => e.id);
 
-  // ── Batch: 4 queries en lugar de 4·N ────────────────────────────────────────
+  // ── Batch: 5 queries en lugar de 4·N ────────────────────────────────────────
   // Tarea #55: agregamos `comisiones` (reparacion_mecanicos.pago) para
   // sumarlas al `total_extra`, así un mecánico que cobra solo a comisión
   // (sueldo base 0) recibe una liquidación con monto correcto.
   // El `inner` join sobre reparaciones filtra por el taller actual y
   // por la fecha de la reparación dentro del período (no por created_at
   // de la asignación, que puede ser otro día).
-  const [yaLiquidados, vales, trabajos, comisiones] = await Promise.all([
+  // Tarea #56: traemos también los períodos del mismo taller que se
+  // solapan en fechas (excluyendo el actual) para chequear si ya hay
+  // liquidaciones de empleados que estamos por liquidar otra vez.
+  const [yaLiquidados, vales, trabajos, comisiones, solapados] = await Promise.all([
     sb.from('liquidaciones').select('empleado_id').eq('periodo_id', periodoId).in('empleado_id', empIds),
     sb.from('vales_empleado').select('empleado_id, monto').in('empleado_id', empIds).gte('fecha', periodo.fecha_inicio).lte('fecha', periodo.fecha_fin),
     sb.from('trabajos_empleado').select('empleado_id, monto').in('empleado_id', empIds).gte('fecha', periodo.fecha_inicio).lte('fecha', periodo.fecha_fin),
@@ -145,9 +220,48 @@ async function generarLiquidaciones(periodoId) {
       .eq('reparaciones.taller_id', tid())
       .gte('reparaciones.fecha', periodo.fecha_inicio)
       .lte('reparaciones.fecha', periodo.fecha_fin),
+    sb.from('periodos_sueldo')
+      .select('id, fecha_inicio, fecha_fin')
+      .eq('taller_id', tid())
+      .neq('id', periodoId)
+      .lte('fecha_inicio', periodo.fecha_fin)
+      .gte('fecha_fin', periodo.fecha_inicio),
   ]);
 
   const yaSet = new Set((yaLiquidados.data || []).map(r => r.empleado_id));
+
+  // Tarea #56: si algún período se cruza con éste y ya tiene liquidaciones
+  // de empleados que ahora estamos por liquidar, avisar antes de generar.
+  // Solo importan los empleados que NO tienen liquidación todavía en el
+  // período actual (los que ya están se filtran abajo de todas formas).
+  // Si la query de solapados falla, abortamos: prefiero no generar a
+  // generar a ciegas y duplicar pagos.
+  if (solapados.error) {
+    toast('Error al chequear períodos solapados: ' + solapados.error.message, 'error');
+    return;
+  }
+  const otros = solapados.data || [];
+  if (otros.length) {
+    const otrosIds = otros.map(p => p.id);
+    const { data: liqOtros, error: liqOtrosErr } = await sb.from('liquidaciones')
+      .select('empleado_id, periodo_id')
+      .in('periodo_id', otrosIds)
+      .in('empleado_id', empIds);
+    if (liqOtrosErr) {
+      toast('Error al chequear liquidaciones de períodos solapados: ' + liqOtrosErr.message, 'error');
+      return;
+    }
+    const conflictoIds = new Set();
+    (liqOtros || []).forEach(l => {
+      if (!yaSet.has(l.empleado_id)) conflictoIds.add(l.empleado_id);
+    });
+    if (conflictoIds.size) {
+      const nombres = emps.filter(e => conflictoIds.has(e.id)).map(e => e.nombre);
+      const rangos = otros.map(p => `${formatFecha(p.fecha_inicio)} — ${formatFecha(p.fecha_fin)}`).join(', ');
+      const ok = await confirmarSolapamientoLiquidaciones(rangos, nombres);
+      if (!ok) return;
+    }
+  }
   const valesPorEmp = {};
   (vales.data || []).forEach(v => {
     valesPorEmp[v.empleado_id] = (valesPorEmp[v.empleado_id] || 0) + parseFloat(v.monto || 0);

@@ -1585,6 +1585,51 @@ END $$;
 
 
 -- ============================================================================
+-- TAREA #56: bloquear períodos de sueldo solapados a nivel base de datos.
+-- La validación en JS (js/finances/sueldos.js) cubre el caso del admin
+-- creando períodos desde la UI, pero esto es un seguro extra contra
+-- inserciones por scripts, importaciones o doble click. Es opcional pero
+-- recomendado.
+--
+-- Requiere la extensión `btree_gist` para combinar uuid + daterange en un
+-- mismo EXCLUDE.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_extension WHERE extname = 'btree_gist'
+  ) THEN
+    BEGIN
+      CREATE EXTENSION IF NOT EXISTS btree_gist;
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE NOTICE 'No se pudo activar btree_gist (permisos). Pedí al admin de Supabase que la habilite y volvé a correr este bloque.';
+    END;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'btree_gist')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_constraint
+       WHERE conname = 'periodos_sueldo_no_solapan_taller'
+     ) THEN
+    BEGIN
+      EXECUTE $sql$
+        ALTER TABLE periodos_sueldo
+        ADD CONSTRAINT periodos_sueldo_no_solapan_taller
+        EXCLUDE USING gist (
+          taller_id WITH =,
+          daterange(fecha_inicio, fecha_fin, '[]') WITH &&
+        )
+      $sql$;
+    EXCEPTION WHEN others THEN
+      RAISE NOTICE 'No se pudo crear el EXCLUDE de períodos solapados: %. Probablemente ya hay datos solapados; resolvelos a mano y volvé a correr el bloque.', SQLERRM;
+    END;
+  END IF;
+END $$;
+
+
+-- ============================================================================
 -- LISTO. Validación recomendada después de aplicar:
 --   • Loguearte como ADMIN: tenés que ver todo (movimientos, sueldos, vales).
 --   • Loguearte como EMPLEADO sin permisos: en consola probá:
