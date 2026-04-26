@@ -245,10 +245,27 @@ async function detalleEmpleado(id) {
 // ─── FUNCIONES AUXILIARES (Vales, Modales, etc.) ────────────────────────────
 async function eliminarVale(valeId, empleadoId) {
   if (typeof requireAdmin === 'function' && !requireAdmin()) return;
-  confirmar('¿Eliminar este vale?', async () => {
+  confirmar('¿Eliminar este vale? También se borrará el egreso en Finanzas.', async () => {
     await safeCall(async () => {
-      await sb.from('vales_empleado').delete().eq('id', valeId);
+      // Borramos primero el egreso atado en Finanzas (referencia_id/_tabla
+      // los setea el insert al crear el vale — ver Tarea #49). Si no existe
+      // movimiento ligado, el delete simplemente no afecta filas.
+      // Si esto falla abortamos: borrar sólo el vale dejaría un huérfano
+      // inverso (egreso sin vale), justo el problema que esta tarea soluciona.
+      const { error: movErr } = await sb.from('movimientos_financieros')
+        .delete()
+        .eq('taller_id', tid())
+        .eq('referencia_tabla', 'vales_empleado')
+        .eq('referencia_id', valeId);
+      if (movErr) {
+        throw new Error('No se pudo borrar el egreso en Finanzas: ' + movErr.message);
+      }
+      const { error: valeErr } = await sb.from('vales_empleado').delete().eq('id', valeId);
+      if (valeErr) {
+        throw new Error('No se pudo eliminar el vale: ' + valeErr.message);
+      }
       clearCache('empleados');
+      clearCache('finanzas');
       toast('Vale eliminado');
       detalleEmpleado(empleadoId);
     }, null, 'No se pudo eliminar el vale');
