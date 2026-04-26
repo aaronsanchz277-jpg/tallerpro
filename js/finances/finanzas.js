@@ -231,7 +231,7 @@ async function finanzas_renderBannerCuentasViejas() {
       <div style="font-size:1.4rem">⚠️</div>
       <div style="flex:1;min-width:200px">
         <div style="font-family:var(--font-head);font-size:.78rem;color:var(--warning);letter-spacing:1px">REVISAR CUENTAS</div>
-        <div style="font-size:.78rem;color:var(--text)">Hay <strong>${res.items.length}</strong> cuenta(s) marcada(s) como pagada(s) sin egreso registrado en Finanzas (₲${gs(total)} en total). Suele pasar con datos importados o pagos cargados por fuera de la app.</div>
+        <div style="font-size:.78rem;color:var(--text)">Hay <strong>${res.items.length}</strong> cuenta(s) marcada(s) como pagada(s) sin egreso registrado en Finanzas (₲${gs(total)} total). Suele pasar con datos importados o pagos cargados por fuera de la app.</div>
       </div>
       <button onclick="cuentas_modalRevisarPagadasSinEgreso()" style="background:var(--warning);color:#000;border:none;border-radius:8px;padding:.4rem .8rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">Revisar</button>
     </div>
