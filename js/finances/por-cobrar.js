@@ -16,12 +16,6 @@ function _pcPuedeCobrar() {
   return false;
 }
 
-// Guards anti-doble-click para que un click acelerado no inserte dos
-// egresos al pagar una cuenta o un sueldo (los triggers de Supabase ya
-// validan transiciones, pero esto evita el round-trip y el toast doble).
-let _pcPagandoCuenta = false;
-let _pcPagandoSueldo = false;
-
 function _pcRenderError(titulo, msg) {
   document.getElementById('main-content').innerHTML = `
     <div class="section-header">
@@ -429,113 +423,32 @@ async function porPagar() {
   `;
 }
 
-async function porPagar_pagarCuenta(id) {
-  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede marcar como pagada')) return;
-  if (_pcPagandoCuenta) return; // anti-doble-click global
-  if (!confirm('¿Marcar esta cuenta como pagada?')) return;
-  _pcPagandoCuenta = true;
-  try {
-    await safeCall(async () => {
-      // Re-leemos el estado y NOS ASEGURAMOS de que sigue pendiente.
-      // Si otro usuario o pestaña ya la marcó como pagada, no insertamos
-      // un segundo egreso (idempotencia local). Update condicional via
-      // eq('pagada', false) → si ya estaba pagada, no actualiza nada.
-      const { data: c } = await sb.from('cuentas_pagar').select('proveedor,monto,pagada').eq('id', id).single();
-      if (!c) { toast('Cuenta no encontrada', 'error'); return; }
-      if (c.pagada) { toast('Esta cuenta ya estaba pagada', 'info'); porPagar(); return; }
-
-      const { data: actualizadas, error: updErr } = await sb.from('cuentas_pagar')
-        .update({ pagada: true, fecha_pago: new Date().toISOString().split('T')[0] })
-        .eq('id', id)
-        .eq('pagada', false)
-        .select('id');
-      if (updErr) { toast('Error: ' + updErr.message, 'error'); return; }
-      if (!actualizadas || actualizadas.length === 0) {
-        toast('Esta cuenta ya estaba pagada', 'info');
-        porPagar();
-        return;
-      }
-
-      // Mismo egreso a Finanzas que hace marcarCuentaPagada en cuentas.js.
-      // OJO: NO es atómico (Supabase JS no tiene transacciones). Si el
-      // insert falla, REVERTIMOS el update para no dejar la cuenta como
-      // "pagada" sin su egreso correspondiente — eso desbalancearía caja.
-      let egresoOk = true;
-      let egresoErr = null;
-      if (typeof obtenerCategoriaFinanciera === 'function') {
-        const categoriaId = await obtenerCategoriaFinanciera('Repuestos', 'egreso');
-        if (categoriaId) {
-          const insRes = await sb.from('movimientos_financieros').insert({
-            taller_id: tid(),
-            tipo: 'egreso',
-            categoria_id: categoriaId,
-            monto: c.monto,
-            descripcion: 'Pago proveedor: ' + c.proveedor,
-            fecha: new Date().toISOString().split('T')[0],
-            referencia_id: id,
-            referencia_tabla: 'cuentas_pagar'
-          });
-          if (insRes.error) {
-            egresoOk = false;
-            egresoErr = insRes.error.message;
-          }
-        } else {
-          egresoOk = false;
-          egresoErr = 'No se pudo encontrar la categoría "Repuestos"';
-        }
-      }
-
-      if (!egresoOk) {
-        // Rollback del update para mantener la consistencia.
-        await sb.from('cuentas_pagar')
-          .update({ pagada: false, fecha_pago: null })
-          .eq('id', id);
-        toast('No se registró el egreso (' + (egresoErr || 'error') + '). Cuenta sigue pendiente.', 'error');
-        porPagar();
-        return;
-      }
-
-      clearCache('cuentas');
-      clearCache('finanzas');
-      toast('Cuenta pagada — egreso registrado', 'success');
-      porPagar();
-      _pcRefrescarBadges();
-    }, null, 'No se pudo marcar como pagada');
-  } finally {
-    _pcPagandoCuenta = false;
+// Reusa la función canónica de cuentas.js (con sus protecciones:
+// anti-doble-click, update condicional, rollback si falla el egreso).
+// El callback se queda en Por pagar y refresca badges.
+function porPagar_pagarCuenta(id) {
+  if (typeof marcarCuentaPagadaConSafeCall !== 'function') {
+    toast('No se pudo abrir el pago', 'error');
+    return;
   }
+  if (!confirm('¿Marcar esta cuenta como pagada?')) return;
+  marcarCuentaPagadaConSafeCall(id, () => {
+    porPagar();
+    _pcRefrescarBadges();
+  });
 }
 
-async function porPagar_pagarSueldo(liquidacionId) {
-  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede registrar pagos de sueldo')) return;
-  if (_pcPagandoSueldo) return; // anti-doble-click global
-  if (!confirm('¿Marcar esta liquidación como pagada?')) return;
-  _pcPagandoSueldo = true;
-  try {
-    await safeCall(async () => {
-      // Update condicional: solo si sigue NO pagada. Así, si el trigger
-      // de Supabase es estricto y ya hay egreso, no se inserta dos veces.
-      const { data: actualizadas, error: updErr } = await sb.from('liquidaciones')
-        .update({ estado: 'pagado', fecha_pago: new Date().toISOString().split('T')[0] })
-        .eq('id', liquidacionId)
-        .neq('estado', 'pagado')
-        .select('id');
-      if (updErr) { toast('Error: ' + updErr.message, 'error'); return; }
-      if (!actualizadas || actualizadas.length === 0) {
-        toast('Esta liquidación ya estaba pagada', 'info');
-        porPagar();
-        _pcRefrescarBadges();
-        return;
-      }
-      // El trigger en Supabase inserta el egreso en movimientos_financieros.
-      clearCache('finanzas');
-      toast('✓ Sueldo pagado', 'success');
-      porPagar();
-      _pcRefrescarBadges();
-    }, null, 'No se pudo registrar el pago');
-  } finally {
-    _pcPagandoSueldo = false;
+// Reusa la función canónica de sueldos.js. Ella ya pide su propia
+// confirmación con confirmar(), así que acá solo delegamos.
+function porPagar_pagarSueldo(liquidacionId) {
+  if (typeof registrarPagoSueldoConSafeCall !== 'function') {
+    toast('No se pudo abrir el pago', 'error');
+    return;
   }
+  registrarPagoSueldoConSafeCall(liquidacionId, () => {
+    porPagar();
+    _pcRefrescarBadges();
+  });
 }
 
 // ─── CONTADORES PARA EL BADGE DE NAVEGACIÓN ────────────────────────────────

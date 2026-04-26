@@ -128,36 +128,83 @@ async function detalleCuenta(id) {
     </div>`;
 }
 
-async function marcarCuentaPagadaConSafeCall(id) {
+async function marcarCuentaPagadaConSafeCall(id, onSuccess) {
   await safeCall(async () => {
-    await marcarCuentaPagada(id);
+    await marcarCuentaPagada(id, onSuccess);
   }, null, 'No se pudo marcar como pagada');
 }
 
-async function marcarCuentaPagada(id) {
+// Anti-doble-click global: dos clicks rápidos no deben disparar dos egresos.
+let _cuentaPagandoLock = false;
+
+// onSuccess es opcional. Si está, se llama al final en lugar de saltar al
+// detalle de la cuenta — esto deja que vistas externas (Centro de cobros)
+// se queden donde estaban y refresquen su lista.
+async function marcarCuentaPagada(id, onSuccess) {
   if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede marcar una cuenta como pagada')) return;
-  const { data:c } = await sb.from('cuentas_pagar').select('proveedor,monto').eq('id',id).single();
-  await sb.from('cuentas_pagar').update({ pagada:true, fecha_pago:new Date().toISOString().split('T')[0] }).eq('id',id);
-  
-  // Integración con Finanzas (MODIFICADO)
-  const categoriaId = await obtenerCategoriaFinanciera('Repuestos', 'egreso');
-  if (categoriaId && c) {
-    await sb.from('movimientos_financieros').insert({
-      taller_id: tid(),
-      tipo: 'egreso',
-      categoria_id: categoriaId,
-      monto: c.monto,
-      descripcion: 'Pago proveedor: ' + c.proveedor,
-      fecha: new Date().toISOString().split('T')[0],
-      referencia_id: id,
-      referencia_tabla: 'cuentas_pagar'
-    });
+  if (_cuentaPagandoLock) return;
+  _cuentaPagandoLock = true;
+  try {
+    const { data:c, error: cErr } = await sb.from('cuentas_pagar').select('proveedor,monto,pagada').eq('id',id).single();
+    if (cErr || !c) { toast('No se encontró la cuenta', 'error'); return; }
+    if (c.pagada) {
+      toast('Esta cuenta ya estaba pagada', 'info');
+      if (typeof onSuccess === 'function') onSuccess(id); else detalleCuenta(id);
+      return;
+    }
+
+    // Update condicional (.eq pagada=false): si dos pestañas chocan, solo
+    // el primero entra; el resto recibe "ya estaba pagada".
+    const { data: actualizadas, error: updErr } = await sb.from('cuentas_pagar')
+      .update({ pagada:true, fecha_pago:new Date().toISOString().split('T')[0] })
+      .eq('id',id)
+      .eq('pagada', false)
+      .select('id');
+    if (updErr) { toast('Error: ' + updErr.message, 'error'); return; }
+    if (!actualizadas || actualizadas.length === 0) {
+      toast('Esta cuenta ya estaba pagada', 'info');
+      if (typeof onSuccess === 'function') onSuccess(id); else detalleCuenta(id);
+      return;
+    }
+
+    // Integración con Finanzas. NO atómico (Supabase JS no tiene tx);
+    // si falla, ROLLBACK del update para no dejar caja descuadrada.
+    let egresoOk = true;
+    let egresoErr = null;
+    const categoriaId = await obtenerCategoriaFinanciera('Repuestos', 'egreso');
+    if (categoriaId) {
+      const insRes = await sb.from('movimientos_financieros').insert({
+        taller_id: tid(),
+        tipo: 'egreso',
+        categoria_id: categoriaId,
+        monto: c.monto,
+        descripcion: 'Pago proveedor: ' + c.proveedor,
+        fecha: new Date().toISOString().split('T')[0],
+        referencia_id: id,
+        referencia_tabla: 'cuentas_pagar'
+      });
+      if (insRes.error) { egresoOk = false; egresoErr = insRes.error.message; }
+    } else {
+      egresoOk = false;
+      egresoErr = 'No se pudo encontrar la categoría "Repuestos"';
+    }
+
+    if (!egresoOk) {
+      await sb.from('cuentas_pagar')
+        .update({ pagada:false, fecha_pago:null })
+        .eq('id', id);
+      toast('No se registró el egreso (' + (egresoErr || 'error') + '). Cuenta sigue pendiente.', 'error');
+      if (typeof onSuccess === 'function') onSuccess(id); else detalleCuenta(id);
+      return;
+    }
+
+    clearCache('cuentas');
+    clearCache('finanzas');
+    toast('Cuenta pagada — egreso registrado en Finanzas','success');
+    if (typeof onSuccess === 'function') onSuccess(id); else detalleCuenta(id);
+  } finally {
+    _cuentaPagandoLock = false;
   }
-  
-  clearCache('cuentas');
-  clearCache('finanzas');
-  toast('Cuenta pagada — egreso registrado en Finanzas','success');
-  detalleCuenta(id);
 }
 
 async function modalEditarCuenta(id) {

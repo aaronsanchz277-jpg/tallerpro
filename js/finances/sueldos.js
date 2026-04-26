@@ -169,30 +169,52 @@ async function generarLiquidaciones(periodoId) {
   detallePeriodo(periodoId);
 }
 
-async function registrarPagoSueldoConSafeCall(liquidacionId) {
+async function registrarPagoSueldoConSafeCall(liquidacionId, onSuccess) {
   confirmar('¿Marcar esta liquidación como pagada?', async () => {
     await safeCall(async () => {
-      await registrarPagoSueldo(liquidacionId);
+      await registrarPagoSueldo(liquidacionId, onSuccess);
     }, null, 'No se pudo registrar el pago');
   });
 }
 
-async function registrarPagoSueldo(liquidacionId) {
+// Anti-doble-click global para evitar dos egresos por la misma liquidación.
+let _sueldoPagandoLock = false;
+
+// onSuccess es opcional. Si está, se llama al final en lugar de saltar al
+// detalle del período — para que vistas externas (Centro de cobros) puedan
+// quedarse en su lugar y refrescar su lista.
+async function registrarPagoSueldo(liquidacionId, onSuccess) {
   if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede registrar pagos de sueldo')) return;
-  const { data: liq, error: liqErr } = await sb.from('liquidaciones')
-    .select('*, empleados(nombre), periodos_sueldo(fecha_inicio, fecha_fin)')
-    .eq('id', liquidacionId).single();
-  if (liqErr || !liq) { toast('Error al obtener liquidación','error'); return; }
+  if (_sueldoPagandoLock) return;
+  _sueldoPagandoLock = true;
+  try {
+    const { data: liq, error: liqErr } = await sb.from('liquidaciones')
+      .select('*, empleados(nombre), periodos_sueldo(fecha_inicio, fecha_fin)')
+      .eq('id', liquidacionId).single();
+    if (liqErr || !liq) { toast('Error al obtener liquidación','error'); return; }
 
-  const fechaPago = new Date().toISOString().split('T')[0];
-  await sb.from('liquidaciones').update({ estado:'pagado', fecha_pago: fechaPago }).eq('id', liquidacionId);
+    // Update condicional (.neq estado='pagado'): si dos clicks o dos
+    // pestañas chocan, solo el primero dispara el trigger del egreso.
+    const fechaPago = new Date().toISOString().split('T')[0];
+    const { data: actualizadas, error: updErr } = await sb.from('liquidaciones')
+      .update({ estado:'pagado', fecha_pago: fechaPago })
+      .eq('id', liquidacionId)
+      .neq('estado', 'pagado')
+      .select('id');
+    if (updErr) { toast('Error: ' + updErr.message, 'error'); return; }
+    if (!actualizadas || actualizadas.length === 0) {
+      toast('Esta liquidación ya estaba pagada', 'info');
+      if (typeof onSuccess === 'function') onSuccess(liquidacionId); else detallePeriodo(liq.periodo_id);
+      return;
+    }
 
-  // NOTA: La inserción en movimientos_financieros ahora la hace un TRIGGER en Supabase
-  // (ver script SQL proporcionado)
-
-  clearCache('finanzas');
-  toast('✓ Sueldo marcado como pagado y registrado en Finanzas', 'success');
-  detallePeriodo(liq.periodo_id);
+    // NOTA: La inserción en movimientos_financieros la hace un TRIGGER en Supabase.
+    clearCache('finanzas');
+    toast('✓ Sueldo marcado como pagado y registrado en Finanzas', 'success');
+    if (typeof onSuccess === 'function') onSuccess(liquidacionId); else detallePeriodo(liq.periodo_id);
+  } finally {
+    _sueldoPagandoLock = false;
+  }
 }
 
 async function cerrarPeriodoConSafeCall(periodoId) {
