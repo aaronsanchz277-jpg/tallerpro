@@ -479,3 +479,58 @@ en cuanto el repuesto entra al stock.
    en `js/integrations/recordatorios.js`. Aparece como pestaña
    "Repuesto llegó" dentro de "📨 Configurar mensajes automáticos"
    y se puede personalizar (se persiste en `localStorage`).
+
+
+## Reparar cuentas viejas pagadas sin egreso (Tarea #42)
+
+Desde la **Tarea #35** existe un trigger en Supabase
+(`trg_cuenta_pagar_egreso` en `rls_policies.sql` sección 3.F) que inserta
+el egreso en `movimientos_financieros` en la misma transacción que el
+`UPDATE cuentas_pagar.pagada=true`. Casos nuevos no pueden quedar
+inconsistentes. Pero los pagos viejos hechos antes del fix podrían haber
+quedado con `pagada=true` sin egreso si la app o la red se cortaba entre
+los dos pasos. La Tarea #42 agrega una verificación de una sola vez (que
+también puede correrse cuando se quiera) para detectarlos y compensarlos.
+
+1. **Detector** (`cuentas_detectarPagadasSinEgreso` en
+   `js/finances/cuentas.js`). Trae todas las `cuentas_pagar` con
+   `pagada=true` del taller, busca en `movimientos_financieros` los que
+   tengan `referencia_tabla='cuentas_pagar'` apuntando a esas cuentas
+   (en bloques de 100 ids para no pasar el límite de `IN`), y devuelve
+   la diferencia: cuentas pagadas que **no** tienen su egreso. El
+   resultado viene ordenado de la más vieja a la más reciente.
+
+2. **Reparador** (`cuentas_repararPagadasSinEgreso`). Para cada cuenta
+   inserta un `movimientos_financieros` con `tipo='egreso'`, categoría
+   "Repuestos" (autocreada vía `obtenerCategoriaFinanciera` si no
+   existía), `monto` y `fecha = fecha_pago` original (o hoy si la
+   cuenta no tenía `fecha_pago`), `referencia_id`/`referencia_tabla`
+   apuntando a la cuenta. Antes de cada insert re-chequea que no exista
+   ya, así dos pestañas haciendo "Reparar" en simultáneo no duplican
+   egresos. Limpia los caches de `cuentas` y `finanzas` al terminar.
+
+3. **Pantalla de revisión** (`cuentas_modalRevisarPagadasSinEgreso`).
+   Modal admin-only con la lista (proveedor, fecha de pago, notas,
+   monto), total a regularizar y botón **🔧 Reparar las N cuenta(s)**.
+   Re-detecta al click para no apoyarse en datos viejos. Después
+   refresca la lista y, si está abierta Finanzas, refresca también la
+   pantalla principal.
+
+4. **Aviso pasivo en Finanzas** (`finanzas_renderBannerCuentasViejas`
+   en `js/finances/finanzas.js`). Cada vez que `finanzas_cargarDatos`
+   pinta los movimientos, llama al detector en background. Si hay
+   cuentas viejas sin egreso, muestra arriba de la lista un banner
+   amarillo "⚠️ CAJA DESCUADRADA — N cuenta(s) pagada(s) sin egreso
+   (₲X total)" con botón **Revisar**. Si no hay nada, el banner queda
+   vacío y no aparece. Falla silenciosa: si la consulta tira error no
+   rompe la pantalla.
+
+5. **Botón directo**. Además del banner automático, la barra de
+   acciones de Finanzas suma "🧾 Cuentas viejas" para abrir la
+   pantalla de revisión cuando quiera el admin (útil después de
+   importar datos o si recién cerró el banner).
+
+Idempotencia total: si se corre dos veces seguidas, la segunda no
+inserta nada (la verificación previa al insert lo evita). No requiere
+correr SQL nuevo: usa el catálogo de categorías y la tabla
+`movimientos_financieros` que ya existían.

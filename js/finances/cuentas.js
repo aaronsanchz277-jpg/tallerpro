@@ -203,3 +203,172 @@ async function eliminarCuentaConSafeCall(id) {
     }, null, 'No se pudo eliminar la cuenta');
   });
 }
+
+// ─── REPARACIÓN HISTÓRICA DE CUENTAS PAGADAS SIN EGRESO (Tarea #42) ─────────
+// Desde la Tarea #35 hay un trigger en Supabase que crea el egreso en la
+// misma transacción que el UPDATE pagada=true, así que casos nuevos no
+// pueden quedar inconsistentes. Pero pagos viejos hechos antes del fix
+// pudieron quedar con pagada=true sin movimiento_financiero asociado si
+// la app se cortó entre los dos pasos. Estas funciones detectan esos casos
+// históricos (sin filtro de fecha) y los compensan con el egreso faltante.
+async function cuentas_detectarPagadasSinEgreso() {
+  if (!tid()) return { ok: false, error: 'No hay taller activo', items: [] };
+
+  const { data: cuentas, error: cErr } = await sb.from('cuentas_pagar')
+    .select('id, proveedor, monto, fecha_pago, fecha_vencimiento, notas')
+    .eq('taller_id', tid())
+    .eq('pagada', true);
+  if (cErr) return { ok: false, error: cErr.message, items: [] };
+  if (!cuentas || cuentas.length === 0) return { ok: true, items: [] };
+
+  // Buscamos en bloques de a 100 para no pasarnos del límite de IN().
+  const conMov = new Set();
+  for (let i = 0; i < cuentas.length; i += 100) {
+    const ids = cuentas.slice(i, i + 100).map(c => c.id);
+    const { data: movs, error: mErr } = await sb.from('movimientos_financieros')
+      .select('referencia_id')
+      .eq('taller_id', tid())
+      .eq('referencia_tabla', 'cuentas_pagar')
+      .in('referencia_id', ids);
+    if (mErr) return { ok: false, error: mErr.message, items: [] };
+    (movs || []).forEach(m => conMov.add(m.referencia_id));
+  }
+
+  const sinEgreso = cuentas.filter(c => !conMov.has(c.id));
+  // Más vieja primero, así el admin ve la evolución histórica.
+  sinEgreso.sort((a, b) => (a.fecha_pago || '').localeCompare(b.fecha_pago || ''));
+  return { ok: true, items: sinEgreso };
+}
+
+async function cuentas_repararPagadasSinEgreso(items) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede reparar inconsistencias de finanzas')) {
+    return { reparados: 0, errores: ['Permiso denegado'] };
+  }
+  if (!items || items.length === 0) return { reparados: 0, errores: [] };
+
+  const categoriaId = await obtenerCategoriaFinanciera('Repuestos', 'egreso');
+  if (!categoriaId) {
+    return { reparados: 0, errores: ['No se pudo obtener/crear la categoría "Repuestos"'] };
+  }
+
+  const hoy = new Date().toISOString().split('T')[0];
+  let reparados = 0;
+  const errores = [];
+
+  for (const c of items) {
+    try {
+      // Re-chequeo defensivo: si el trigger ya creó el egreso (o un repair
+      // paralelo lo hizo), no insertamos uno duplicado.
+      const { data: existe } = await sb.from('movimientos_financieros')
+        .select('id')
+        .eq('taller_id', tid())
+        .eq('referencia_tabla', 'cuentas_pagar')
+        .eq('referencia_id', c.id)
+        .maybeSingle();
+      if (existe) continue;
+
+      const { error: insErr } = await sb.from('movimientos_financieros').insert({
+        taller_id: tid(),
+        tipo: 'egreso',
+        categoria_id: categoriaId,
+        monto: c.monto,
+        concepto: `Pago proveedor: ${c.proveedor || ''}`.trim(),
+        fecha: c.fecha_pago || hoy,
+        referencia_id: c.id,
+        referencia_tabla: 'cuentas_pagar'
+      });
+      if (insErr) errores.push(`${c.proveedor || c.id}: ${insErr.message}`);
+      else reparados++;
+    } catch (e) {
+      errores.push(`${c.proveedor || c.id}: ${e.message}`);
+    }
+  }
+
+  clearCache('finanzas');
+  clearCache('cuentas');
+  return { reparados, errores };
+}
+
+async function cuentas_modalRevisarPagadasSinEgreso() {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede revisar inconsistencias de finanzas')) return;
+
+  openModal(`
+    <div class="modal-title">🔧 Cuentas pagadas sin egreso</div>
+    <div id="cpse-resultado">
+      <div style="text-align:center;padding:1rem;color:var(--text2)">Buscando inconsistencias históricas…</div>
+    </div>
+    <button class="btn-secondary" style="margin-top:1rem" onclick="closeModal()">Cerrar</button>
+  `);
+
+  await cuentas_renderRevisarPagadasSinEgreso();
+}
+
+async function cuentas_renderRevisarPagadasSinEgreso() {
+  const cont = document.getElementById('cpse-resultado');
+  if (!cont) return;
+  cont.innerHTML = `<div style="text-align:center;padding:1rem;color:var(--text2)">Analizando datos…</div>`;
+
+  const res = await cuentas_detectarPagadasSinEgreso();
+  if (!res.ok) {
+    cont.innerHTML = `<div style="color:var(--danger);text-align:center;padding:1rem">Error: ${h(res.error || 'no se pudo verificar')}</div>`;
+    return;
+  }
+
+  const items = res.items || [];
+  if (items.length === 0) {
+    cont.innerHTML = `<div style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:10px;padding:.85rem;text-align:center;color:var(--success)">✅ No hay cuentas pagadas sin egreso. La caja está consistente.</div>`;
+    return;
+  }
+
+  const total = items.reduce((s, c) => s + parseFloat(c.monto || 0), 0);
+  const filas = items.map(c => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.5rem .6rem;border-bottom:1px solid var(--border)">
+      <div style="min-width:0;flex:1">
+        <div style="font-size:.82rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(c.proveedor || 'Sin proveedor')}</div>
+        <div style="font-size:.68rem;color:var(--text2)">Pago: ${c.fecha_pago ? formatFecha(c.fecha_pago) : '<span style="color:var(--warning)">sin fecha — se usará hoy</span>'}</div>
+        ${c.notas ? `<div style="font-size:.65rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(c.notas)}</div>` : ''}
+      </div>
+      <div style="font-family:var(--font-head);font-size:.9rem;color:var(--danger);flex-shrink:0">-₲${gs(c.monto)}</div>
+    </div>
+  `).join('');
+
+  cont.innerHTML = `
+    <div style="background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.25);border-radius:10px;padding:.75rem;margin-bottom:.75rem">
+      <div style="color:var(--warning);font-family:var(--font-head);font-size:.85rem;letter-spacing:1px;margin-bottom:.25rem">⚠️ ${items.length} CUENTA(S) SIN EGRESO</div>
+      <div style="font-size:.72rem;color:var(--text2)">Estas cuentas figuran como pagadas pero no tienen un egreso en Finanzas. Reparar inserta el egreso retroactivo (categoría <strong>Repuestos</strong>) usando la fecha de pago original.</div>
+      <div style="margin-top:.4rem;font-size:.78rem;color:var(--text)">Total a regularizar: <strong style="color:var(--danger);font-family:var(--font-head)">₲${gs(total)}</strong></div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;max-height:260px;overflow-y:auto;margin-bottom:.75rem">
+      ${filas}
+    </div>
+    <button class="btn-primary" id="cpse-btn-reparar" onclick="cuentas_repararPagadasSinEgresoConSafeCall()">🔧 Reparar las ${items.length} cuenta(s)</button>
+  `;
+}
+
+async function cuentas_repararPagadasSinEgresoConSafeCall() {
+  await safeCall(async () => {
+    const btn = document.getElementById('cpse-btn-reparar');
+    if (btn) { btn.disabled = true; btn.textContent = 'Reparando…'; }
+
+    // Re-detectamos al momento del click para no compensar nada que ya
+    // haya sido cubierto por otra pestaña o por el trigger en el medio.
+    const res = await cuentas_detectarPagadasSinEgreso();
+    if (!res.ok) { toast('No se pudo verificar: ' + (res.error || ''), 'error'); return; }
+
+    const out = await cuentas_repararPagadasSinEgreso(res.items || []);
+    if (out.reparados > 0) {
+      toast(`✅ Se insertaron ${out.reparados} egreso(s) retroactivo(s)`, 'success');
+    } else if (!out.errores.length) {
+      toast('No quedaban inconsistencias para reparar', 'info');
+    }
+    if (out.errores.length) {
+      console.warn('Errores reparando cuentas pagadas sin egreso:', out.errores);
+      toast(`Quedaron ${out.errores.length} error(es). Revisá la consola.`, 'error');
+    }
+
+    await cuentas_renderRevisarPagadasSinEgreso();
+    if (typeof finanzas_cargarDatos === 'function' && document.getElementById('finanzas-contenido-dinamico')) {
+      finanzas_cargarDatos();
+    }
+  }, null, 'No se pudo completar la reparación');
+}

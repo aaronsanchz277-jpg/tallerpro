@@ -160,11 +160,13 @@ async function finanzas_cargarDatos() {
         </div>
       </div>
 
-      <div style="display:flex;gap:.4rem;margin-bottom:1rem">
+      <div style="display:flex;gap:.4rem;margin-bottom:1rem;flex-wrap:wrap">
         <button class="btn-secondary" style="margin:0;font-size:.75rem;padding:.4rem .6rem" onclick="finanzas_modalCategorias()">📌 Categorías</button>
         <button onclick="modalCierreCaja()" style="background:rgba(255,204,0,.1);border:1px solid rgba(255,204,0,.25);color:var(--warning);border-radius:8px;padding:.4rem .6rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">💵 Cierre de caja</button>
         <button onclick="conciliador_modalConciliacion()" style="background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.25);color:var(--accent);border-radius:8px;padding:.4rem .6rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">🔍 Conciliar</button>
+        <button onclick="cuentas_modalRevisarPagadasSinEgreso()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">🧾 Cuentas viejas</button>
       </div>
+      <div id="finanzas-banner-cuentas-viejas"></div>
     `;
 
     if (fechasOrdenadas.length > 0) {
@@ -208,10 +210,32 @@ async function finanzas_cargarDatos() {
     }
 
     contenedor.innerHTML = html;
+
+    // Detector pasivo: si hay cuentas viejas pagadas sin egreso, mostrar banner.
+    // Va aparte y silencioso: si falla no rompe la pantalla de finanzas.
+    finanzas_renderBannerCuentasViejas().catch(() => {});
   } catch (error) {
     console.error('❌ Error en finanzas_cargarDatos:', error);
     contenedor.innerHTML = `<div class="empty"><p>Error al cargar los datos: ${error.message}</p></div>`;
   }
+}
+
+async function finanzas_renderBannerCuentasViejas() {
+  const slot = document.getElementById('finanzas-banner-cuentas-viejas');
+  if (!slot || typeof cuentas_detectarPagadasSinEgreso !== 'function') return;
+  const res = await cuentas_detectarPagadasSinEgreso();
+  if (!res.ok || !res.items?.length) { slot.innerHTML = ''; return; }
+  const total = res.items.reduce((s, c) => s + parseFloat(c.monto || 0), 0);
+  slot.innerHTML = `
+    <div style="background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.3);border-radius:10px;padding:.7rem .85rem;margin-bottom:1rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+      <div style="font-size:1.4rem">⚠️</div>
+      <div style="flex:1;min-width:200px">
+        <div style="font-family:var(--font-head);font-size:.78rem;color:var(--warning);letter-spacing:1px">CAJA DESCUADRADA</div>
+        <div style="font-size:.78rem;color:var(--text)">Hay <strong>${res.items.length}</strong> cuenta(s) pagada(s) sin egreso registrado (₲${gs(total)} en total).</div>
+      </div>
+      <button onclick="cuentas_modalRevisarPagadasSinEgreso()" style="background:var(--warning);color:#000;border:none;border-radius:8px;padding:.4rem .8rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">Revisar</button>
+    </div>
+  `;
 }
 
 function finanzas_aplicarRango() {
