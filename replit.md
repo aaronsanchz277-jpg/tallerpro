@@ -703,3 +703,59 @@ dos acciones por columna:
 Si los dos períodos tienen pagadas, el modal lo explica y solo deja
 achicar fechas. El "Volver" del sub-modal de achicar re-abre el
 resolutor (vuelve a fetchear estado fresco).
+
+## Importar clientes y vehículos desde Excel (Tarea #60)
+
+Módulo nuevo `js/crm/importar.js` (cargado en `index.html` después de
+`cliente-view.js`). Sirve para que un taller que ya tiene su base en
+Excel (o en otro sistema que exporta a `.xlsx`/`.csv`) pueda subir todo
+de golpe sin tipear patente por patente.
+
+Wizard de 4 pasos en un solo modal:
+
+1. **Bienvenida** (`modalImportarExcel(tipo)`): explica el formato,
+   ofrece descargar la plantilla (`descargarPlantillaImport`, genera un
+   `.xlsx` con headers `Nombre, Telefono, Email, RUC, Patente, Marca,
+   Modelo, Año, Color` + 2 filas de ejemplo) y un input file
+   (`onArchivoImportSeleccionado`). Reusa `loadXLSX()` de
+   `js/reports/export-excel.js` para cargar SheetJS on-demand. Tope de
+   5 MB. Aborta si el usuario está offline (`requireOnline`) o no es
+   admin/empleado.
+2. **Mapeo + vista previa** (`pasoMapeoImport`): muestra las primeras 5
+   filas como tabla, con un `<select>` por columna del Excel para
+   asignarla a un campo. La detección automática (`_detectFieldFromHeader`)
+   compara contra sinónimos (case-insensitive, sin tildes) — p.ej.
+   "Tel. Cel." → teléfono, "Patente"/"Placa"/"Chapa" → patente.
+   `actualizarMapeoImport` evita asignar un mismo campo a dos columnas.
+3. **Resumen** (`validarYResumirImport` + `pasoResumenImport`): carga
+   en una sola query todos los clientes y vehículos del taller a memoria,
+   indexados por teléfono normalizado, RUC y patente normalizada. Para
+   cada fila del Excel decide: cliente nuevo, cliente existente
+   (vehículo se vincula al existente), vehículo nuevo, vehículo existente
+   (se omite — no reasignamos para no pisar datos), o error
+   (sin nombre, año fuera de 1900..hoy+2, patente vacía, patente
+   duplicada intra-Excel). Genera UUIDs cliente-side con
+   `crypto.randomUUID()` para que los vehículos puedan vincularse a
+   clientes nuevos sin esperar el round-trip.
+4. **Ejecución** (`ejecutarImport`): inserta clientes y vehículos en
+   lotes de 100 con `sb.from(...).insert([...])` directo (no
+   `offlineInsert` — la cola offline no escala a 800 filas). Si un lote
+   falla, reintenta fila por fila para no perder lo bueno; las que
+   fallen se listan al usuario. Antes de insertar vehículos, si algún
+   cliente falló, re-consulta qué IDs realmente quedaron en la base y
+   limpia los `cliente_id` huérfanos para no romper la FK. Termina con
+   `clearCache('clientes'/'vehiculos')` + `invalidateComponentCache()`
+   y `cerrarYRefrescarImport` navega a la sección.
+
+UI de descubrimiento: en `clientes()` y `vehiculos()` (`js/crm/clientes.js`,
+`js/crm/vehiculos.js`) se agregó un botón "📥 Importar" al lado del
+"+ Nuevo" (solo visible para admin/empleado), y cuando el listado está
+totalmente vacío y sin búsqueda activa se muestra
+`bannerImportarVacio(tipo)` — un cartel grande con el botón
+"Importar desde Excel" para que el primer admin de un taller nuevo
+no se pierda la feature.
+
+No requiere correr SQL ni cambios al schema: usa las tablas y políticas
+RLS existentes (`clientes_modify_staff`, `vehiculos_modify_staff`) y
+los helpers de `js/core/components.js` (`normalizarTelefono`,
+`normalizarPatente`).

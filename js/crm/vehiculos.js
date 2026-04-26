@@ -8,15 +8,20 @@ async function vehiculos({ search='', offset=0 }={}) {
     return q.range(offset, offset + PAGE_SIZE - 1);
   });
 
+  const canEdit = ['admin','empleado'].includes(currentPerfil?.rol);
   document.getElementById('main-content').innerHTML = `
     <div class="section-header">
       <div class="section-title">${t('vehTitulo')} ${count ? `<span style="font-size:.75rem;color:var(--text2)">(${count})</span>` : ''}</div>
-      ${['admin','empleado'].includes(currentPerfil?.rol) ? `<button class="btn-add" onclick="modalNuevoVehiculo()">+ Nuevo</button>` : ''}
+      ${canEdit ? `<div style="display:flex;gap:.4rem">
+        <button class="btn-secondary" style="margin:0;padding:.5rem .7rem;font-size:.78rem" onclick="modalImportarExcel('vehiculos')" title="Importar desde Excel">📥 Importar</button>
+        <button class="btn-add" onclick="modalNuevoVehiculo()">+ Nuevo</button>
+      </div>` : ''}
     </div>
     <div class="search-box">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input type="text" placeholder="${t('dashBuscarPatente')}" value="${h(search)}" oninput="debounce('veh',()=>vehiculos({search:this.value}))" class="form-input" style="padding-left:2.5rem">
     </div>
+    ${(count===0 && !search && canEdit && typeof bannerImportarVacio === 'function') ? bannerImportarVacio('vehiculos') : ''}
     ${(data||[]).length===0 ? `<div class="empty"><p>${t('vehSinDatos')}</p></div>` :
       (data||[]).map(v => `
       <div class="card" onclick="detalleVehiculo('${v.id}')">

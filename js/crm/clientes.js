@@ -12,12 +12,16 @@ async function clientes({ search='', offset=0 }={}) {
   document.getElementById('main-content').innerHTML = `
     <div class="section-header">
       <div class="section-title">${t('cliTitulo')} ${count ? `<span style="font-size:.75rem;color:var(--text2)">(${count})</span>` : ''}</div>
-      ${canEdit ? `<button class="btn-add" onclick="modalNuevoCliente()">${t('cliNuevo')}</button>` : ''}
+      ${canEdit ? `<div style="display:flex;gap:.4rem">
+        <button class="btn-secondary" style="margin:0;padding:.5rem .7rem;font-size:.78rem" onclick="modalImportarExcel('clientes')" title="Importar desde Excel">📥 Importar</button>
+        <button class="btn-add" onclick="modalNuevoCliente()">${t('cliNuevo')}</button>
+      </div>` : ''}
     </div>
     <div class="search-box">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input type="text" placeholder="${t('cliBuscar')}" value="${h(search)}" oninput="debounce('cli',()=>clientes({search:this.value}))" class="form-input" style="padding-left:2.5rem">
     </div>
+    ${(count===0 && !search && canEdit && typeof bannerImportarVacio === 'function') ? bannerImportarVacio('clientes') : ''}
     ${(data||[]).length===0 ? `<div class="empty"><p>${t('cliSinDatos')}</p></div>` :
       (data||[]).map(c => `
       <div class="card" onclick="detalleCliente('${c.id}')">
