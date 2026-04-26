@@ -91,7 +91,7 @@ async function detalleReparacion(id) {
         <span style="font-size:.78rem;color:var(--text2)">Mano de obra (mecánicos)</span>
         <span style="font-size:.85rem;color:var(--danger)">-₲${gs(totalPagoMecanicos)}</span>
       </div>` : ''}
-      ${(costoRep > 0 || totalPagoMecanicos > 0) && puedeVerGanancia ? `
+      ${puedeVerGanancia && cobrado > 0 ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border)">
         <span style="font-size:.78rem;font-weight:600">Ganancia real</span>
         <span style="font-family:var(--font-head);font-size:1.1rem;color:${gananciaReal > 0 ? 'var(--accent)' : 'var(--danger)'}">₲${gs(gananciaReal)} <span style="font-size:.7rem;color:var(--text2)">(${pctGanancia}%)</span></span>
