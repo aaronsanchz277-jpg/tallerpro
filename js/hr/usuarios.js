@@ -60,12 +60,14 @@ async function eliminarCodigoConSafeCall(id) {
 }
 
 async function eliminarCodigo(id) {
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   await sb.from('codigos_empleado').delete().eq('id', id);
   toast('Código cancelado');
   usuarios();
 }
 
 async function cambiarRol(userId, rolActual) {
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   const roles = ['admin','empleado','cliente'];
   const siguiente = roles[(roles.indexOf(rolActual)+1) % roles.length];
   confirmar(`¿Cambiar el rol a ${siguiente.toUpperCase()}?`, async () => {
@@ -162,6 +164,7 @@ async function desvincularVehiculo(vehiculoId, perfilId, nombreUsuario) {
 
 // ─── VINCULAR PERFIL CON EMPLEADO ─────────────────────────────────────────
 async function modalVincularEmpleado(perfilId, nombreUsuario) {
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   const { data: perfil } = await sb.from('perfiles').select('empleado_id').eq('id', perfilId).maybeSingle();
   const { data: empleados } = await sb.from('empleados').select('id,nombre').eq('taller_id', tid()).order('nombre');
   
@@ -181,6 +184,7 @@ async function modalVincularEmpleado(perfilId, nombreUsuario) {
 }
 
 async function vincularPerfilEmpleado(perfilId) {
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   const empleadoId = document.getElementById('f-vincular-empleado').value || null;
   const { error } = await sb.from('perfiles').update({ empleado_id: empleadoId }).eq('id', perfilId);
   if (error) { toast('Error: '+error.message,'error'); return; }
@@ -255,6 +259,7 @@ async function generarCodigoConSafeCall(tipo) {
 }
 
 async function generarCodigo(tipo) {
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   for (let intento = 0; intento < 3; intento++) {
     const arr = new Uint32Array(8);

@@ -26,6 +26,13 @@ async function empleados() {
 }
 
 async function detalleEmpleado(id) {
+  // Guardia: solo admin, o el propio empleado mirando lo suyo, o un empleado
+  // con permiso explícito de "ver_historial_otros".
+  if (typeof puedoVerEmpleado === 'function' && !puedoVerEmpleado(id)) {
+    toast('No autorizado', 'error');
+    navigate('dashboard');
+    return;
+  }
   let emp, trabajosManuales;
   try {
     const empRes = await sb.from('empleados').select('*').eq('id', id).single();
@@ -195,6 +202,7 @@ async function detalleEmpleado(id) {
 
 // ─── FUNCIONES AUXILIARES (Vales, Modales, etc.) ────────────────────────────
 async function eliminarVale(valeId, empleadoId) {
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   confirmar('¿Eliminar este vale?', async () => {
     await safeCall(async () => {
       await sb.from('vales_empleado').delete().eq('id', valeId);
@@ -206,6 +214,7 @@ async function eliminarVale(valeId, empleadoId) {
 }
 
 async function eliminarEmpleado(id) {
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   confirmar('Esta acción eliminará al empleado y sus registros.', async () => {
     await safeCall(async () => {
       await sb.from('trabajos_empleado').delete().eq('empleado_id', id);
@@ -218,6 +227,7 @@ async function eliminarEmpleado(id) {
 }
 
 async function modalNuevoTrabajo(empleadoId) {
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   const vehiculoSelect = await renderVehiculoSelect('f-vehiculo', null, null, true);
   openModal(`
     <div class="modal-title">${t("modRegistrarTrabajo")}</div>
@@ -339,6 +349,7 @@ async function crearPeriodoDesdeModal(empleadoId) {
 
 // Modal principal de vale (ahora recibe opcionalmente periodoSeleccionadoId)
 async function modalNuevoVale(empleadoId, periodoSeleccionadoId = null) {
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   const { data: periodos } = await sb.from('periodos_sueldo')
     .select('id, fecha_inicio, fecha_fin, estado')
     .eq('taller_id', tid())
@@ -397,6 +408,7 @@ async function guardarValeConSafeCall(empleadoId) {
 }
 
 async function guardarVale(empleadoId) {
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   const monto = parseFloat(document.getElementById('f-vale-monto').value);
   if (!validatePositiveNumber(monto, 'Monto')) return;
 
@@ -478,13 +490,92 @@ async function guardarEmpleado(id = null) {
 }
 
 async function modalEditarEmpleado(id) {
-  const { data: e } = await sb.from('empleados').select('*').eq('id', id).single();
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
+  const [{ data: e }, perfilRes] = await Promise.all([
+    sb.from('empleados').select('*').eq('id', id).single(),
+    sb.from('perfiles').select('id, nombre, permisos').eq('empleado_id', id).maybeSingle()
+  ]);
+  const perfilVinculado = perfilRes?.data || null;
+  const permisos = (perfilVinculado?.permisos && typeof perfilVinculado.permisos === 'object')
+    ? perfilVinculado.permisos
+    : {};
+
+  const labels = (typeof PERMISOS_LABELS !== 'undefined') ? PERMISOS_LABELS : {
+    ver_costos: 'Ver costos de repuestos',
+    ver_ganancia: 'Ver ganancia neta del trabajo',
+    registrar_cobros: 'Registrar cobros al cliente',
+    anular_ventas: 'Anular ventas',
+    modificar_precios: 'Modificar precios cobrados al cliente',
+    ver_historial_otros: 'Ver historial de otros mecánicos'
+  };
+
+  const permisosHTML = perfilVinculado ? `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.75rem">
+      <div style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px;margin-bottom:.5rem">🔐 PERMISOS DEL USUARIO</div>
+      <div style="font-size:.72rem;color:var(--text2);margin-bottom:.6rem">Marcá lo que esta persona puede ver/hacer en la app. Por defecto todo está en NO.</div>
+      ${Object.keys(labels).map(k => `
+        <label style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;cursor:pointer;font-size:.83rem">
+          <input type="checkbox" class="perm-check" data-perm="${k}" ${permisos[k] === true ? 'checked' : ''} style="accent-color:var(--accent);width:18px;height:18px">
+          <span>${labels[k]}</span>
+        </label>
+      `).join('')}
+      <div style="font-size:.65rem;color:var(--text2);margin-top:.4rem">Usuario vinculado: <strong style="color:var(--text)">${h(perfilVinculado.nombre || '')}</strong></div>
+    </div>` : `
+    <div style="background:rgba(255,204,0,.05);border:1px solid rgba(255,204,0,.25);border-radius:10px;padding:.6rem;margin-bottom:.75rem;font-size:.78rem;color:var(--warning)">
+      Este empleado todavía no tiene un usuario vinculado. Para asignar permisos, vinculalo desde la sección "Usuarios".
+    </div>`;
+
   openModal(`
     <div class="modal-title">${t("modEditarEmpleado")}</div>
     <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" value="${h(e.nombre || '')}"></div>
     <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" value="${h(e.rol || '')}"></div>
     <div class="form-group"><label class="form-label">Sueldo mensual ₲</label>${renderMontoInput('f-sueldo', e.sueldo || 0)}</div>
     <div class="form-group"><label class="form-label">Teléfono</label>${phoneInput('f-tel', e.telefono, '0981 123 456')}</div>
-    <button class="btn-primary" onclick="guardarEmpleadoConSafeCall('${id}')">${t('actualizar')}</button>
+    ${permisosHTML}
+    <button class="btn-primary" onclick="guardarEmpleadoConPermisosConSafeCall('${id}', ${perfilVinculado ? `'${perfilVinculado.id}'` : 'null'})">${t('actualizar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+async function guardarEmpleadoConPermisosConSafeCall(empleadoId, perfilId) {
+  await safeCall(async () => {
+    await guardarEmpleadoConPermisos(empleadoId, perfilId);
+  }, null, 'No se pudieron guardar los cambios');
+}
+
+async function guardarEmpleadoConPermisos(empleadoId, perfilId) {
+  if (typeof requireAdmin === 'function' && !requireAdmin()) return;
+
+  // 1) Guardar datos básicos del empleado (igual que antes)
+  const nombre = document.getElementById('f-nombre').value.trim();
+  if (!validateRequired(nombre, 'Nombre')) return;
+  const data = {
+    nombre,
+    rol: document.getElementById('f-rol').value,
+    sueldo: parseFloat(document.getElementById('f-sueldo')?.value) || 0,
+    telefono: document.getElementById('f-tel').value,
+    taller_id: tid()
+  };
+  const { error } = await offlineUpdate('empleados', data, 'id', empleadoId);
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+
+  // 2) Guardar permisos del perfil vinculado, si lo hay
+  if (perfilId && perfilId !== 'null') {
+    const checks = document.querySelectorAll('.perm-check');
+    const permisos = {};
+    checks.forEach(cb => { permisos[cb.dataset.perm] = !!cb.checked; });
+    const { error: pErr } = await sb.from('perfiles').update({ permisos }).eq('id', perfilId);
+    if (pErr) {
+      // Si falla por columna inexistente, avisamos al admin que falta correr el SQL.
+      if (/permisos/i.test(pErr.message || '')) {
+        toast('Falta correr el script SQL de seguridad para guardar permisos.', 'error');
+      } else {
+        toast('Permisos no guardados: ' + pErr.message, 'error');
+      }
+    }
+  }
+
+  clearCache('empleados');
+  toast('Empleado actualizado', 'success');
+  closeModal();
+  empleados();
 }

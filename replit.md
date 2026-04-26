@@ -35,3 +35,33 @@ Pasos manuales (una sola vez):
    Guardá. Esto hace que los links de mails (recuperación de contraseña, confirmación) apunten al dominio correcto.
 
 `server.js` y `.replit` siguen funcionando para desarrollo local en Replit y se pueden quedar en el repo sin afectar a GitHub Pages (los ignora).
+
+## Permisos del empleado y seguridad (RLS)
+
+A partir de la Tarea #12, el sistema tiene dos capas de seguridad:
+
+1. **Capa de UI (cliente)** — `js/core/permisos.js` agrega helpers globales
+   `esAdmin()`, `esEmpleado()`, `puedeVer(clave)`, `puedoVerEmpleado(id)`,
+   `requireAdmin()`, `requirePerm(clave)` y `tienePerm(clave)`. Los módulos de
+   reparaciones, empleados, usuarios y sueldos los usan para esconder botones
+   y bloquear acciones que no le tocan al empleado. El perfil del usuario
+   carga el campo `permisos` (jsonb) y `empleado_id` desde `loadPerfil` con
+   fallback defensivo si la migración SQL todavía no fue corrida.
+2. **Capa de servidor (Postgres / RLS)** — el script
+   `supabase/rls_policies.sql` agrega la columna `permisos` a `perfiles`,
+   crea funciones helper `SECURITY DEFINER` (`taller_id_actual`, `es_admin`,
+   etc.) y activa políticas en todas las tablas para que cada usuario solo
+   pueda ver/escribir lo de su taller, y el empleado nunca acceda a
+   movimientos financieros, sueldos o vales que no son suyos.
+
+**Importante**: el script SQL hay que correrlo a mano una vez por taller en
+**Supabase → SQL Editor**. Es idempotente (`DROP POLICY IF EXISTS`,
+`CREATE OR REPLACE FUNCTION`, `IF NOT EXISTS`), así que se puede correr de
+nuevo sin romper nada. La app sigue funcionando si todavía no fue corrido,
+pero **no hay seguridad real** hasta que se aplique.
+
+Claves del jsonb `permisos` (default todo en `false`):
+`ver_costos`, `ver_ganancia`, `registrar_cobros`, `anular_ventas`,
+`modificar_precios`, `ver_historial_otros`. Se editan desde el modal
+"Editar empleado" cuando el empleado tiene un usuario vinculado (vía
+**Usuarios → Vincular**).

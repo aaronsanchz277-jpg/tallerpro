@@ -12,6 +12,11 @@ async function detalleReparacion(id) {
   const isAdmin = currentPerfil?.rol === 'admin';
   const canEdit = ['admin', 'empleado'].includes(currentPerfil?.rol);
   const isCliente = currentPerfil?.rol === 'cliente';
+  // Permisos finos para empleado (admin siempre ve/puede)
+  const puedeVerCostos    = isAdmin || (typeof tienePerm === 'function' && tienePerm('ver_costos'));
+  const puedeVerGanancia  = isAdmin || (typeof tienePerm === 'function' && tienePerm('ver_ganancia'));
+  const puedeModificar    = isAdmin || (typeof tienePerm === 'function' && tienePerm('modificar_precios'));
+  const puedeRegistrarCob = isAdmin || (typeof tienePerm === 'function' && tienePerm('registrar_cobros'));
 
   const checklist = r.checklist_recepcion || {};
   const fotos = r.fotos_recepcion || [];
@@ -44,11 +49,12 @@ async function detalleReparacion(id) {
         <span style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px">COBRADO AL CLIENTE</span>
         <span style="font-family:var(--font-head);font-size:1.4rem;color:var(--success)">₲${gs(r.costo)}</span>
       </div>
-      ${r.costo_repuestos ? `
+      ${r.costo_repuestos && puedeVerCostos ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border)">
         <span style="font-size:.78rem;color:var(--text2)">Repuestos gastados</span>
         <span style="font-size:.85rem;color:var(--danger)">-₲${gs(r.costo_repuestos)}</span>
-      </div>
+      </div>` : ''}
+      ${r.costo_repuestos && puedeVerGanancia ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border)">
         <span style="font-size:.78rem;font-weight:600">Tu ganancia</span>
         <span style="font-family:var(--font-head);font-size:1.1rem;color:${(r.costo - r.costo_repuestos) > 0 ? 'var(--accent)' : 'var(--danger)'}">₲${gs(r.costo - r.costo_repuestos)} <span style="font-size:.7rem;color:var(--text2)">(${r.costo > 0 ? Math.round(((r.costo - r.costo_repuestos) / r.costo) * 100) : 0}%)</span></span>
@@ -62,7 +68,7 @@ async function detalleReparacion(id) {
         <span style="font-size:.78rem;color:var(--success)">TOTALMENTE PAGADO</span>
         <span style="font-family:var(--font-head);font-size:.85rem;color:var(--success)">✓</span>
       </div>` : ''}
-      ${canEdit ? `<button onclick="modalActualizarCosto('${id}',${r.costo},${r.costo_repuestos || 0})" style="width:100%;margin-top:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.4rem;font-size:.72rem;color:var(--text2);cursor:pointer">✏️ Actualizar costos</button>` : ''}
+      ${puedeModificar ? `<button onclick="modalActualizarCosto('${id}',${r.costo},${r.costo_repuestos || 0})" style="width:100%;margin-top:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.4rem;font-size:.72rem;color:var(--text2);cursor:pointer">✏️ Actualizar costos</button>` : ''}
     </div>
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
@@ -129,9 +135,9 @@ async function detalleReparacion(id) {
       <button class="btn-secondary" style="margin:0;font-size:.72rem;padding:.5rem .3rem" onclick="modalFotosEtapa('${id}','proceso')">📷 Proceso</button>
       <button class="btn-secondary" style="margin:0;font-size:.72rem;padding:.5rem .3rem" onclick="modalFotosEtapa('${id}','entrega')">📷 Entrega</button>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
+    <div style="display:grid;grid-template-columns:${puedeRegistrarCob ? '1fr 1fr' : '1fr'};gap:.5rem;margin-bottom:.5rem">
       <button class="btn-secondary" style="margin:0;font-size:.8rem" onclick="modalChecklistRecepcion('${id}')">📋 Revisión</button>
-      <button class="btn-secondary" style="margin:0;font-size:.8rem" onclick="modalPagosReparacion('${id}')">💰 Pagos</button>
+      ${puedeRegistrarCob ? `<button class="btn-secondary" style="margin:0;font-size:.8rem" onclick="modalPagosReparacion('${id}')">💰 Pagos</button>` : ''}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
       ${r.ficha_recepcion ? `<button class="btn-secondary" style="margin:0;font-size:.8rem;color:var(--success);border-color:var(--success)" onclick="verFichaRecepcion('${id}')">📋 Ver Ficha</button>` : `<button class="btn-secondary" style="margin:0;font-size:.8rem" onclick="modalFichaRecepcion('${id}')">📋 Ficha Ingreso</button>`}
@@ -237,6 +243,10 @@ function modalActualizarCosto(id, costoActual, repuestosActual) {
 }
 
 async function guardarActualizarCosto(id) {
+  if (typeof esAdmin === 'function' && !esAdmin() && !(typeof tienePerm === 'function' && tienePerm('modificar_precios'))) {
+    toast('No tenés permisos para modificar costos','error');
+    return;
+  }
   await safeCall(async () => {
     const costo = parseFloat(document.getElementById('f-upd-costo').value) || 0;
     const rep = parseFloat(document.getElementById('f-upd-rep').value) || 0;

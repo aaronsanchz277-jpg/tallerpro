@@ -1,6 +1,10 @@
 // ─── MEJORA #7: GESTIÓN DE SUELDOS ──────────────────────────────────────────
 
 async function sueldos() {
+  if (typeof requireAdmin === 'function' && !requireAdmin('No tenés acceso a esta sección')) {
+    navigate('dashboard');
+    return;
+  }
   const { data: periodos } = await sb.from('periodos_sueldo').select('*').eq('taller_id', tid()).order('fecha_inicio', {ascending:false});
   
   document.getElementById('main-content').innerHTML = `
@@ -67,6 +71,10 @@ async function guardarPeriodo() {
 }
 
 async function detallePeriodo(periodoId) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('No tenés acceso a esta sección')) {
+    navigate('dashboard');
+    return;
+  }
   const [{ data: periodo }, { data: liquidaciones }, { data: empleadosAll }] = await Promise.all([
     sb.from('periodos_sueldo').select('*').eq('id', periodoId).single(),
     sb.from('liquidaciones').select('*, empleados(nombre)').eq('periodo_id', periodoId).order('created_at'),

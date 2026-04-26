@@ -97,16 +97,33 @@ function mostrarFormCambiarPass() {
 async function loadPerfil(user) {
   currentUser = user;
   try {
-    const { data: perfil, error } = await sb.from('perfiles')
-      .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion)')
-      .eq('id', user.id)
-      .maybeSingle();
+    // Intentamos traer los campos nuevos (empleado_id, permisos). Si la
+    // columna `permisos` todavía no fue creada en la BD, hacemos fallback al
+    // select sin ella para no romper el login.
+    let perfil = null, error = null;
+    {
+      const res = await sb.from('perfiles')
+        .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion)')
+        .eq('id', user.id)
+        .maybeSingle();
+      perfil = res.data;
+      error = res.error;
+    }
+    if (error && /permisos|empleado_id|cliente_id/i.test(error.message || '')) {
+      const res = await sb.from('perfiles')
+        .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion)')
+        .eq('id', user.id)
+        .maybeSingle();
+      perfil = res.data;
+      error = res.error;
+    }
     if (error) { console.error('loadPerfil error:', error); showLogin(); return; }
     if (!perfil) {
-      currentPerfil = { id: user.id, nombre: user.email, rol: 'cliente', taller_id: null };
+      currentPerfil = { id: user.id, nombre: user.email, rol: 'cliente', taller_id: null, permisos: {} };
       showCodigoPrompt();
       return;
     }
+    if (!perfil.permisos || typeof perfil.permisos !== 'object') perfil.permisos = {};
     currentPerfil = perfil;
     if (perfil.taller_id && (perfil.rol === 'admin' || perfil.rol === 'empleado' || perfil.rol === 'cliente')) {
       showApp();
