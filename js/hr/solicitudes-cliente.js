@@ -80,6 +80,7 @@ async function solicitudesCliente() {
           <button onclick="event.stopPropagation();confirmarTurnoSolicitado('${c.id}')" style="background:rgba(0,255,136,.15);color:var(--success);border:1px solid rgba(0,255,136,.3);border-radius:8px;padding:.5rem;font-size:.78rem;font-family:var(--font-head);cursor:pointer">✓ Confirmar</button>
           <button onclick="event.stopPropagation();rechazarTurnoSolicitado('${c.id}')" style="background:rgba(255,68,68,.08);color:var(--danger);border:1px solid rgba(255,68,68,.25);border-radius:8px;padding:.5rem;font-size:.78rem;font-family:var(--font-head);cursor:pointer">✕ Rechazar</button>
         </div>
+        <button onclick="event.stopPropagation();proponerOtraFechaTurno('${c.id}')" style="margin-top:.4rem;width:100%;background:rgba(0,212,255,.08);color:var(--accent);border:1px solid rgba(0,212,255,.25);border-radius:8px;padding:.5rem;font-size:.78rem;font-family:var(--font-head);cursor:pointer">📆 Proponer otra fecha</button>
       </div>`).join('')}
   `;
 }
@@ -181,6 +182,61 @@ async function rechazarTurnoSolicitado(citaId) {
       solicitudesCliente();
     }, null, 'No se pudo rechazar el turno');
   });
+}
+
+// ─── PROPONER OTRA FECHA ─────────────────────────────────────────────────────
+// El admin no quiere ni confirmar ni rechazar el turno: quiere proponer otra
+// fecha/hora. Reescribimos fecha/hora de la cita y la dejamos en estado
+// 'reprogramada' para que el cliente la vea y confirme desde "Mis turnos".
+// Si la columna `notas` existe, agregamos la justificación al final.
+async function proponerOtraFechaTurno(citaId) {
+  const { data: cita, error } = await sb.from('citas')
+    .select('id, fecha, hora, notas, cliente_id')
+    .eq('id', citaId).maybeSingle();
+  if (error || !cita) { toast('No encontramos el turno', 'error'); return; }
+
+  openModal(`
+    <div class="modal-title">📆 Proponer otra fecha</div>
+    <div style="font-size:.82rem;color:var(--text2);margin-bottom:.75rem">
+      Reagendamos el turno y lo dejamos pendiente de confirmación del cliente.
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nueva fecha *</label>
+      <input class="form-input" id="prop-fecha" type="date" value="${cita.fecha||''}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nueva hora *</label>
+      <input class="form-input" id="prop-hora" type="time" value="${cita.hora||''}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Motivo (opcional)</label>
+      <textarea class="form-input" id="prop-motivo" rows="2" placeholder="Ej: la grúa está ocupada esa mañana"></textarea>
+    </div>
+    <button class="btn-primary" onclick="proponerOtraFechaEjecutar('${citaId}')">PROPONER</button>
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function proponerOtraFechaEjecutar(citaId) {
+  const fecha = document.getElementById('prop-fecha').value;
+  const hora = document.getElementById('prop-hora').value;
+  const motivo = document.getElementById('prop-motivo').value.trim();
+  if (!fecha || !hora) { toast('Indicá fecha y hora', 'error'); return; }
+
+  await safeCall(async () => {
+    const patch = { fecha, hora, estado: 'reprogramada' };
+    if (motivo) {
+      // Append motivo a notas (no rompe si la columna no existe — el catch lo absorbe).
+      const { data: prev } = await sb.from('citas').select('notas').eq('id', citaId).maybeSingle();
+      const stamp = `[${new Date().toLocaleDateString('es-AR')}] Reprogramado por el taller: ${motivo}`;
+      patch.notas = prev?.notas ? `${prev.notas}\n${stamp}` : stamp;
+    }
+    await offlineUpdate('citas', patch, 'id', citaId);
+    clearCache('citas');
+    toast('Nueva fecha propuesta. El cliente la verá en "Mis turnos".', 'success');
+    closeModal();
+    solicitudesCliente();
+  }, null, 'No se pudo proponer la nueva fecha');
 }
 
 // ─── VINCULAR CUENTA SIN CÓDIGO POR EMAIL ────────────────────────────────────
