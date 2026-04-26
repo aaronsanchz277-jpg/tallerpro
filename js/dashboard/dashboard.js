@@ -335,6 +335,7 @@ async function dashboard() {
       </div>
       ` : ''}
 
+      ${typeof getSetupPendienteCard === 'function' ? getSetupPendienteCard() : ''}
       ${getInstallBanner()}
       ${getSuscripcionBanner()}
       ${typeof getPushBanner === 'function' ? getPushBanner() : ''}

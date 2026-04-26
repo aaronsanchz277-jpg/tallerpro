@@ -104,13 +104,23 @@ async function loadPerfil(user) {
     let perfil = null, error = null;
     {
       const res = await sb.from('perfiles')
+        .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais, setup_completado, setup_pasos_pendientes)')
+        .eq('id', user.id)
+        .maybeSingle();
+      perfil = res.data;
+      error = res.error;
+    }
+    // Fallback 1.a: faltan setup_completado / setup_pasos_pendientes
+    // (Tarea #62 sin migrar). Reintenta sin esos campos.
+    if (error && /setup_completado|setup_pasos_pendientes/i.test(error.message || '')) {
+      const res = await sb.from('perfiles')
         .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais)')
         .eq('id', user.id)
         .maybeSingle();
       perfil = res.data;
       error = res.error;
     }
-    // Fallback 1: faltan moneda_simbolo / moneda_locale / pais (Tarea #61
+    // Fallback 1.b: faltan moneda_simbolo / moneda_locale / pais (Tarea #61
     // sin migrar). Reintenta sin esos campos; monedaActual() usará los
     // defaults Paraguay automáticamente.
     if (error && /moneda_simbolo|moneda_locale|\bpais\b/i.test(error.message || '')) {
@@ -195,9 +205,15 @@ async function aplicarCodigo() {
     // moneda (Tarea #61) o la de permisos no se aplicó todavía.
     let perfil = null;
     let res = await sb.from('perfiles')
-      .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais)')
+      .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais, setup_completado, setup_pasos_pendientes)')
       .eq('id', currentUser.id).maybeSingle();
     perfil = res.data;
+    if (res.error && /setup_completado|setup_pasos_pendientes/i.test(res.error.message || '')) {
+      res = await sb.from('perfiles')
+        .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais)')
+        .eq('id', currentUser.id).maybeSingle();
+      perfil = res.data;
+    }
     if (res.error && /moneda_simbolo|moneda_locale|\bpais\b/i.test(res.error.message || '')) {
       res = await sb.from('perfiles')
         .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion)')
@@ -243,12 +259,19 @@ async function crearTallerDesdePrompt() {
     const trialEnd = new Date(); trialEnd.setDate(trialEnd.getDate() + 14);
     await sb.from('suscripciones').insert({ taller_id: taller.id, plan_id: 'premium', estado: 'trial', fecha_vencimiento: trialEnd.toISOString().split('T')[0] });
 
-    // Fallback por si la migración de moneda (Tarea #61) no se aplicó.
+    // Fallback por si las migraciones nuevas (Tarea #61 moneda, Tarea #62
+    // setup) no se aplicaron.
     let perfil = null;
     let resPerfil = await sb.from('perfiles')
-      .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais)')
+      .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais, setup_completado, setup_pasos_pendientes)')
       .eq('id', currentUser.id).maybeSingle();
     perfil = resPerfil.data;
+    if (resPerfil.error && /setup_completado|setup_pasos_pendientes/i.test(resPerfil.error.message || '')) {
+      resPerfil = await sb.from('perfiles')
+        .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais)')
+        .eq('id', currentUser.id).maybeSingle();
+      perfil = resPerfil.data;
+    }
     if (resPerfil.error && /moneda_simbolo|moneda_locale|\bpais\b/i.test(resPerfil.error.message || '')) {
       resPerfil = await sb.from('perfiles')
         .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion)')
@@ -360,6 +383,13 @@ function showApp() {
     if (typeof stockRealtime_init === 'function') stockRealtime_init();
     if (typeof fab_actualizarVisibilidad === 'function') fab_actualizarVisibilidad();
     navigate('dashboard');
+    // Tarea #62: si es admin de un taller recién creado (setup_completado
+    // null), disparar el asistente de configuración inicial. Lo hacemos
+    // después de navigate('dashboard') para que al cerrar el wizard el
+    // dashboard ya esté pintado con la tarjeta de pendientes.
+    if (typeof iniciarAsistenteSetup === 'function') {
+      setTimeout(() => iniciarAsistenteSetup(), 300);
+    }
     // Deep-link: si la URL trae ?rep=<uuid>, abrimos esa reparación.
     // Lo usa, entre otros, el aviso "repuesto llegó" por WhatsApp (Tarea #30)
     // para que el cliente toque el link y caiga directo en la ficha.

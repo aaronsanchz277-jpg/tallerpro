@@ -803,3 +803,57 @@ elegido, y los precios de **suscripción** de TallerPro (landing,
 `index.html`, `404.html`, `js/auth/plan.js`) — esos son precios de la
 empresa TallerPro y siguen en ₲ porque la empresa es paraguaya.
 
+## Asistente de configuración inicial post-signup (Tarea #62)
+
+Apenas un admin crea su taller, antes solo veía un dashboard vacío.
+Ahora se dispara un **asistente bloqueante a pantalla completa** con
+4-5 pasos secuenciales y barra de progreso. Vive en
+`js/auth/setup-wizard.js` y se monta en su propio `<div id="setup-
+wizard-overlay">` con z-index 500 (sobre `modal-overlay`).
+
+Estado en `talleres`:
+
+- `setup_completado timestamptz` — `NULL` = wizard pendiente; fecha =
+  cerrado/completado. Los talleres preexistentes se marcan con
+  `created_at` en la migración para no molestarlos.
+- `setup_pasos_pendientes jsonb` — array con las claves saltadas
+  (`['moneda','servicios','pwa']`). Vacío = todo listo. Maneja la
+  tarjeta de "Configuración pendiente" del dashboard.
+
+La migración (idempotente, fin de `supabase/rls_policies.sql`) usa
+`ADD COLUMN IF NOT EXISTS`. `loadPerfil`/`aplicarCodigo`/
+`crearTallerDesdePrompt` cargan los dos campos con fallback en
+cascada: si la columna no existe, el SELECT se reintenta sin ella y
+`setupPendiente()` devuelve false (no rompe la app antes de migrar).
+
+Pasos (filtrados dinámicamente):
+
+1. **Datos del taller** — RUC y dirección obligatorios, tel opcional.
+   Único paso sin botón "Saltar".
+2. **País / moneda** — solo si `monedaActual()` está disponible y la
+   columna `moneda_simbolo` se cargó.
+3. **Servicios típicos** — lista hardcodeada de 12 servicios mecánicos
+   (Cambio de aceite, Alineación, Balanceo, etc.) en
+   `SETUP_SERVICIOS_TIPICOS`. Al confirmar inserta en `inventario`
+   con `categoria='Servicios'`, `unidad='servicio'`, `cantidad=999`.
+4. **Instalar PWA** — solo si la app no está ya en standalone. Reusa
+   `installApp()` y la detección de iOS de `js/core/pwa.js`.
+
+Disparador: `iniciarAsistenteSetup()` se llama desde `showApp()` con
+`setTimeout(300)` después de `navigate('dashboard')`, así el wizard
+queda por encima de un dashboard ya pintado y al cerrarlo la tarjeta
+de pendientes ya está visible debajo.
+
+Tarjeta de pendientes en dashboard: `getSetupPendienteCard()` se
+inserta entre los banners (justo antes de `getInstallBanner()`).
+Click en la tarjeta llama a `reanudarAsistenteSetup()`, que filtra
+los pasos según las features actuales (ej: si la PWA ya se instaló
+desde el header, ese paso desaparece) y vuelve a abrir el wizard
+solo con lo que falta. Cuando todo queda en cero, la tarjeta se
+oculta sola.
+
+**Fuera de scope**: crear primer empleado, importar clientes, foto del
+local, redes sociales, horarios, tour del dashboard (lo cubre el
+tutorial existente), y subir logo (queda para Tarea #63 cuando exista
+la columna `logo_url`).
+

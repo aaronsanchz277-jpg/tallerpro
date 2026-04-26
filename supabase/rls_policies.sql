@@ -1651,3 +1651,34 @@ ALTER TABLE talleres ADD COLUMN IF NOT EXISTS moneda_simbolo TEXT NOT NULL DEFAU
 ALTER TABLE talleres ADD COLUMN IF NOT EXISTS moneda_locale  TEXT NOT NULL DEFAULT 'es-PY';
 ALTER TABLE talleres ADD COLUMN IF NOT EXISTS pais           TEXT NOT NULL DEFAULT 'PY';
 
+
+
+-- ============================================================================
+-- TAREA #62 — ASISTENTE DE CONFIGURACIÓN INICIAL POST-SIGNUP
+-- ----------------------------------------------------------------------------
+-- Cuando se crea un taller nuevo, el admin debe completar un asistente con
+-- datos fiscales, país/moneda, servicios típicos y PWA. Mientras el setup
+-- no esté terminado, se le muestra al entrar y queda una tarjeta de
+-- "Configuración pendiente" en el dashboard.
+--
+--   setup_completado          NULL  = wizard pendiente (taller nuevo)
+--                              fecha = wizard cerrado / completado
+--   setup_pasos_pendientes    JSONB con array de claves de pasos saltados
+--                              (['moneda','servicios','pwa']). Vacío = todo
+--                              listo, no se muestra la tarjeta del dashboard.
+--
+-- A los talleres que ya existían cuando se aplica esta migración los
+-- damos por completados (setup_completado = NOW()) para no molestar a
+-- usuarios actuales con el wizard.
+--
+-- Idempotente: se puede correr varias veces sin error.
+-- ============================================================================
+ALTER TABLE talleres ADD COLUMN IF NOT EXISTS setup_completado       timestamptz;
+ALTER TABLE talleres ADD COLUMN IF NOT EXISTS setup_pasos_pendientes jsonb;
+
+-- Marcar talleres preexistentes como completados (solo la primera vez).
+UPDATE talleres
+   SET setup_completado = COALESCE(created_at, NOW())
+ WHERE setup_completado IS NULL
+   AND created_at IS NOT NULL
+   AND created_at < NOW() - INTERVAL '1 minute';
