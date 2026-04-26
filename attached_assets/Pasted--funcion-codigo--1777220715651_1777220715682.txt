@@ -1,0 +1,208 @@
+| funcion                               | codigo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| registrar_movimiento_venta            | CREATE OR REPLACE FUNCTION public.registrar_movimiento_venta()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+BEGIN
+  IF NEW.estado = 'completado' AND NEW.total > 0 THEN
+    SELECT id INTO cat_id FROM categorias_financieras 
+    WHERE taller_id = NEW.taller_id AND nombre = 'Ventas' AND tipo = 'ingreso'
+    LIMIT 1;
+    
+    IF cat_id IS NULL THEN
+      INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+      VALUES (NEW.taller_id, 'Ventas', 'ingreso', true)
+      RETURNING id INTO cat_id;
+    END IF;
+
+    INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+    VALUES (NEW.taller_id, 'ingreso', cat_id, NEW.total, 
+            COALESCE(NEW.descripcion, 'Venta POS'), 
+            NEW.created_at::date, NEW.id, 'ventas', true)
+    ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$function$
+                                                                                                                                                                                      |
+| registrar_movimiento_credito_otorgado | CREATE OR REPLACE FUNCTION public.registrar_movimiento_credito_otorgado()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+BEGIN
+  SELECT id INTO cat_id FROM categorias_financieras 
+  WHERE taller_id = NEW.taller_id AND nombre = 'Créditos otorgados' AND tipo = 'ingreso'
+  LIMIT 1;
+  
+  IF cat_id IS NULL THEN
+    INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+    VALUES (NEW.taller_id, 'Créditos otorgados', 'ingreso', true)
+    RETURNING id INTO cat_id;
+  END IF;
+
+  INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+  VALUES (NEW.taller_id, 'ingreso', cat_id, NEW.monto, 
+          'Crédito otorgado: ' || COALESCE(NEW.descripcion, ''), 
+          NEW.fecha, NEW.id, 'fiados', false)
+  ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  RETURN NEW;
+END;
+$function$
+                                                                                                                                                                                                                                          |
+| registrar_movimiento_pago_credito     | CREATE OR REPLACE FUNCTION public.registrar_movimiento_pago_credito()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+  cred RECORD;
+BEGIN
+  IF NEW.pagado = true AND OLD.pagado = false THEN
+    SELECT * INTO cred FROM fiados WHERE id = NEW.id;
+    
+    SELECT id INTO cat_id FROM categorias_financieras 
+    WHERE taller_id = cred.taller_id AND nombre = 'Cobro de créditos' AND tipo = 'ingreso'
+    LIMIT 1;
+    
+    IF cat_id IS NULL THEN
+      INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+      VALUES (cred.taller_id, 'Cobro de créditos', 'ingreso', true)
+      RETURNING id INTO cat_id;
+    END IF;
+
+    INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+    VALUES (cred.taller_id, 'ingreso', cat_id, cred.monto,
+            'Cobro de crédito: ' || COALESCE(cred.descripcion, ''), 
+            CURRENT_DATE, cred.id, 'fiados', true)
+    ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$function$
+                                                                      |
+| registrar_movimiento_pago_reparacion  | CREATE OR REPLACE FUNCTION public.registrar_movimiento_pago_reparacion()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+  rep_desc TEXT;
+BEGIN
+  IF NEW.metodo != 'Crédito' AND NEW.monto > 0 THEN
+    SELECT id INTO cat_id FROM categorias_financieras 
+    WHERE taller_id = NEW.taller_id AND nombre = 'Reparaciones' AND tipo = 'ingreso'
+    LIMIT 1;
+    
+    IF cat_id IS NULL THEN
+      INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+      VALUES (NEW.taller_id, 'Reparaciones', 'ingreso', true)
+      RETURNING id INTO cat_id;
+    END IF;
+
+    SELECT descripcion INTO rep_desc FROM reparaciones WHERE id = NEW.reparacion_id;
+    
+    INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+    VALUES (NEW.taller_id, 'ingreso', cat_id, NEW.monto,
+            'Pago: ' || COALESCE(rep_desc, 'reparación') || ' (' || COALESCE(NEW.metodo, 'Efectivo') || ')',
+            NEW.fecha, NEW.id, 'pagos_reparacion', true)
+    ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$function$
+ |
+| registrar_movimiento_gasto            | CREATE OR REPLACE FUNCTION public.registrar_movimiento_gasto()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+  concepto_final TEXT;
+BEGIN
+  SELECT id INTO cat_id FROM categorias_financieras 
+  WHERE taller_id = NEW.taller_id AND nombre = COALESCE(NEW.categoria, 'Otros egresos') AND tipo = 'egreso'
+  LIMIT 1;
+  
+  IF cat_id IS NULL THEN
+    INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+    VALUES (NEW.taller_id, COALESCE(NEW.categoria, 'Otros egresos'), 'egreso', false)
+    RETURNING id INTO cat_id;
+  END IF;
+
+  concepto_final := COALESCE(NEW.descripcion, 'Gasto');
+  IF NEW.proveedor IS NOT NULL AND NEW.proveedor != '' THEN
+    concepto_final := concepto_final || ' - ' || NEW.proveedor;
+  END IF;
+
+  INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+  VALUES (NEW.taller_id, 'egreso', cat_id, NEW.monto,
+          concepto_final, NEW.fecha, NEW.id, 'gastos_taller', true)
+  ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  RETURN NEW;
+END;
+$function$
+                                      |
+| registrar_movimiento_cuenta_pagada    | CREATE OR REPLACE FUNCTION public.registrar_movimiento_cuenta_pagada()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+BEGIN
+  IF NEW.pagada = true AND OLD.pagada = false THEN
+    SELECT id INTO cat_id FROM categorias_financieras 
+    WHERE taller_id = NEW.taller_id AND nombre = 'Repuestos' AND tipo = 'egreso'
+    LIMIT 1;
+    
+    IF cat_id IS NULL THEN
+      INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+      VALUES (NEW.taller_id, 'Repuestos', 'egreso', true)
+      RETURNING id INTO cat_id;
+    END IF;
+
+    INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+    VALUES (NEW.taller_id, 'egreso', cat_id, NEW.monto,
+            'Pago proveedor: ' || NEW.proveedor,
+            COALESCE(NEW.fecha_pago, CURRENT_DATE), NEW.id, 'cuentas_pagar', true)
+    ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$function$
+                                                                                                                                                          |
+| registrar_movimiento_sueldo           | CREATE OR REPLACE FUNCTION public.registrar_movimiento_sueldo()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+  liq RECORD;
+BEGIN
+  IF NEW.estado = 'pagado' AND OLD.estado != 'pagado' THEN
+    SELECT * INTO liq FROM liquidaciones WHERE id = NEW.id;
+    
+    SELECT id INTO cat_id FROM categorias_financieras 
+    WHERE taller_id = liq.taller_id AND nombre = 'Sueldos' AND tipo = 'egreso'
+    LIMIT 1;
+    
+    IF cat_id IS NULL THEN
+      INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+      VALUES (liq.taller_id, 'Sueldos', 'egreso', true)
+      RETURNING id INTO cat_id;
+    END IF;
+
+    INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja)
+    VALUES (liq.taller_id, 'egreso', cat_id, liq.total_liquidado,
+            'Pago de sueldo a ' || (SELECT nombre FROM empleados WHERE id = liq.empleado_id),
+            COALESCE(NEW.fecha_pago, CURRENT_DATE), NEW.id, 'liquidaciones', true)
+    ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$function$
+                       |
