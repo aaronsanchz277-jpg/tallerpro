@@ -121,6 +121,19 @@ async function dashboard() {
   const tallerNombre = currentPerfil?.talleres?.nombre || 'Tu Taller';
   if (rol === 'cliente') { misReparaciones(); return; }
 
+  // Tarea #62: si el usuario eligió "Cargá tu primer trabajo" en el banner
+  // post-asistente, dejamos un flag para disparar el tour del dashboard la
+  // próxima vez que vuelva acá. Lo ejecutamos one-shot (lo borramos al
+  // dispararlo) para no repetirlo en cada visita al dashboard.
+  try {
+    if (localStorage.getItem('tallerpro_tutorial_pendiente') &&
+        !localStorage.getItem('tallerpro_tutorial_visto') &&
+        typeof iniciarTutorial === 'function') {
+      localStorage.removeItem('tallerpro_tutorial_pendiente');
+      setTimeout(() => iniciarTutorial(), 600);
+    }
+  } catch (e) {}
+
   const hoy = fechaHoy();
   const primerMes = primerDiaMes();
 
