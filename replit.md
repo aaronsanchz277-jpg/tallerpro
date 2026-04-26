@@ -70,13 +70,18 @@ Claves del jsonb `permisos` (default todo en `false`):
 
 A partir de la Tarea #13, el cliente tiene su propia cuenta en TallerPro:
 
-1. **Registro libre con código** — pestaña "Soy cliente" en el login
-   (`index.html` + `js/auth/auth.js`). El cliente crea su cuenta con
-   nombre + email + contraseña + **código de invitación** (requerido).
-   El código lo emite el taller desde "Usuarios → Vincular" y lo aplica
-   la RPC `aplicar_codigo`, que asigna `taller_id` y opcionalmente
-   `cliente_id`. Sin código no se permite el alta porque la cuenta
-   quedaría invisible para todos los talleres.
+1. **Registro libre con código opcional** — pestaña "Soy cliente" en el
+   login (`index.html` + `js/auth/auth.js`). El cliente crea su cuenta
+   con nombre + email + contraseña; el **código de invitación es
+   opcional**.
+   - **Con código** → la RPC `aplicar_codigo` asigna `taller_id` y
+     opcionalmente `cliente_id` en el momento.
+   - **Sin código** → la cuenta queda en estado *limbo*
+     (`rol=cliente`, `taller_id=NULL`, `cliente_id=NULL`). Al loguear,
+     `loadPerfil()` detecta el `taller_id` nulo y dispara
+     `showCodigoPrompt()` automáticamente para que el cliente "reclame"
+     su código del taller. Este es el flujo *claim code post-signup*
+     y permite que el cliente arme la cuenta antes de tener el código.
 
 2. **Bandeja "Solicitudes de cliente"** — `js/hr/solicitudes-cliente.js`,
    ruta `solicitudes`, sidebar admin → CLIENTES. Lista perfiles con
@@ -100,10 +105,10 @@ A partir de la Tarea #13, el cliente tiene su propia cuenta en TallerPro:
    y avisa cuando cambia el estado de una reparación o aparece un
    presupuesto pendiente. Tracking en `localStorage` para evitar spam.
 
-**Drift de RLS pendiente**: la pantalla "Mis presupuestos" requiere una
-policy SQL adicional sobre `presupuestos_v2` que permita SELECT al
-cliente sobre filas con su `cliente_id` (similar a la policy
-`client_reparaciones` aplicada en Tarea #12). Sin esa policy la query
-devuelve [] sin romper la pantalla — el cliente verá solo las
-reparaciones pendientes de aprobación. Hay que sumarla a
-`supabase/rls_policies.sql` y aplicarla manualmente.
+**RLS aplicada en Tarea #13**: `supabase/rls_policies.sql` ya incluye
+las policies dedicadas `presupuestos_v2_select` (cliente ve solo filas
+con su `cliente_id`) y `presupuestos_v2_modify_staff` (admin/empleado
+escriben en su taller). El usuario tiene que correr el script en el
+SQL Editor de Supabase una sola vez para que la pantalla "Mis
+presupuestos" devuelva datos. Sin ejecutar el script la query devuelve
+[] sin romper la UI — el cliente igual ve sus reparaciones pendientes.

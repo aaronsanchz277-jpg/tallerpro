@@ -422,25 +422,40 @@ async function handleAuth() {
       const codigo = document.getElementById('cli-codigo').value.trim().toUpperCase();
       if (!nombre) throw new Error('Ingresá tu nombre');
       if (pass.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres');
-      // El código es REQUERIDO para que la cuenta quede vinculada al taller
-      // (sin código no hay forma de saber a qué taller pertenece, lo que dejaría
-      // a la cuenta en un limbo invisible para todos los admins).
-      if (!codigo) throw new Error('Pedile al taller el código de invitación e ingresalo abajo');
 
       btn.textContent = 'CREANDO CUENTA...';
 
+      // Registro libre: el cliente puede crear cuenta SIN código.
+      // - Con código  → aplicar_codigo vincula taller + cliente (si el código tenía cliente_id).
+      // - Sin código  → cuenta queda en estado "limbo" (rol=cliente, taller_id=null,
+      //   cliente_id=null). Al loguear se mostrará showCodigoPrompt para que ingrese
+      //   el código del taller (flujo "claim code" post-signup).
       const { data, error } = await sb.auth.signUp({ email, password: pass });
       if (error) throw new Error(error.message);
       if (!data.user) throw new Error('Error al crear la cuenta');
 
-      // Aplica el código → vincula el perfil con el taller (y opcionalmente con un cliente).
-      const { data: result, error: rpcError } = await sb.rpc('aplicar_codigo', { p_codigo: codigo, p_user_id: data.user.id });
-      if (rpcError || !result?.ok) throw new Error(result?.error || rpcError?.message || 'Código inválido o ya utilizado');
-      await sb.from('perfiles').update({ nombre }).eq('id', data.user.id);
-      if (result.rol === 'cliente') {
-        const { data: perfil } = await sb.from('perfiles').select('cliente_id').eq('id', data.user.id).maybeSingle();
-        if (perfil?.cliente_id) {
-          await sb.from('clientes').update({ nombre, telefono: telefono || null }).eq('id', perfil.cliente_id);
+      if (codigo) {
+        // Aplica el código → vincula el perfil con el taller (y opcionalmente con un cliente).
+        const { data: result, error: rpcError } = await sb.rpc('aplicar_codigo', { p_codigo: codigo, p_user_id: data.user.id });
+        if (rpcError || !result?.ok) throw new Error(result?.error || rpcError?.message || 'Código inválido o ya utilizado');
+        await sb.from('perfiles').update({ nombre }).eq('id', data.user.id);
+        if (result.rol === 'cliente') {
+          const { data: perfil } = await sb.from('perfiles').select('cliente_id').eq('id', data.user.id).maybeSingle();
+          if (perfil?.cliente_id) {
+            await sb.from('clientes').update({ nombre, telefono: telefono || null }).eq('id', perfil.cliente_id);
+          }
+        }
+      } else {
+        // Sin código: trigger anti-escalada en perfiles solo permite insertar
+        // rol='cliente' sin taller_id ni cliente_id. Es exactamente lo que necesitamos.
+        await sb.from('perfiles').upsert({
+          id: data.user.id,
+          nombre,
+          rol: 'cliente'
+        });
+        // Guardamos teléfono en metadata del usuario (no requiere columna nueva).
+        if (telefono) {
+          try { await sb.auth.updateUser({ data: { telefono } }); } catch(_) {}
         }
       }
 
@@ -448,6 +463,7 @@ async function handleAuth() {
       const { data: loginData } = await sb.auth.signInWithPassword({ email, password: pass });
       toast(`¡Bienvenido ${h(nombre)}!`, 'success');
       if (loginData?.user) {
+        // loadPerfil() detecta taller_id=null y muestra showCodigoPrompt automáticamente.
         await loadPerfil(loginData.user);
       } else {
         switchLoginTab('login');

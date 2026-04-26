@@ -342,7 +342,8 @@ DECLARE
   staff_tables text[] := ARRAY[
     'inventario','movimientos_inventario','historial_precios','ubicaciones',
     'agenda','citas','feriados','google_calendar_tokens',
-    'mantenimientos','presupuestos','presupuestos_v2',
+    'mantenimientos','presupuestos',
+    -- 'presupuestos_v2' tiene policies dedicadas más abajo (lectura cliente).
     'reparacion_mecanicos','reparacion_items','items_reparacion',
     'fotos','fotos_reparacion','checklist_recepcion','checklist_plantillas',
     'trabajos_empleado'
@@ -364,6 +365,41 @@ BEGIN
       $f$, t, t);
     END IF;
   END LOOP;
+END $$;
+
+
+-- ---- PRESUPUESTOS_V2 (cliente VE los suyos; staff escribe) ----
+-- Tarea #13: portal del cliente muestra sus presupuestos en "Mis presupuestos".
+-- Pattern idéntico al de `reparaciones`: cliente solo ve filas con su cliente_id.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='presupuestos_v2') THEN
+    EXECUTE 'ALTER TABLE presupuestos_v2 ENABLE ROW LEVEL SECURITY';
+
+    EXECUTE 'DROP POLICY IF EXISTS "presupuestos_v2_select" ON presupuestos_v2';
+    EXECUTE $p$
+      CREATE POLICY "presupuestos_v2_select" ON presupuestos_v2
+        FOR SELECT TO authenticated
+        USING (
+          taller_id = public.taller_id_actual()
+          AND (
+            public.rol_actual() IN ('admin','empleado')
+            OR (public.rol_actual() = 'cliente' AND cliente_id = public.cliente_id_actual())
+          )
+        )
+    $p$;
+
+    EXECUTE 'DROP POLICY IF EXISTS "presupuestos_v2_modify_staff" ON presupuestos_v2';
+    EXECUTE $p$
+      CREATE POLICY "presupuestos_v2_modify_staff" ON presupuestos_v2
+        FOR ALL TO authenticated
+        USING (taller_id = public.taller_id_actual()
+               AND public.rol_actual() IN ('admin','empleado'))
+        WITH CHECK (taller_id = public.taller_id_actual()
+                    AND public.rol_actual() IN ('admin','empleado'))
+    $p$;
+  END IF;
 END $$;
 
 
