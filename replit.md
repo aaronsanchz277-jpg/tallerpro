@@ -91,19 +91,37 @@ A partir de la Tarea #13, el cliente tiene su propia cuenta en TallerPro:
    vincula a un cliente existente o crea uno nuevo.
 
 3. **"Mis presupuestos"** — `misPresupuestos()` en
-   `js/crm/cliente-view.js`, sidebar cliente. Muestra presupuestos
-   formales (`presupuestos_v2`) y reparaciones pendientes de aprobación
-   (`reparaciones.aprobacion_cliente='pendiente'`). El cliente aprueba,
-   rechaza o abre WhatsApp con el taller.
+   `js/crm/cliente-view.js`, sidebar cliente. Muestra dos secciones:
+   - **Reparaciones pendientes de aprobación** (presupuesto cargado
+     directo en la OT): aprueba o rechaza vía
+     `aprobarPresupuestoCliente`.
+   - **Presupuestos formales (`presupuestos_v2`)**: si están en estado
+     `generado` aparecen los botones APROBAR / RECHAZAR / Pedir
+     aclaración (`aprobarPresupV2`, `rechazarPresupV2`,
+     `aclararPresupV2`). El update de estado lo permite la policy
+     `presupuestos_v2_update_cliente`. "Pedir aclaración" abre
+     WhatsApp con el taller sin cambiar el estado.
 
 4. **Comprobante PDF del cliente** — botón "Descargar comprobante PDF"
    en `misReparaciones` para reparaciones finalizadas. Reusa
    `generarCartaConformidad` (jsPDF cargado on-demand desde CDN).
 
-5. **Notificaciones del cliente** — `pushCheckMisReps` en
-   `js/integrations/push.js` corre en el ciclo de checks (cada 15 min)
-   y avisa cuando cambia el estado de una reparación o aparece un
-   presupuesto pendiente. Tracking en `localStorage` para evitar spam.
+5. **Notificaciones del cliente** — tres checks en
+   `js/integrations/push.js` corren en el ciclo cada 15 min:
+   - `pushCheckMisReps`: cambios de estado en reparaciones y nuevos
+     presupuestos pendientes de aprobar (sobre `reparaciones`).
+   - `pushCheckMisCitas`: turnos que pasan de `pendiente` a
+     `confirmada` o `cancelada/rechazada`.
+   - `pushCheckMisPresupuestos`: nuevos presupuestos formales
+     (`presupuestos_v2`) en estado `generado` para mí.
+   Tracking en `localStorage` (snapshot id→estado) para evitar spam.
+
+6. **Vincular cuentas sin código** — botón "Buscar y vincular por
+   email" en la bandeja admin. Como las RLS no dejan ver perfiles de
+   otros talleres, usa la RPC SECURITY DEFINER
+   `admin_vincular_cuenta_huerfana(p_email, p_cliente_id)` (en
+   `supabase/rls_policies.sql`). El admin pega el email del cliente
+   y opcionalmente lo asocia a un cliente del CRM en la misma acción.
 
 **RLS aplicada en Tarea #13**: `supabase/rls_policies.sql` ya incluye
 las policies dedicadas `presupuestos_v2_select` (cliente ve solo filas

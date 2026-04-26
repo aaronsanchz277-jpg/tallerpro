@@ -51,6 +51,16 @@ async function solicitudesCliente() {
         </div>
       </div>`).join('')}
 
+    <div style="background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.15);border-radius:10px;padding:.75rem;margin-top:1rem">
+      <div style="font-family:var(--font-head);font-size:.78rem;color:var(--accent);letter-spacing:.5px;margin-bottom:.4rem">
+        📨 ¿Tu cliente creó cuenta sin código?
+      </div>
+      <div style="font-size:.78rem;color:var(--text2);margin-bottom:.6rem">
+        Si un cliente se registró sin tu código de invitación, vinculalo manualmente con su email.
+      </div>
+      <button onclick="modalVincularPorEmail()" style="background:rgba(0,229,255,.15);color:var(--accent);border:1px solid rgba(0,229,255,.3);border-radius:8px;padding:.5rem .9rem;font-size:.8rem;font-family:var(--font-head);cursor:pointer">🔍 Buscar y vincular por email</button>
+    </div>
+
     <div style="font-family:var(--font-head);font-size:.72rem;color:var(--text2);letter-spacing:1px;margin-top:1.25rem;margin-bottom:.5rem">
       📅 TURNOS PEDIDOS — PENDIENTES DE CONFIRMAR
     </div>
@@ -169,4 +179,61 @@ async function rechazarTurnoSolicitado(citaId) {
       solicitudesCliente();
     }, null, 'No se pudo rechazar el turno');
   });
+}
+
+// ─── VINCULAR CUENTA SIN CÓDIGO POR EMAIL ────────────────────────────────────
+// El cliente pudo registrarse sin ingresar código (taller_id queda NULL).
+// Ese perfil no aparece en la bandeja porque las RLS no permiten verlo.
+// Esta acción usa la RPC SECURITY DEFINER `admin_vincular_cuenta_huerfana`
+// que busca por email exacto y vincula al taller del admin.
+async function modalVincularPorEmail() {
+  const { data: clientes } = await sb.from('clientes')
+    .select('id, nombre, telefono, ruc')
+    .eq('taller_id', tid())
+    .order('nombre');
+
+  const opciones = (clientes||[]).map(c =>
+    `<option value="${c.id}">${h(c.nombre)}${c.telefono?' · '+h(c.telefono):''}</option>`
+  ).join('');
+
+  openModal(`
+    <div class="modal-title">📨 Vincular cuenta por email</div>
+    <div style="font-size:.82rem;color:var(--text2);margin-bottom:.75rem">
+      Pedíle a tu cliente el email con el que creó su cuenta en TallerPro y pegalo abajo. Lo vinculamos al taller en el momento.
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Email del cliente *</label>
+      <input class="form-input" id="vinc-email" type="email" placeholder="cliente@email.com" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Vincular a un cliente del CRM (opcional)</label>
+      <select class="form-input" id="vinc-cliente-existente">
+        <option value="">— Vincular después —</option>
+        ${opciones}
+      </select>
+    </div>
+
+    <button class="btn-primary" onclick="vincularPorEmailEjecutar()">VINCULAR</button>
+    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function vincularPorEmailEjecutar() {
+  const email = document.getElementById('vinc-email').value.trim();
+  const clienteId = document.getElementById('vinc-cliente-existente').value || null;
+  if (!email) { toast('Ingresá el email del cliente', 'error'); return; }
+
+  await safeCall(async () => {
+    const { data, error } = await sb.rpc('admin_vincular_cuenta_huerfana', {
+      p_email: email,
+      p_cliente_id: clienteId
+    });
+    if (error) { toast('Error: '+error.message, 'error'); return; }
+    if (!data?.ok) { toast(data?.error || 'No se pudo vincular', 'error'); return; }
+    toast(data.created ? 'Cuenta creada y vinculada' : 'Cuenta vinculada al taller', 'success');
+    closeModal();
+    solicitudesCliente();
+  }, null, 'No se pudo vincular la cuenta');
 }

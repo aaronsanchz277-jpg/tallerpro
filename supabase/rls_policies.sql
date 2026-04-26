@@ -399,8 +399,95 @@ BEGIN
         WITH CHECK (taller_id = public.taller_id_actual()
                     AND public.rol_actual() IN ('admin','empleado'))
     $p$;
+
+    -- Cliente puede aprobar / rechazar SUS presupuestos formales (estado).
+    -- El trigger más abajo asegura que solo cambie el campo `estado` (y opcionalmente
+    -- `aprobado_por_cliente_at` si la columna existe).
+    EXECUTE 'DROP POLICY IF EXISTS "presupuestos_v2_update_cliente" ON presupuestos_v2';
+    EXECUTE $p$
+      CREATE POLICY "presupuestos_v2_update_cliente" ON presupuestos_v2
+        FOR UPDATE TO authenticated
+        USING (
+          taller_id = public.taller_id_actual()
+          AND public.rol_actual() = 'cliente'
+          AND cliente_id = public.cliente_id_actual()
+        )
+        WITH CHECK (
+          taller_id = public.taller_id_actual()
+          AND public.rol_actual() = 'cliente'
+          AND cliente_id = public.cliente_id_actual()
+          AND estado IN ('aprobado','rechazado','generado')
+        )
+    $p$;
   END IF;
 END $$;
+
+
+-- ---- RPC: vincular cuentas sin taller (admin only) ─────────────────────────
+-- Tarea #13: el cliente puede crear cuenta SIN código (queda con taller_id=NULL).
+-- Esta RPC permite al admin buscarla por email exacto y vincularla a su taller.
+-- SECURITY DEFINER porque las RLS no permiten al admin ver perfiles de otros
+-- talleres. La RPC valida que el solicitante sea admin de algún taller y que el
+-- perfil destino esté huérfano (taller_id IS NULL, rol='cliente').
+CREATE OR REPLACE FUNCTION public.admin_vincular_cuenta_huerfana(
+  p_email text,
+  p_cliente_id uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_taller uuid;
+  v_user_id uuid;
+  v_perfil_actual record;
+BEGIN
+  -- Solo admin con taller asignado.
+  SELECT taller_id INTO v_admin_taller
+    FROM perfiles
+    WHERE id = auth.uid() AND rol = 'admin'
+    LIMIT 1;
+  IF v_admin_taller IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Solo el admin del taller puede vincular cuentas');
+  END IF;
+
+  -- Buscar el user_id por email exacto (case-insensitive).
+  SELECT id INTO v_user_id
+    FROM auth.users
+    WHERE lower(email) = lower(trim(p_email))
+    LIMIT 1;
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'No encontramos ninguna cuenta con ese email');
+  END IF;
+
+  -- El perfil debe estar huérfano (sin taller, rol cliente).
+  SELECT * INTO v_perfil_actual FROM perfiles WHERE id = v_user_id LIMIT 1;
+  IF v_perfil_actual IS NULL THEN
+    -- Crear perfil cliente vinculado.
+    INSERT INTO perfiles (id, rol, taller_id, cliente_id)
+      VALUES (v_user_id, 'cliente', v_admin_taller, p_cliente_id);
+    RETURN jsonb_build_object('ok', true, 'created', true);
+  END IF;
+
+  IF v_perfil_actual.taller_id IS NOT NULL AND v_perfil_actual.taller_id <> v_admin_taller THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Esa cuenta ya está vinculada a otro taller');
+  END IF;
+
+  IF v_perfil_actual.rol <> 'cliente' THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Esa cuenta no es de cliente');
+  END IF;
+
+  UPDATE perfiles
+    SET taller_id = v_admin_taller,
+        cliente_id = COALESCE(p_cliente_id, cliente_id)
+    WHERE id = v_user_id;
+
+  RETURN jsonb_build_object('ok', true, 'created', false);
+END $$;
+
+REVOKE ALL ON FUNCTION public.admin_vincular_cuenta_huerfana(text, uuid) FROM public;
+GRANT EXECUTE ON FUNCTION public.admin_vincular_cuenta_huerfana(text, uuid) TO authenticated;
 
 
 -- ---- VENTAS (admin + empleado escriben; cliente no ve nada) ----

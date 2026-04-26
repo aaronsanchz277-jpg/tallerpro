@@ -131,8 +131,10 @@ async function misPresupuestos() {
 
     ${(pptos||[]).length>0 ? `
       <div style="font-family:var(--font-head);font-size:.72rem;color:var(--text2);letter-spacing:1px;margin:1rem 0 .5rem">📋 PRESUPUESTOS</div>
-      ${(pptos||[]).map(p => `
-        <div class="card">
+      ${(pptos||[]).map(p => {
+        const esGenerado = p.estado === 'generado' || p.estado === 'pendiente';
+        return `
+        <div class="card" ${esGenerado?'style="border-left:3px solid var(--warning)"':''}>
           <div class="card-header">
             <div class="card-avatar">📋</div>
             <div class="card-info">
@@ -142,9 +144,16 @@ async function misPresupuestos() {
             </div>
             <span class="card-badge ${p.estado==='aprobado'?'badge-green':p.estado==='rechazado'?'badge-red':'badge-yellow'}">${(p.estado||'').toUpperCase()}</span>
           </div>
+          ${esGenerado ? `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-top:.6rem">
+              <button onclick="aprobarPresupV2('${p.id}')" style="background:rgba(0,255,136,.15);color:var(--success);border:1px solid rgba(0,255,136,.3);border-radius:10px;padding:.55rem;font-family:var(--font-head);font-size:.85rem;cursor:pointer">✓ APROBAR</button>
+              <button onclick="rechazarPresupV2('${p.id}')" style="background:rgba(255,68,68,.1);color:var(--danger);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:.55rem;font-family:var(--font-head);font-size:.85rem;cursor:pointer">✕ RECHAZAR</button>
+            </div>
+            <button onclick="aclararPresupV2('${p.id}','${hjs(p.descripcion||'')}')" style="width:100%;margin-top:.4rem;background:rgba(255,176,0,.08);color:var(--warning);border:1px solid rgba(255,176,0,.25);border-radius:8px;padding:.45rem;font-size:.78rem;cursor:pointer">❓ Pedir aclaración</button>
+          ` : ''}
           ${tallerTel ? `<div style="margin-top:.5rem;text-align:right"><button onclick="window.open('https://wa.me/${tallerTel}?text=${encodeURIComponent('Hola! Sobre el presupuesto: '+(p.descripcion||''))}')" style="background:rgba(37,211,102,.1);color:#25d366;border:1px solid rgba(37,211,102,.25);border-radius:8px;padding:.35rem .7rem;font-size:.72rem;cursor:pointer">💬 Hablar con el taller</button></div>` : ''}
-        </div>
-      `).join('')}
+        </div>`;
+      }).join('')}
     ` : ''}
 
     ${((pptos||[]).length===0 && (repsPend||[]).length===0) ? `<div class="empty"><p>Todavía no tenés presupuestos en ${h(tallerNombre)}.</p></div>` : ''}
@@ -161,5 +170,47 @@ async function descargarComprobanteCliente(repId) {
     return;
   }
   await generarCartaConformidad(repId);
+}
+
+// ─── ACCIONES SOBRE PRESUPUESTOS FORMALES (presupuestos_v2) ──────────────────
+// El cliente puede APROBAR, RECHAZAR o PEDIR ACLARACIÓN sobre un presupuesto
+// formal con estado='generado'. Update de estado limitado por la policy
+// `presupuestos_v2_update_cliente` (en supabase/rls_policies.sql).
+async function aprobarPresupV2(id) {
+  confirmar('¿Aprobar este presupuesto? El taller podrá empezar el trabajo.', async () => {
+    await safeCall(async () => {
+      const { error } = await sb.from('presupuestos_v2')
+        .update({ estado: 'aprobado', aprobado_por_cliente_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) { toast('No se pudo aprobar: '+error.message, 'error'); return; }
+      toast('✓ Presupuesto aprobado', 'success');
+      clearCache && clearCache('presupuestos_v2');
+      misPresupuestos();
+    }, null, 'No se pudo aprobar el presupuesto');
+  });
+}
+
+async function rechazarPresupV2(id) {
+  confirmar('¿Rechazar este presupuesto?', async () => {
+    await safeCall(async () => {
+      const { error } = await sb.from('presupuestos_v2')
+        .update({ estado: 'rechazado', aprobado_por_cliente_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) { toast('No se pudo rechazar: '+error.message, 'error'); return; }
+      toast('Presupuesto rechazado', 'success');
+      clearCache && clearCache('presupuestos_v2');
+      misPresupuestos();
+    }, null, 'No se pudo rechazar el presupuesto');
+  });
+}
+
+// "Pedir aclaración" abre WhatsApp con el taller con el contexto del
+// presupuesto. No cambia el estado en la base (sigue 'generado'); el taller
+// responde y el cliente vuelve a aprobar / rechazar después.
+function aclararPresupV2(id, descripcion) {
+  const tel = (currentPerfil?.talleres?.telefono || '').replace(/\D/g,'');
+  if (!tel) { toast('El taller no tiene teléfono registrado', 'error'); return; }
+  const msg = `Hola! Tengo una consulta sobre el presupuesto: ${descripcion || id}`;
+  window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(msg), '_blank');
 }
 

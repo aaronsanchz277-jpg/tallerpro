@@ -153,11 +153,92 @@ async function pushCheckMisReps() {
   }, null, 'Error verificando mis reparaciones');
 }
 
+// ─── CHECK PARA CLIENTES: cambios en sus turnos (citas) ──────────────────────
+// Avisa cuando una cita pasa de "pendiente" a "confirmada" o "cancelada".
+async function pushCheckMisCitas() {
+  if (!currentPerfil || Notification.permission !== 'granted') return;
+  if (currentPerfil.rol !== 'cliente') return;
+
+  await safeCall(async () => {
+    const { data: perfil } = await sb.from('perfiles').select('cliente_id').eq('id', currentUser.id).maybeSingle();
+    if (!perfil?.cliente_id) return;
+
+    const { data: citas } = await sb.from('citas')
+      .select('id, descripcion, fecha, hora, estado')
+      .eq('cliente_id', perfil.cliente_id)
+      .order('fecha', { ascending: false })
+      .limit(20);
+    if (!citas || citas.length === 0) return;
+
+    const prev = JSON.parse(localStorage.getItem('tallerpro_notif_miscitas') || '{}');
+    const next = {};
+    let n = 0;
+    citas.forEach(c => {
+      next[c.id] = c.estado;
+      const before = prev[c.id];
+      if (!before || n >= 3) return;
+      if (before !== c.estado) {
+        const fechaTxt = (c.fecha || '') + (c.hora ? ' ' + c.hora.slice(0,5) : '');
+        if (c.estado === 'confirmada') {
+          pushNotify(`✓ Tu turno fue confirmado`, `${c.descripcion || 'Turno'} — ${fechaTxt}`, 'cita-' + c.id, () => navigate('mis-turnos'));
+          n++;
+        } else if (c.estado === 'cancelada' || c.estado === 'rechazada') {
+          pushNotify(`✕ Tu turno fue rechazado`, `${c.descripcion || 'Turno'} — ${fechaTxt}`, 'cita-' + c.id, () => navigate('mis-turnos'));
+          n++;
+        }
+      }
+    });
+    localStorage.setItem('tallerpro_notif_miscitas', JSON.stringify(next));
+  }, null, 'Error verificando mis turnos');
+}
+
+// ─── CHECK PARA CLIENTES: nuevos presupuestos formales ───────────────────────
+// Avisa cuando aparece un presupuesto_v2 nuevo en estado 'generado' para mí.
+async function pushCheckMisPresupuestos() {
+  if (!currentPerfil || Notification.permission !== 'granted') return;
+  if (currentPerfil.rol !== 'cliente') return;
+
+  await safeCall(async () => {
+    const { data: perfil } = await sb.from('perfiles').select('cliente_id').eq('id', currentUser.id).maybeSingle();
+    if (!perfil?.cliente_id) return;
+
+    let pptos = [];
+    try {
+      const res = await sb.from('presupuestos_v2')
+        .select('id, descripcion, estado, total')
+        .eq('cliente_id', perfil.cliente_id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (!res.error) pptos = res.data || [];
+    } catch (_) { return; }
+
+    if (pptos.length === 0) return;
+
+    // Snapshot { id: estado }. Solo notificamos cambios sobre estados ya vistos.
+    const prev = JSON.parse(localStorage.getItem('tallerpro_notif_mispresup') || '{}');
+    const next = {};
+    let n = 0;
+    pptos.forEach(p => {
+      next[p.id] = p.estado;
+      // Notificar SOLO cuando el presupuesto pasa a "generado" (nuevo o actualizado).
+      if (n >= 3) return;
+      if (p.estado === 'generado' && prev[p.id] !== 'generado') {
+        const total = (typeof gs === 'function') ? gs(p.total||0) : (p.total||0);
+        pushNotify(`📋 Nuevo presupuesto`, `${p.descripcion || 'Presupuesto'} — ₲${total}`, 'pv2-' + p.id, () => navigate('mis-presupuestos'));
+        n++;
+      }
+    });
+    localStorage.setItem('tallerpro_notif_mispresup', JSON.stringify(next));
+  }, null, 'Error verificando mis presupuestos');
+}
+
 async function pushRunChecks() {
   await pushCheckCitas();
   await pushCheckMantenimientos();
   await pushCheckStock();
   await pushCheckMisReps();
+  await pushCheckMisCitas();
+  await pushCheckMisPresupuestos();
 }
 
 function pushStartChecking() {
