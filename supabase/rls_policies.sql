@@ -327,7 +327,7 @@ DECLARE
   t text;
   staff_tables text[] := ARRAY[
     'inventario','agenda','mantenimientos','presupuestos','presupuestos_v2',
-    'reparacion_mecanicos','items_reparacion','pagos_reparacion',
+    'reparacion_mecanicos','items_reparacion',
     'fotos_reparacion','checklist_recepcion','trabajos_empleado',
     'codigos_empleado'
   ];
@@ -371,9 +371,124 @@ CREATE POLICY "ventas_update_staff" ON ventas
   WITH CHECK (taller_id = public.taller_id_actual() AND public.rol_actual() IN ('admin','empleado'));
 
 DROP POLICY IF EXISTS "ventas_delete_admin" ON ventas;
+-- Admin o empleado con permiso explícito `anular_ventas`.
 CREATE POLICY "ventas_delete_admin" ON ventas
   FOR DELETE TO authenticated
-  USING (public.es_admin() AND taller_id = public.taller_id_actual());
+  USING (
+    taller_id = public.taller_id_actual()
+    AND (
+      public.es_admin()
+      OR (
+        public.rol_actual() = 'empleado'
+        AND COALESCE(
+          (SELECT (permisos->>'anular_ventas')::boolean
+             FROM perfiles WHERE id = auth.uid()),
+          false
+        ) = true
+      )
+    )
+  );
+
+
+-- ---- PAGOS DE REPARACION (sensible: gate por permiso `registrar_cobros`) ----
+-- Cualquier staff lee (lo necesita la pantalla de detalle, caja y rentabilidad)
+-- pero SOLO admin o empleado con permiso `registrar_cobros` inserta/modifica.
+ALTER TABLE pagos_reparacion ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "pagos_reparacion_select_staff" ON pagos_reparacion;
+CREATE POLICY "pagos_reparacion_select_staff" ON pagos_reparacion
+  FOR SELECT TO authenticated
+  USING (
+    taller_id = public.taller_id_actual()
+    AND public.rol_actual() IN ('admin','empleado')
+  );
+
+DROP POLICY IF EXISTS "pagos_reparacion_insert_perm" ON pagos_reparacion;
+CREATE POLICY "pagos_reparacion_insert_perm" ON pagos_reparacion
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    taller_id = public.taller_id_actual()
+    AND (
+      public.es_admin()
+      OR (
+        public.rol_actual() = 'empleado'
+        AND COALESCE(
+          (SELECT (permisos->>'registrar_cobros')::boolean
+             FROM perfiles WHERE id = auth.uid()),
+          false
+        ) = true
+      )
+    )
+  );
+
+DROP POLICY IF EXISTS "pagos_reparacion_update_admin" ON pagos_reparacion;
+CREATE POLICY "pagos_reparacion_update_admin" ON pagos_reparacion
+  FOR UPDATE TO authenticated
+  USING (taller_id = public.taller_id_actual() AND public.es_admin())
+  WITH CHECK (taller_id = public.taller_id_actual() AND public.es_admin());
+
+DROP POLICY IF EXISTS "pagos_reparacion_delete_admin" ON pagos_reparacion;
+CREATE POLICY "pagos_reparacion_delete_admin" ON pagos_reparacion
+  FOR DELETE TO authenticated
+  USING (taller_id = public.taller_id_actual() AND public.es_admin());
+
+
+-- ---- FIADOS (créditos de clientes, real nombre de la tabla) ----
+-- Es información financiera sensible. Staff lee (para ver saldos en cliente,
+-- caja, dashboard, reportes). INSERT por admin o empleado con
+-- `registrar_cobros` (porque el flujo de pago parcial crea un fiado por el
+-- resto). UPDATE/DELETE (cobrar/anular) solo admin.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='fiados') THEN
+
+    EXECUTE 'ALTER TABLE fiados ENABLE ROW LEVEL SECURITY';
+
+    EXECUTE 'DROP POLICY IF EXISTS "fiados_select_staff" ON fiados';
+    EXECUTE $f$
+      CREATE POLICY "fiados_select_staff" ON fiados
+        FOR SELECT TO authenticated
+        USING (taller_id = public.taller_id_actual()
+               AND public.rol_actual() IN ('admin','empleado'))
+    $f$;
+
+    EXECUTE 'DROP POLICY IF EXISTS "fiados_insert_perm" ON fiados';
+    EXECUTE $f$
+      CREATE POLICY "fiados_insert_perm" ON fiados
+        FOR INSERT TO authenticated
+        WITH CHECK (
+          taller_id = public.taller_id_actual()
+          AND (
+            public.es_admin()
+            OR (
+              public.rol_actual() = 'empleado'
+              AND COALESCE(
+                (SELECT (permisos->>'registrar_cobros')::boolean
+                   FROM perfiles WHERE id = auth.uid()),
+                false
+              ) = true
+            )
+          )
+        )
+    $f$;
+
+    EXECUTE 'DROP POLICY IF EXISTS "fiados_update_admin" ON fiados';
+    EXECUTE $f$
+      CREATE POLICY "fiados_update_admin" ON fiados
+        FOR UPDATE TO authenticated
+        USING (taller_id = public.taller_id_actual() AND public.es_admin())
+        WITH CHECK (taller_id = public.taller_id_actual() AND public.es_admin())
+    $f$;
+
+    EXECUTE 'DROP POLICY IF EXISTS "fiados_delete_admin" ON fiados';
+    EXECUTE $f$
+      CREATE POLICY "fiados_delete_admin" ON fiados
+        FOR DELETE TO authenticated
+        USING (taller_id = public.taller_id_actual() AND public.es_admin())
+    $f$;
+  END IF;
+END $$;
 
 
 -- =====================================================================
