@@ -288,9 +288,9 @@ async function detalleEmpleado(id) {
           <div style="font-size:.55rem;color:var(--text2)">SUELDO</div>
           <div style="font-family:var(--font-head);font-size:.85rem;color:${sueldo > 0 ? 'var(--success)' : 'var(--text2)'}">₲${gs(sueldo)}</div>
         </div>
-        <div style="background:rgba(0,229,255,.08);border-radius:8px;padding:.4rem;text-align:center">
-          <div style="font-size:.55rem;color:var(--accent)">COMISIONES</div>
-          <div style="font-family:var(--font-head);font-size:.85rem;color:var(--accent)">+₲${gs(totalComisionesMes)}</div>
+        <div style="background:rgba(0,255,136,.08);border-radius:8px;padding:.4rem;text-align:center">
+          <div style="font-size:.55rem;color:var(--success)">COMISIONES</div>
+          <div style="font-family:var(--font-head);font-size:.85rem;color:var(--success)">+₲${gs(totalComisionesMes)}</div>
         </div>
         <div style="background:rgba(255,204,0,.08);border-radius:8px;padding:.4rem;text-align:center">
           <div style="font-size:.55rem;color:var(--warning)">VALES</div>

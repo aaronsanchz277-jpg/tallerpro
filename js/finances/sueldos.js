@@ -103,7 +103,7 @@ async function detallePeriodo(periodoId) {
           <div class="card-avatar">👤</div>
           <div class="card-info">
             <div class="card-name">${h(l.empleados?.nombre||'?')}</div>
-            <div class="card-sub">Base ₲${gs(l.sueldo_base)}${l.total_extra?' · Trabajos+Comis. ₲'+gs(l.total_extra):''}${l.total_bonos?' · Bonos ₲'+gs(l.total_bonos):''}${l.total_descuentos?' · Desc ₲'+gs(l.total_descuentos):''}</div>
+            <div class="card-sub">Base ₲${gs(l.sueldo_base)}${l.total_extra?' · Trabajos y comisiones ₲'+gs(l.total_extra):''}${l.total_bonos?' · Bonos ₲'+gs(l.total_bonos):''}${l.total_descuentos?' · Desc ₲'+gs(l.total_descuentos):''}</div>
           </div>
           <div style="text-align:right">
             <div style="font-family:var(--font-head);font-size:1rem;color:${l.estado==='pagado'?'var(--success)':'var(--accent)'}">₲${gs(l.total_liquidado)}</div>
