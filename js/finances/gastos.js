@@ -86,6 +86,7 @@ async function modalEditarGasto(id) {
 }
 
 async function guardarGasto(id) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede registrar gastos')) return;
   if (guardando()) return;
   const desc = document.getElementById('g-desc').value.trim();
   const monto = parseFloat(document.getElementById('g-monto').value);
@@ -128,6 +129,7 @@ async function guardarGasto(id) {
 }
 
 async function eliminarGasto(id) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede eliminar gastos')) return;
   confirmar('¿Eliminar este gasto? También se eliminará el registro financiero asociado.', async () => {
     // El trigger de BD podría encargarse, pero por seguridad borramos manualmente
     await sb.from('movimientos_financieros')

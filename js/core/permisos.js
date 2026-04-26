@@ -6,15 +6,13 @@
 //   registrar_cobros      → puede tocar el botón "Pagos" en reparación
 //   anular_ventas         → puede eliminar/anular ventas
 //   modificar_precios     → puede usar "Actualizar costos" en reparación
-//   ver_historial_otros   → puede entrar al detalle de OTRO empleado
 
 const PERMISOS_DEFAULT = {
   ver_costos: false,
   ver_ganancia: false,
   registrar_cobros: false,
   anular_ventas: false,
-  modificar_precios: false,
-  ver_historial_otros: false
+  modificar_precios: false
 };
 
 const PERMISOS_LABELS = {
@@ -22,8 +20,7 @@ const PERMISOS_LABELS = {
   ver_ganancia:        'Ver ganancia neta del trabajo',
   registrar_cobros:    'Registrar cobros al cliente',
   anular_ventas:       'Anular ventas',
-  modificar_precios:   'Modificar precios cobrados al cliente',
-  ver_historial_otros: 'Ver historial de otros mecánicos'
+  modificar_precios:   'Modificar precios cobrados al cliente'
 };
 
 function userPermisos() {

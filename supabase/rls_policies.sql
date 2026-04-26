@@ -626,10 +626,13 @@ CREATE POLICY "movimientos_delete_admin" ON movimientos_financieros
 DO $$
 DECLARE
   t text;
+  -- Nombres reales de tablas usadas por el frontend (verificado con grep
+  -- en js/finances/*.js, js/reports/*.js). NOTA: `gastos_taller` (no
+  -- `gastos`), `fiados` está protegida arriba con políticas finas.
   admin_tables text[] := ARRAY[
-    'gastos','sueldos','liquidaciones','liquidaciones_sueldo','cuentas_pagar','creditos',
-    'balances','movimiento_balance','cierres_caja','categorias_financieras',
-    'conciliaciones','suscripciones'
+    'gastos_taller','sueldos','liquidaciones','liquidaciones_sueldo',
+    'cuentas_pagar','balances','movimiento_balance','cierres_caja',
+    'categorias_financieras','conciliaciones','suscripciones'
   ];
 BEGIN
   FOREACH t IN ARRAY admin_tables LOOP

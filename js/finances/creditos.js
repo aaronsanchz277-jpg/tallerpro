@@ -46,6 +46,7 @@ async function marcarPagadoConSafeCall(id) {
 }
 
 async function marcarPagado(id) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede cobrar un fiado')) return;
   await offlineUpdate('fiados', { pagado: true }, 'id', id);
   
   // NOTA: La inserción en movimientos_financieros ahora la hace un TRIGGER en Supabase
@@ -76,6 +77,7 @@ async function guardarCreditoConSafeCall() {
 }
 
 async function guardarCredito() {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede registrar créditos')) return;
   const cid = document.getElementById('f-cliente').value;
   if (!cid) { toast('Seleccioná un cliente','error'); return; }
   

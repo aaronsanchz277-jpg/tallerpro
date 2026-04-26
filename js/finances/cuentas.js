@@ -75,6 +75,7 @@ async function guardarCuentaConSafeCall() {
 }
 
 async function guardarCuenta(id=null) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede gestionar cuentas a pagar')) return;
   const proveedor = document.getElementById('f-proveedor').value.trim();
   if (!validateRequired(proveedor, 'Proveedor')) return;
   
@@ -134,6 +135,7 @@ async function marcarCuentaPagadaConSafeCall(id) {
 }
 
 async function marcarCuentaPagada(id) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede marcar una cuenta como pagada')) return;
   const { data:c } = await sb.from('cuentas_pagar').select('proveedor,monto').eq('id',id).single();
   await sb.from('cuentas_pagar').update({ pagada:true, fecha_pago:new Date().toISOString().split('T')[0] }).eq('id',id);
   
@@ -173,6 +175,7 @@ async function modalEditarCuenta(id) {
 }
 
 async function eliminarCuentaConSafeCall(id) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede eliminar cuentas')) return;
   confirmar('¿Eliminar esta cuenta?', async () => {
     await safeCall(async () => {
       await sb.from('cuentas_pagar').delete().eq('id',id);
