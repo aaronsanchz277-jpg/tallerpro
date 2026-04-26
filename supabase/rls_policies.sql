@@ -1089,6 +1089,28 @@ END $$;
 
 
 -- =====================================================================
+-- 3.C · Índice único anti-duplicado de vinculación empleado↔perfil (Tarea #17)
+-- =====================================================================
+-- Garantiza que una misma fila de `empleados` no pueda quedar vinculada a dos
+-- perfiles distintos (lo que rompería "Mi cobro" y la asignación de
+-- comisiones). Si ya hay duplicados previos, lanzamos un NOTICE y seguimos
+-- sin crear el índice — el admin debe limpiar a mano antes.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT empleado_id FROM perfiles
+     WHERE empleado_id IS NOT NULL
+     GROUP BY empleado_id HAVING count(*) > 1
+  ) THEN
+    RAISE NOTICE 'Hay perfiles con empleado_id duplicado. Limpiá primero y volvé a correr para crear el índice único.';
+  ELSE
+    EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS perfiles_empleado_id_unico
+               ON perfiles (empleado_id) WHERE empleado_id IS NOT NULL';
+  END IF;
+END $$;
+
+
+-- =====================================================================
 -- 4) Tabla `planes` (catálogo público)
 -- =====================================================================
 DO $$
