@@ -367,8 +367,8 @@ async function misCitas() {
     sb.from('citas').select('*, vehiculos(patente,marca)').eq('cliente_id', perfil.cliente_id).order('fecha',{ascending:true}),
     sb.from('vehiculos').select('id,patente,marca').eq('cliente_id', perfil.cliente_id).order('patente')
   ]);
-  const badges = { pendiente:'badge-yellow', confirmada:'badge-blue', completada:'badge-green', cancelada:'badge-red' };
-  const labels = { pendiente:t('agendaPendiente'), confirmada:t('agendaConfirmada'), completada:t('agendaCompletada'), cancelada:t('agendaCancelada') };
+  const badges = { pendiente:'badge-yellow', confirmada:'badge-blue', completada:'badge-green', cancelada:'badge-red', reprogramada:'badge-yellow' };
+  const labels = { pendiente:t('agendaPendiente'), confirmada:t('agendaConfirmada'), completada:t('agendaCompletada'), cancelada:t('agendaCancelada'), reprogramada:'NUEVA FECHA PROPUESTA' };
   window._misVehsCliente = misVehs || [];
   window._miClienteId = perfil.cliente_id;
 
@@ -392,7 +392,35 @@ async function misCitas() {
             ${c.estado==='pendiente'?`<button onclick="event.stopPropagation();cancelarMiCitaConSafeCall('${c.id}')" style="font-size:.65rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 6px;cursor:pointer">${t('agendaCancelar')}</button>`:''}
           </div>
         </div>
+        ${c.estado==='reprogramada'?`
+          <div style="margin-top:.6rem;padding:.6rem;background:rgba(255,193,7,.08);border:1px solid rgba(255,193,7,.25);border-radius:8px">
+            <div style="font-size:.78rem;color:var(--text2);margin-bottom:.5rem">El taller propone esta nueva fecha. ¿La aceptás?</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem">
+              <button onclick="event.stopPropagation();aceptarFechaPropuesta('${c.id}')" style="background:rgba(0,255,136,.15);color:var(--success);border:1px solid rgba(0,255,136,.3);border-radius:8px;padding:.5rem;font-size:.78rem;font-family:var(--font-head);cursor:pointer">✓ Aceptar</button>
+              <button onclick="event.stopPropagation();rechazarFechaPropuesta('${c.id}')" style="background:rgba(255,68,68,.08);color:var(--danger);border:1px solid rgba(255,68,68,.25);border-radius:8px;padding:.5rem;font-size:.78rem;font-family:var(--font-head);cursor:pointer">✕ Rechazar</button>
+            </div>
+          </div>`:''}
       </div>`).join('')}`;
+}
+
+// Cliente: el taller propuso una nueva fecha (estado='reprogramada').
+// La RLS de citas para clientes permite cambiar el estado de su propia cita.
+async function aceptarFechaPropuesta(id) {
+  await safeCall(async () => {
+    await offlineUpdate('citas', { estado: 'confirmada' }, 'id', id);
+    toast('Fecha confirmada', 'success');
+    misCitas();
+  }, null, 'No se pudo confirmar la fecha');
+}
+
+async function rechazarFechaPropuesta(id) {
+  confirmar('¿Rechazás la nueva fecha propuesta? El turno quedará cancelado.', async () => {
+    await safeCall(async () => {
+      await offlineUpdate('citas', { estado: 'cancelada' }, 'id', id);
+      toast('Turno cancelado', 'success');
+      misCitas();
+    }, null, 'No se pudo rechazar la fecha');
+  });
 }
 
 async function cancelarMiCitaConSafeCall(id) {
