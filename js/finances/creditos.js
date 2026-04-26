@@ -1,5 +1,9 @@
 // ─── CRÉDITOS ──────────────────────────────────────────────────────────────────
 async function creditos({ filtro='pendiente' }={}) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede ver créditos')) {
+    if (typeof navigate === 'function') navigate('dashboard');
+    return;
+  }
   const { data } = await cachedQuery(`creditos_${filtro}`, () => {
     let q = sb.from('fiados').select('*, clientes(nombre,telefono)').eq('taller_id',tid()).order('created_at',{ascending:false});
     if (filtro!=='todos') q = q.eq('pagado', filtro==='pagado');

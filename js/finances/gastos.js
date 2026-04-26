@@ -4,6 +4,10 @@
 const CATEGORIAS_GASTO = ['Alquiler','Servicios','Repuestos','Sueldos','Impuestos','Herramientas','Insumos','Limpieza','Otros'];
 
 async function gastos({ filtro='todos', offset=0 }={}) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede ver gastos')) {
+    if (typeof navigate === 'function') navigate('dashboard');
+    return;
+  }
   const cacheKey = `gastos_${filtro}_${offset}`;
   const { data, count } = await cachedQuery(cacheKey, () => {
     let q = sb.from('gastos_taller').select('*', {count:'exact'}).eq('taller_id',tid()).order('fecha',{ascending:false});

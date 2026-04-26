@@ -1,5 +1,9 @@
 // ─── CUENTAS A PAGAR (Proveedores) ──────────────────────────────────────────
 async function cuentasPagar({ filtro='pendiente' }={}) {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede ver cuentas a pagar')) {
+    if (typeof navigate === 'function') navigate('dashboard');
+    return;
+  }
   const { data } = await sb.from('cuentas_pagar').select('*').eq('taller_id',tid()).order('fecha_vencimiento',{ascending:true});
   const hoy = new Date().toISOString().split('T')[0];
   const pendientes = (data||[]).filter(c => !c.pagada);

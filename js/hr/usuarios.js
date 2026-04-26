@@ -1,5 +1,10 @@
 // ─── USUARIOS (ADMIN) ─────────────────────────────────────────────────────────
 async function usuarios() {
+  // Pantalla solo para admin. Si no lo es, lo mandamos al dashboard.
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede gestionar usuarios')) {
+    if (typeof navigate === 'function') navigate('dashboard');
+    return;
+  }
   const [{ data: perfiles }, { data: codigos }] = await Promise.all([
     sb.from('perfiles').select('*').eq('taller_id', tid()).order('nombre'),
     sb.from('codigos_empleado').select('*').eq('taller_id', tid()).eq('usado', false).order('created_at', {ascending:false})

@@ -39,6 +39,10 @@ function finanzas_initFechas() {
 }
 
 async function finanzas() {
+  if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede ver finanzas')) {
+    if (typeof navigate === 'function') navigate('dashboard');
+    return;
+  }
   await finanzas_initCategorias();
   finanzas_initFechas();
 

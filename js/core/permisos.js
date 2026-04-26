@@ -43,12 +43,15 @@ function puedeVer(clave) {
 }
 
 // ¿Puede ver el detalle del empleado con id `empleadoId`?
-// Admin: siempre. Empleado: solo el suyo, salvo permiso `ver_historial_otros`.
+// Admin: siempre. Empleado: SOLO el suyo. La fila `empleados` contiene
+// sueldo, así que no puede ser vista por otro empleado a nivel de servidor
+// (RLS lo bloquea). El permiso `ver_historial_otros` ya no aplica acá; el
+// historial de trabajos sigue accesible vía `trabajos_empleado` y
+// `reparaciones`, sin exponer la info salarial.
 function puedoVerEmpleado(empleadoId) {
   if (esAdmin()) return true;
   if (!esEmpleado()) return false;
-  if (currentPerfil?.empleado_id && currentPerfil.empleado_id === empleadoId) return true;
-  return userPermisos().ver_historial_otros === true;
+  return currentPerfil?.empleado_id && currentPerfil.empleado_id === empleadoId;
 }
 
 // Guardia para acciones que requieren admin. Devuelve true si puede seguir.

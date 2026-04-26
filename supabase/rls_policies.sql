@@ -328,8 +328,7 @@ DECLARE
   staff_tables text[] := ARRAY[
     'inventario','agenda','mantenimientos','presupuestos','presupuestos_v2',
     'reparacion_mecanicos','items_reparacion',
-    'fotos_reparacion','checklist_recepcion','trabajos_empleado',
-    'codigos_empleado'
+    'fotos_reparacion','checklist_recepcion','trabajos_empleado'
   ];
 BEGIN
   FOREACH t IN ARRAY staff_tables LOOP
@@ -388,6 +387,26 @@ CREATE POLICY "ventas_delete_admin" ON ventas
       )
     )
   );
+
+
+-- ---- CODIGOS DE EMPLEADO (admin-only) ----
+-- Códigos de invitación para vincular usuarios. Solo admin del taller los
+-- crea, lista, marca como usados o elimina. Empleados/clientes no deben
+-- siquiera leerlos (pueden filtrar info de quién está siendo invitado).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='codigos_empleado') THEN
+    EXECUTE 'ALTER TABLE codigos_empleado ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS "codigos_empleado_admin_all" ON codigos_empleado';
+    EXECUTE $f$
+      CREATE POLICY "codigos_empleado_admin_all" ON codigos_empleado
+        FOR ALL TO authenticated
+        USING (taller_id = public.taller_id_actual() AND public.es_admin())
+        WITH CHECK (taller_id = public.taller_id_actual() AND public.es_admin())
+    $f$;
+  END IF;
+END $$;
 
 
 -- ---- PAGOS DE REPARACION (sensible: gate por permiso `registrar_cobros`) ----
@@ -498,6 +517,11 @@ END $$;
 -- ---- EMPLEADOS ----
 ALTER TABLE empleados ENABLE ROW LEVEL SECURITY;
 
+-- empleados.sueldo es información SENSIBLE. Por eso esta policy es estricta:
+-- admin del taller, o el propio empleado mirándose a sí mismo. Ningún
+-- empleado puede leer la fila de otro (ni con ver_historial_otros): si
+-- mañana se quiere "ver historial de otros mecánicos" se hará vía vista
+-- pública sin sueldo o vía la tabla `trabajos_empleado` (que sí es staff).
 DROP POLICY IF EXISTS "empleados_select" ON empleados;
 CREATE POLICY "empleados_select" ON empleados
   FOR SELECT TO authenticated
@@ -506,8 +530,6 @@ CREATE POLICY "empleados_select" ON empleados
     AND (
       public.es_admin()
       OR (public.rol_actual() = 'empleado' AND id = public.empleado_id_actual())
-      OR (public.rol_actual() = 'empleado'
-          AND COALESCE((SELECT permisos->>'ver_historial_otros' FROM perfiles WHERE id = auth.uid()), 'false') = 'true')
     )
   );
 
