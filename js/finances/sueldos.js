@@ -115,20 +115,46 @@ async function generarLiquidaciones(periodoId) {
   const { data: periodo } = await sb.from('periodos_sueldo').select('*').eq('id', periodoId).single();
   const { data: emps } = await sb.from('empleados').select('id,nombre,sueldo').eq('taller_id', tid());
   if (!emps?.length) { toast('No hay empleados registrados','error'); return; }
+
+  const empIds = emps.map(e => e.id);
+
+  // ── Batch: 3 queries en lugar de 3·N ────────────────────────────────────────
+  const [yaLiquidados, vales, trabajos] = await Promise.all([
+    sb.from('liquidaciones').select('empleado_id').eq('periodo_id', periodoId).in('empleado_id', empIds),
+    sb.from('vales_empleado').select('empleado_id, monto').in('empleado_id', empIds).gte('fecha', periodo.fecha_inicio).lte('fecha', periodo.fecha_fin),
+    sb.from('trabajos_empleado').select('empleado_id, monto').in('empleado_id', empIds).gte('fecha', periodo.fecha_inicio).lte('fecha', periodo.fecha_fin),
+  ]);
+
+  const yaSet = new Set((yaLiquidados.data || []).map(r => r.empleado_id));
+  const valesPorEmp = {};
+  (vales.data || []).forEach(v => {
+    valesPorEmp[v.empleado_id] = (valesPorEmp[v.empleado_id] || 0) + parseFloat(v.monto || 0);
+  });
+  const trabajosPorEmp = {};
+  (trabajos.data || []).forEach(t => {
+    trabajosPorEmp[t.empleado_id] = (trabajosPorEmp[t.empleado_id] || 0) + parseFloat(t.monto || 0);
+  });
+
+  const filas = emps
+    .filter(emp => !yaSet.has(emp.id))
+    .map(emp => ({
+      taller_id: tid(),
+      empleado_id: emp.id,
+      periodo_id: periodoId,
+      sueldo_base: emp.sueldo || 0,
+      total_bonos: 0,
+      total_descuentos: valesPorEmp[emp.id] || 0,
+      total_extra: trabajosPorEmp[emp.id] || 0,
+      estado: 'pendiente'
+    }));
+
   let creados = 0;
-  for (const emp of emps) {
-    const { data: existe } = await sb.from('liquidaciones').select('id').eq('empleado_id',emp.id).eq('periodo_id',periodoId).maybeSingle();
-    if (existe) continue;
-    const { data: vales } = await sb.from('vales_empleado').select('monto').eq('empleado_id',emp.id).gte('fecha',periodo.fecha_inicio).lte('fecha',periodo.fecha_fin);
-    const totalDescuentos = (vales||[]).reduce((s,v) => s + parseFloat(v.monto||0), 0);
-    const { data: trabajos } = await sb.from('trabajos_empleado').select('monto').eq('empleado_id',emp.id).gte('fecha',periodo.fecha_inicio).lte('fecha',periodo.fecha_fin);
-    const totalExtra = (trabajos||[]).reduce((s,t) => s + parseFloat(t.monto||0), 0);
-    await sb.from('liquidaciones').insert({
-      taller_id: tid(), empleado_id: emp.id, periodo_id: periodoId,
-      sueldo_base: emp.sueldo||0, total_bonos: 0, total_descuentos: totalDescuentos, total_extra: totalExtra, estado: 'pendiente'
-    });
-    creados++;
+  if (filas.length) {
+    const { error } = await sb.from('liquidaciones').insert(filas);
+    if (error) { toast('Error: ' + error.message, 'error'); return; }
+    creados = filas.length;
   }
+
   toast(`✓ ${creados} liquidación(es) generada(s)`,'success');
   detallePeriodo(periodoId);
 }

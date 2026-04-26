@@ -36,7 +36,7 @@ async function reparaciones({ filtro='todos', search='', offset=0, tipo='', meca
     else if (filtro === 'mes') q = q.gte('fecha', primerDiaMes());
     else if (filtro !== 'todos') q = q.eq('estado', filtro);
     if (tipo) q = q.eq('tipo_trabajo', tipo);
-    if (search) q = q.ilike('descripcion', `%${search}%`);
+    if (search) q = q.ilike('descripcion', `%${escapeLikePattern(search)}%`);
 
     q = q.range(offset, offset + PAGE_SIZE - 1);
     const res = await q;
@@ -57,7 +57,7 @@ async function reparaciones({ filtro='todos', search='', offset=0, tipo='', meca
       else if (filtro === 'mes') q = q.gte('fecha', primerDiaMes());
       else if (filtro !== 'todos') q = q.eq('estado', filtro);
       if (tipo) q = q.eq('tipo_trabajo', tipo);
-      if (search) q = q.ilike('descripcion', `%${search}%`);
+      if (search) q = q.ilike('descripcion', `%${escapeLikePattern(search)}%`);
       return q.range(offset, offset + PAGE_SIZE - 1);
     });
     data = res.data;

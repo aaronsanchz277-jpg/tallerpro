@@ -17,9 +17,16 @@ function stockRealtime_init() {
     }, (payload) => {
       stockRealtime_verificarBajo(payload.new);
     })
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') console.log('📦 Stock Realtime conectado');
-    });
+    .subscribe();
+}
+
+function stockRealtime_desconectar() {
+  if (_stockRealtimeChannel) {
+    try { _stockRealtimeChannel.unsubscribe(); } catch (e) {}
+    _stockRealtimeChannel = null;
+  }
+  // Limpiar cache de deduplicación
+  for (const k in _stockNotificadosCache) delete _stockNotificadosCache[k];
 }
 
 function stockRealtime_verificarBajo(item) {
@@ -46,23 +53,5 @@ function stockRealtime_verificarBajo(item) {
   }
 }
 
-// Enganche seguro con realtime_init (si existe)
-(function() {
-  if (typeof realtime_init === 'function') {
-    const originalRealtimeInit = realtime_init;
-    realtime_init = function() {
-      originalRealtimeInit();
-      stockRealtime_init();
-    };
-  } else {
-    // Si realtime_init no existe aún, esperar a que el canal de Supabase esté disponible
-    console.warn('realtime_init no definido, stock-realtime se inicializará bajo demanda');
-    // Intentar inicializar cuando haya usuario
-    const checkInterval = setInterval(() => {
-      if (typeof sb !== 'undefined' && tid() && currentUser) {
-        stockRealtime_init();
-        clearInterval(checkInterval);
-      }
-    }, 1000);
-  }
-})();
+// Inicialización: se dispara explícitamente desde showApp() y se desconecta
+// desde logout(). No usamos polling ni monkey-patches sobre realtime_init.

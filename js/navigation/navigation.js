@@ -153,6 +153,17 @@ async function navigate(page, params = {}) {
   const clienteOnly = ['mis-reparaciones','mis-vehiculos','mis-mantenimientos','mis-citas'];
   if (clienteOnly.includes(page) && rol !== 'cliente') { navigate('dashboard'); return; }
 
+  // Cleanup al salir de "modo-taller": limpia intervals + clase del body
+  if (currentPage === 'modo-taller' && page !== 'modo-taller') {
+    if (typeof _modoTallerInterval !== 'undefined' && _modoTallerInterval) {
+      clearInterval(_modoTallerInterval); _modoTallerInterval = null;
+    }
+    if (typeof _modoTallerRelojInterval !== 'undefined' && _modoTallerRelojInterval) {
+      clearInterval(_modoTallerRelojInterval); _modoTallerRelojInterval = null;
+    }
+    document.body.classList.remove('modo-taller');
+  }
+
   currentPage = page;
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const navEl = document.getElementById('nav-' + page);

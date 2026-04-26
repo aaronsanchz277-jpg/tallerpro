@@ -4,7 +4,6 @@
 // ════════════════════════════════════════════════════════════════
 
 // ─── SEGURIDAD: Escape de HTML para prevenir XSS ─────────────────────────────
-// ─── SEGURIDAD: Escape de HTML para prevenir XSS ─────────────────────────────
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   const s = String(str);
@@ -18,6 +17,33 @@ function escapeHtml(str) {
     .replace(/[\']/g, '&#39;');
 }
 const h = escapeHtml;
+
+// ─── SEGURIDAD: Escape combinado HTML-attr + JS-string ───────────────────────
+// Para uso dentro de atributos delimitados por dobles comillas que interpolan
+// strings de usuario como argumentos JS, p.ej.:
+//   onclick="foo('${hjs(name)}')"
+// Aplica DOS capas de escape (orden importa, porque el HTML-parser corre primero
+// y luego el JS-parser):
+//   1) JS-string escape — neutraliza el cierre del string ('), backslashes y
+//      separadores de línea (incl. U+2028/U+2029, que son line terminators en JS).
+//   2) HTML-attribute escape — neutraliza el cierre de atributo (") y todos los
+//      metacaracteres HTML, evitando que un " en el dato cierre el atributo.
+function escapeHtmlJs(str) {
+  if (str === null || str === undefined) return '';
+  const jsEscaped = String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+  return jsEscaped
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+const hjs = escapeHtmlJs;
 
 // ─── CONFIGURACIÓN ────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://uggqqmsmxvafeyyinuir.supabase.co';

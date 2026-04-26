@@ -3,7 +3,7 @@ async function inventario({ search='', offset=0, zona='' }={}) {
   const cacheKey = `inventario_${search}_${offset}_${zona}`;
   const { data, count } = await cachedQuery(cacheKey, () => {
     let q = sb.from('inventario').select('*', {count:'exact'}).eq('taller_id',tid()).order('nombre');
-    if (search) q = q.ilike('nombre',`%${search}%`);
+    if (search) q = q.ilike('nombre',`%${escapeLikePattern(search)}%`);
     if (zona) q = q.eq('zona', zona);
     return q.range(offset, offset + PAGE_SIZE - 1);
   });
@@ -23,7 +23,7 @@ async function inventario({ search='', offset=0, zona='' }={}) {
     </div>
     ${zonas.length > 0 ? `<div style="display:flex;gap:.3rem;margin-bottom:.75rem;overflow-x:auto;padding-bottom:.3rem">
       <button onclick="inventario({zona:''})" style="background:${!zona?'var(--accent)':'var(--surface2)'};color:${!zona?'#000':'var(--text2)'};border:1px solid ${!zona?'var(--accent)':'var(--border)'};border-radius:8px;padding:.3rem .6rem;font-size:.72rem;cursor:pointer;white-space:nowrap">Todos</button>
-      ${zonas.map(z => `<button onclick="inventario({zona:'${h(z)}'})" style="background:${zona===z?'var(--accent)':'var(--surface2)'};color:${zona===z?'#000':'var(--text2)'};border:1px solid ${zona===z?'var(--accent)':'var(--border)'};border-radius:8px;padding:.3rem .6rem;font-size:.72rem;cursor:pointer;white-space:nowrap">📍 ${h(z)}</button>`).join('')}
+      ${zonas.map(z => `<button onclick="inventario({zona:'${hjs(z)}'})" style="background:${zona===z?'var(--accent)':'var(--surface2)'};color:${zona===z?'#000':'var(--text2)'};border:1px solid ${zona===z?'var(--accent)':'var(--border)'};border-radius:8px;padding:.3rem .6rem;font-size:.72rem;cursor:pointer;white-space:nowrap">📍 ${h(z)}</button>`).join('')}
     </div>` : ''}
     <div class="search-box">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -147,7 +147,7 @@ async function modalEditarItem(id) {
     </div>
     <button class="btn-primary" onclick="guardarItemConSafeCall('${id}')">${t('actualizar')}</button>
     <div style="display:flex;gap:.5rem">
-      <button class="btn-secondary" style="margin:0;flex:1" onclick="modalDescontarStock('${id}','${h(item.nombre)}',${item.cantidad})">- Descontar stock</button>
+      <button class="btn-secondary" style="margin:0;flex:1" onclick="modalDescontarStock('${id}','${hjs(item.nombre)}',${item.cantidad})">- Descontar stock</button>
       ${isAdmin?`<button class="btn-danger" style="margin:0" onclick="eliminarItem('${id}')">${t('eliminarBtn')}</button>`:''}
     </div>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);

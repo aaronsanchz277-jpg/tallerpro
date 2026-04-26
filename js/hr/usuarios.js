@@ -18,8 +18,8 @@ async function usuarios() {
         </div>
         <div style="display:flex;gap:.4rem;align-items:center">
           ${u.id!==currentUser.id?`<button onclick="cambiarRol('${u.id}','${u.rol}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 8px;cursor:pointer">Rol</button>`:''}
-          ${u.rol==='cliente'?`<button onclick="modalVincularVehiculo('${u.id}','${h(u.nombre)}')" style="font-size:.7rem;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.3);color:var(--accent);border-radius:6px;padding:3px 8px;cursor:pointer">🚗 Autos</button>`:''}
-          ${(u.rol==='empleado'||u.rol==='admin')?`<button onclick="modalVincularEmpleado('${u.id}','${h(u.nombre)}')" style="font-size:.7rem;background:rgba(255,204,0,.1);border:1px solid rgba(255,204,0,.3);color:var(--warning);border-radius:6px;padding:3px 8px;cursor:pointer">👤 Vincular</button>`:''}
+          ${u.rol==='cliente'?`<button onclick="modalVincularVehiculo('${u.id}','${hjs(u.nombre)}')" style="font-size:.7rem;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.3);color:var(--accent);border-radius:6px;padding:3px 8px;cursor:pointer">🚗 Autos</button>`:''}
+          ${(u.rol==='empleado'||u.rol==='admin')?`<button onclick="modalVincularEmpleado('${u.id}','${hjs(u.nombre)}')" style="font-size:.7rem;background:rgba(255,204,0,.1);border:1px solid rgba(255,204,0,.3);color:var(--warning);border-radius:6px;padding:3px 8px;cursor:pointer">👤 Vincular</button>`:''}
         </div>
       </div>
     </div>`;
@@ -104,7 +104,7 @@ async function modalVincularVehiculo(perfilId, nombreUsuario) {
       ${vehiculosAsignados.map(v => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
           <span style="font-size:.85rem">${h(v.patente)} · ${h(v.marca)} ${h(v.modelo||'')}</span>
-          <button onclick="desvincularVehiculoConSafeCall('${v.id}','${perfilId}','${h(nombreUsuario)}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 8px;cursor:pointer">✕ Quitar</button>
+          <button onclick="desvincularVehiculoConSafeCall('${v.id}','${perfilId}','${hjs(nombreUsuario)}')" style="font-size:.7rem;background:none;border:1px solid var(--border);color:var(--danger);border-radius:6px;padding:2px 8px;cursor:pointer">✕ Quitar</button>
         </div>`).join('')}
     </div>` : ''}
 
@@ -113,7 +113,7 @@ async function modalVincularVehiculo(perfilId, nombreUsuario) {
     ${(vehiculosSin||[]).map(v => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
         <span style="font-size:.85rem">${h(v.patente)} · ${h(v.marca)} ${h(v.modelo||'')}</span>
-        <button onclick="vincularVehiculoAClienteConSafeCall('${v.id}','${perfilId}','${h(nombreUsuario)}')" style="font-size:.7rem;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.3);color:var(--accent);border-radius:6px;padding:2px 8px;cursor:pointer">+ Asignar</button>
+        <button onclick="vincularVehiculoAClienteConSafeCall('${v.id}','${perfilId}','${hjs(nombreUsuario)}')" style="font-size:.7rem;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.3);color:var(--accent);border-radius:6px;padding:2px 8px;cursor:pointer">+ Asignar</button>
       </div>`).join('')}
     ` : `<p style="color:var(--text2);font-size:.82rem">No hay vehículos sin propietario.</p>`}
 

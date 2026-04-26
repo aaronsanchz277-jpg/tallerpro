@@ -46,6 +46,14 @@ async function forceSyncNow() {
   else { toast(`Quedan ${count} elementos por sincronizar`, 'warning'); }
 }
 
+// ─── SEGURIDAD: Escape de wildcards para queries .ilike()/.like() ────────────
+// Previene inyección de patrones (%, _, \) cuando el input del usuario
+// llega a Postgres como parte de un patrón LIKE/ILIKE.
+function escapeLikePattern(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
 function formatMoneda(valor) { return '₲ ' + gs(valor); }
 function formatNumero(valor) { return new Intl.NumberFormat('es-PY').format(valor || 0); }
 function capitalize(str) { return str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : ''; }

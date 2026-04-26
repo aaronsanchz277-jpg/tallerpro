@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a0a0f">
 <link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%230a0a0f'/><text x='32' y='44' font-size='32' text-anchor='middle' fill='%2300e5ff' font-family='sans-serif' font-weight='bold'>T</text></svg>">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%230a0a0f'/><text x='96' y='125' font-size='90' text-anchor='middle' fill='%2300e5ff' font-family='sans-serif' font-weight='bold'>T</text></svg>">
 <title>TallerPro</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -92,10 +93,12 @@
           <div class="form-group"><label class="form-label">Nombre del taller *</label><input class="form-input" id="reg-taller" placeholder="Taller San José"></div>
           <div class="form-group"><label class="form-label">Teléfono del taller</label><input class="form-input" id="reg-tel" placeholder="+595 21 000 000"></div>
         </div>
-        <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="auth-email" type="email" placeholder="tu@email.com"></div>
-        <div class="form-group"><label class="form-label">Contraseña *</label><input class="form-input" id="auth-pass" type="password" placeholder="••••••••"></div>
-        <button class="btn-primary" id="auth-btn" onclick="handleAuth()">INGRESAR</button>
-        <p id="auth-error" class="error-msg"></p>
+        <form id="login-normal-form" onsubmit="event.preventDefault();const b=document.getElementById('auth-btn');if(!b||b.disabled)return false;b.click();return false">
+          <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="auth-email" type="email" autocomplete="email" placeholder="tu@email.com"></div>
+          <div class="form-group"><label class="form-label">Contraseña *</label><input class="form-input" id="auth-pass" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+          <button type="button" class="btn-primary" id="auth-btn" onclick="handleAuth()">INGRESAR</button>
+          <p id="auth-error" class="error-msg"></p>
+        </form>
         <div id="forgot-link" style="text-align:center;margin-top:.75rem">
           <button onclick="switchLoginTab('forgot')" style="background:none;border:none;color:var(--text2);font-size:.8rem;cursor:pointer;text-decoration:underline">¿Olvidaste tu contraseña?</button>
         </div>
@@ -131,10 +134,12 @@
           <input class="form-input" id="inv-codigo" placeholder="Código del taller" style="text-transform:uppercase;letter-spacing:3px" oninput="onCodigoInput(this.value)">
           <div style="font-size:.72rem;color:var(--text2);margin-top:.3rem" id="inv-codigo-hint">El admin te da el código. Define si sos cliente o empleado.</div>
         </div>
-        <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="inv-email" type="email" placeholder="tu@email.com"></div>
-        <div class="form-group"><label class="form-label">Contraseña *</label><input class="form-input" id="inv-pass" type="password" placeholder="Mínimo 6 caracteres"></div>
-        <button class="btn-primary" onclick="handleRegistroInvitacion()">REGISTRARME</button>
-        <p id="inv-error" class="error-msg"></p>
+        <form id="login-invitacion-form" onsubmit="event.preventDefault();handleRegistroInvitacion();return false">
+          <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="inv-email" type="email" autocomplete="email" placeholder="tu@email.com"></div>
+          <div class="form-group"><label class="form-label">Contraseña *</label><input class="form-input" id="inv-pass" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div>
+          <button type="button" class="btn-primary" onclick="handleRegistroInvitacion()">REGISTRARME</button>
+          <p id="inv-error" class="error-msg"></p>
+        </form>
         <div style="text-align:center;margin-top:.75rem">
           <button onclick="showLoginNormal(true)" style="background:none;border:none;color:var(--text2);font-size:.8rem;cursor:pointer;text-decoration:underline">Ya tengo cuenta → Ingresar</button>
         </div>

@@ -243,17 +243,18 @@ async function guardarVenta(esServicioRapido = false) {
   const descuento = parseFloat(document.getElementById('venta-descuento')?.value || 0);
   const totalFinal = Math.max(0, total - descuento);
   
-  // Descontar stock de productos
-  for (const item of window._ventaItems) {
-    if (item.id) {
+  // Descontar stock de productos en paralelo (en lugar de N awaits secuenciales)
+  const stockUpdates = window._ventaItems
+    .filter(item => item.id)
+    .map(item => {
       const inv = window._ventaInv.find(p => p.id === item.id);
-      if (inv) {
-        await sb.from('inventario').update({ 
-          cantidad: Math.max(0, parseFloat(inv.cantidad) - item.cantidad) 
-        }).eq('id', item.id);
-      }
-    }
-  }
+      if (!inv) return null;
+      return sb.from('inventario').update({
+        cantidad: Math.max(0, parseFloat(inv.cantidad) - item.cantidad)
+      }).eq('id', item.id);
+    })
+    .filter(Boolean);
+  if (stockUpdates.length) await Promise.all(stockUpdates);
   
   const data = {
     tipo: esServicioRapido ? 'mixto' : 'producto',

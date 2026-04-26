@@ -4,7 +4,7 @@ async function vehiculos({ search='', offset=0 }={}) {
   const cacheKey = `vehiculos_${search}_${offset}`;
   const { data, count } = await cachedQuery(cacheKey, () => {
     let q = sb.from('vehiculos').select('*, clientes(nombre)', {count:'exact'}).eq('taller_id', tid()).order('patente');
-    if (search) q = q.ilike('patente', `%${search}%`);
+    if (search) q = q.ilike('patente', `%${escapeLikePattern(search)}%`);
     return q.range(offset, offset + PAGE_SIZE - 1);
   });
 

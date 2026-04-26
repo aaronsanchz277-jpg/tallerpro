@@ -357,7 +357,7 @@ async function ia_ejecutar(a) {
         break;
       }
       case 'registrar_vale': {
-        const { data: emps } = await sb.from('empleados').select('id,nombre').eq('taller_id',tid()).ilike('nombre','%'+(a.empleado_nombre||'')+'%').limit(1);
+        const { data: emps } = await sb.from('empleados').select('id,nombre').eq('taller_id',tid()).ilike('nombre','%'+escapeLikePattern(a.empleado_nombre||'')+'%').limit(1);
         if (!emps?.length) { ia_addMsg(`No encontré al empleado "${a.empleado_nombre}".`, false); return; }
         const emp = emps[0];
         const { error } = await sb.from('vales_empleado').insert({ empleado_id:emp.id, monto:cleanNum(a.monto), concepto:a.concepto||'Vale', fecha:new Date().toISOString().split('T')[0], taller_id:tid() });

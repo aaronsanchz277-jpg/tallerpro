@@ -10,7 +10,7 @@ async function presupuestos({ filtro='todos', search='', offset=0 }={}) {
     let q = sb.from('presupuestos_v2').select('*, vehiculos(patente,marca,modelo), clientes(nombre)', {count:'exact'})
       .eq('taller_id',tid()).order('created_at',{ascending:false});
     if (filtro!=='todos') q = q.eq('estado',filtro);
-    if (search) q = q.ilike('descripcion', `%${search}%`);
+    if (search) q = q.ilike('descripcion', `%${escapeLikePattern(search)}%`);
     return q.range(offset, offset + PAGE_SIZE - 1);
   });
   

@@ -79,7 +79,7 @@ async function barcode_accionProducto(code) {
       </div>
       ${bajo?'<div style="background:rgba(255,68,68,.1);border-radius:8px;padding:.5rem;margin-bottom:1rem;font-size:.8rem;color:var(--danger);text-align:center">⚠ Stock bajo — pedir más</div>':''}
       <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
-        <button onclick="closeModal();modalDescontarStock('${data.id}','${h(data.nombre)}',${data.cantidad})" class="btn-primary" style="flex:1;margin:0">Descontar stock</button>
+        <button onclick="closeModal();modalDescontarStock('${data.id}','${hjs(data.nombre)}',${data.cantidad})" class="btn-primary" style="flex:1;margin:0">Descontar stock</button>
       </div>
       <div style="display:flex;gap:.5rem">
         <button onclick="closeModal();modalEditarItem('${data.id}')" class="btn-secondary" style="flex:1;margin:0">Editar producto</button>

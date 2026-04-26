@@ -1,6 +1,6 @@
 // ─── SERVICE WORKER - TallerPro ───────────────────────────────────────────────
 // Incrementar en cada deploy para invalidar caché viejo
-const CACHE_NAME = 'tallerpro-v3';
+const CACHE_NAME = 'tallerpro-v4';
 
 // Solo el shell mínimo — JS y CSS NO van aquí (se manejan network-first)
 const SHELL_URLS = [
@@ -27,10 +27,7 @@ function shouldBypass(url) {
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      console.log('📦 SW: cacheando shell');
-      return cache.addAll(SHELL_URLS);
-    })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL_URLS))
   );
 });
 
@@ -40,14 +37,10 @@ self.addEventListener('activate', event => {
     caches.keys().then(keys => Promise.all(
       keys
         .filter(key => key !== CACHE_NAME)
-        .map(key => {
-          console.log('🗑️ SW: eliminando caché viejo:', key);
-          return caches.delete(key);
-        })
+        .map(key => caches.delete(key))
     ))
   );
   self.clients.claim();
-  console.log('✅ SW activado:', CACHE_NAME);
 });
 
 // ─── FETCH ────────────────────────────────────────────────────────────────────
@@ -60,9 +53,14 @@ self.addEventListener('fetch', event => {
   // Solo interceptar GET
   if (event.request.method !== 'GET') return;
 
-  const isJS  = url.includes('.js');
-  const isCSS = url.includes('.css');
-  const isHTML = url.includes('.html') || url.endsWith('/');
+  // Detectar tipo por pathname para evitar falsos positivos
+  // (p.ej. ".js" en query strings, o ".json" matcheando ".js")
+  let pathname = '';
+  try { pathname = new URL(url).pathname; } catch { return; }
+
+  const isJS   = pathname.endsWith('.js');
+  const isCSS  = pathname.endsWith('.css');
+  const isHTML = pathname.endsWith('.html') || pathname.endsWith('/');
 
   // ── JS y CSS: Network-first ──────────────────────────────────────────────
   if (isJS || isCSS) {
@@ -77,10 +75,7 @@ self.addEventListener('fetch', event => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          console.warn('SW: offline, sirviendo JS/CSS desde caché:', url);
-          return caches.match(event.request);
-        })
+        .catch(() => caches.match(event.request))
     );
     return;
   }
@@ -98,9 +93,9 @@ self.addEventListener('fetch', event => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          console.warn('SW: offline, sirviendo HTML desde caché:', url);
-          return caches.match(event.request) || caches.match('./index.html');
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          return cached || caches.match('./index.html');
         })
     );
     return;
@@ -117,9 +112,7 @@ self.addEventListener('fetch', event => {
             }
             return networkResponse;
           })
-          .catch(() => {
-            console.warn('SW: fetch falló para:', url);
-          });
+          .catch(() => null);
         return cachedResponse || fetchPromise;
       })
     )
@@ -129,7 +122,6 @@ self.addEventListener('fetch', event => {
 // ─── MENSAJES ─────────────────────────────────────────────────────────────────
 self.addEventListener('message', event => {
   if (event.data?.type === 'SKIP_WAITING') {
-    console.log('⏩ SW: forzando skipWaiting');
     self.skipWaiting();
   }
 

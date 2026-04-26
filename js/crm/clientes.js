@@ -4,7 +4,7 @@ async function clientes({ search='', offset=0 }={}) {
   const cacheKey = `clientes_${search}_${offset}`;
   const { data, count } = await cachedQuery(cacheKey, () => {
     let q = sb.from('clientes').select('*', {count:'exact'}).eq('taller_id', tid()).order('nombre');
-    if (search) q = q.ilike('nombre', `%${search}%`);
+    if (search) q = q.ilike('nombre', `%${escapeLikePattern(search)}%`);
     return q.range(offset, offset + PAGE_SIZE - 1);
   });
   const canEdit = ['admin','empleado'].includes(currentPerfil?.rol);

@@ -406,7 +406,7 @@ async function buscarPatente(valor) {
   patenteBusquedaTimer = setTimeout(async () => {
     await safeCall(async () => {
       const { data: vehs, fromCache } = await cachedQuery(`buscar_patente_${patente}`, () =>
-        sb.from('vehiculos').select('*, clientes(nombre,telefono), reparaciones(id,descripcion,estado,costo,fecha,meses_garantia)').eq('taller_id', tid()).ilike('patente', `%${patente}%`).limit(3)
+        sb.from('vehiculos').select('*, clientes(nombre,telefono), reparaciones(id,descripcion,estado,costo,fecha,meses_garantia)').eq('taller_id', tid()).ilike('patente', `%${escapeLikePattern(patente)}%`).limit(3)
       );
       if (!vehs || vehs.length === 0) {
         resultsEl.innerHTML = `<div style="background:var(--surface2);border-radius:10px;padding:.75rem;margin-bottom:1rem;font-size:.85rem;color:var(--text2)">${t('dashPatenteNoEncontrada')}</div>`;

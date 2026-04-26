@@ -1,7 +1,6 @@
 // ─── PWA: Service Worker ─────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').then(reg => {
-    console.log('SW registrado:', reg.scope);
+  navigator.serviceWorker.register('./sw.js').then(() => {
     navigator.serviceWorker.addEventListener('message', e => {
       if (e.data?.type === 'SYNC_REQUESTED') processOfflineQueue();
     });
@@ -13,7 +12,6 @@ let _installPrompt = null;
 let _appInstalled = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone || window.matchMedia('(display-mode: fullscreen)').matches;
 
 window.addEventListener('beforeinstallprompt', e => {
-  console.log('📲 Evento beforeinstallprompt detectado. La app es instalable.');
   // Prevenir el banner automático (lo manejaremos con nuestro botón)
   e.preventDefault();
   _installPrompt = e;
@@ -23,12 +21,10 @@ window.addEventListener('beforeinstallprompt', e => {
     btn.style.display = 'inline-flex';
     btn.style.alignItems = 'center';
     btn.style.gap = '4px';
-    console.log('✅ Botón de instalación visible');
   }
 });
 
 window.addEventListener('appinstalled', () => {
-  console.log('✅ TallerPro instalada como app');
   _appInstalled = true;
   _installPrompt = null;
   const btn = document.getElementById('btn-install');
@@ -38,14 +34,12 @@ window.addEventListener('appinstalled', () => {
 
 async function installApp() {
   if (!_installPrompt) {
-    console.log('No hay evento de instalación pendiente. Tal vez ya está instalada o el navegador no soporta la instalación.');
     toast('Para instalar, usá el menú del navegador (Agregar a pantalla de inicio).', 'info');
     return;
   }
   try {
     _installPrompt.prompt();
     const { outcome } = await _installPrompt.userChoice;
-    console.log(`Usuario ${outcome === 'accepted' ? 'aceptó' : 'canceló'} la instalación`);
     _installPrompt = null;
     if (outcome === 'accepted') {
       const btn = document.getElementById('btn-install');

@@ -169,7 +169,7 @@ async function ssSearch(id, query) {
     return;
   }
   results.innerHTML = items.map(item =>
-    `<div onclick="ssSelect('${id}','${item.id}','${h(item.label)}')" style="padding:.5rem .7rem;font-size:.82rem;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${h(item.label)}</div>`
+    `<div onclick="ssSelect('${id}','${item.id}','${hjs(item.label)}')" style="padding:.5rem .7rem;font-size:.82rem;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${h(item.label)}</div>`
   ).join('');
   results.style.display = 'block';
 }
