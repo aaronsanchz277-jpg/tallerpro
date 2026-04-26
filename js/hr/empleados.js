@@ -153,6 +153,15 @@ async function detalleEmpleado(id) {
   // Total horas (solo trabajos manuales)
   const totalHoras = (trabajosManuales || []).reduce((s, t) => s + parseFloat(t.horas || 0), 0);
 
+  // ¿Quién está mirando? Determina qué se muestra:
+  //  - admin: ve todo (sueldo, vales, resumen, botones)
+  //  - el propio empleado: ve todo lo suyo
+  //  - empleado con permiso "ver_historial_otros": NO ve sueldo ni vales
+  //    (solo trabajos / horas / reparaciones asignadas)
+  const _esAdmin   = (typeof esAdmin === 'function') && esAdmin();
+  const _esPropio  = currentPerfil?.empleado_id && currentPerfil.empleado_id === id;
+  const verSensible = _esAdmin || _esPropio;
+
   document.getElementById('main-content').innerHTML = `
     <div class="detail-header">
       <button class="back-btn" onclick="navigate('empleados')">${t('volver')}</button>
@@ -164,9 +173,10 @@ async function detalleEmpleado(id) {
     <div class="info-grid">
       <div class="info-item"><div class="label">${t('cliTel')}</div><div class="value">${h(emp.telefono || '-')}</div></div>
       <div class="info-item"><div class="label">Total horas</div><div class="value" style="color:var(--accent)">${totalHoras.toFixed(1)} hs</div></div>
-      ${emp.sueldo ? `<div class="info-item"><div class="label">Sueldo</div><div class="value" style="color:var(--success)">₲${gs(emp.sueldo)}</div></div>` : ''}
+      ${verSensible && emp.sueldo ? `<div class="info-item"><div class="label">Sueldo</div><div class="value" style="color:var(--success)">₲${gs(emp.sueldo)}</div></div>` : ''}
     </div>
 
+    ${verSensible ? `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
       <div style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px;margin-bottom:.5rem">💵 RESUMEN DEL MES</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-bottom:.5rem">
@@ -186,17 +196,23 @@ async function detalleEmpleado(id) {
     </div>
 
     ${valesHTML}
-
-    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
-      <button class="btn-add" style="flex:1;justify-content:center" onclick="modalNuevoTrabajo('${id}')">+ Registrar trabajo</button>
-      <button onclick="modalNuevoVale('${id}')" style="flex:1;background:rgba(255,204,0,.12);color:var(--warning);border:1px solid rgba(255,204,0,.3);border-radius:10px;padding:.5rem;font-family:var(--font-head);font-size:.8rem;cursor:pointer;text-align:center">+ Vale / Adelanto</button>
+    ` : `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem;font-size:.78rem;color:var(--text2)">
+      🔒 La información de sueldo y vales solo la ve el dueño del taller o el propio empleado.
     </div>
+    `}
+
+    ${verSensible ? `
+    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
+      ${_esAdmin ? `<button class="btn-add" style="flex:1;justify-content:center" onclick="modalNuevoTrabajo('${id}')">+ Registrar trabajo</button>` : ''}
+      ${_esAdmin ? `<button onclick="modalNuevoVale('${id}')" style="flex:1;background:rgba(255,204,0,.12);color:var(--warning);border:1px solid rgba(255,204,0,.3);border-radius:10px;padding:.5rem;font-family:var(--font-head);font-size:.8rem;cursor:pointer;text-align:center">+ Vale / Adelanto</button>` : ''}
+    </div>` : ''}
     <div style="display:flex;gap:.5rem;margin-bottom:1.25rem">
       <button class="btn-secondary" style="margin:0;flex:1" onclick="reparaciones({filtro:'todos', mecanico:'${id}'})">
         🔧 Ver reparaciones asignadas
       </button>
-      <button class="btn-secondary" style="margin:0;flex:1" onclick="modalEditarEmpleado('${id}')">${t('editarBtn')}</button>
-      <button class="btn-danger" style="margin:0" onclick="eliminarEmpleado('${id}')">✕</button>
+      ${_esAdmin ? `<button class="btn-secondary" style="margin:0;flex:1" onclick="modalEditarEmpleado('${id}')">${t('editarBtn')}</button>` : ''}
+      ${_esAdmin ? `<button class="btn-danger" style="margin:0" onclick="eliminarEmpleado('${id}')">✕</button>` : ''}
     </div>`;
 }
 

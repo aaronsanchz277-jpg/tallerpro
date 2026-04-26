@@ -81,7 +81,7 @@ async function detalleVenta(id) {
     <div style="display:flex;gap:.5rem;margin-top:1rem">
       ${v.estado==='completado' ? `<button class="btn-primary" style="flex:1;margin:0;background:var(--success)" onclick="facturarVenta('${v.id}')">🧾 Facturar</button>` : ''}
       <button class="btn-secondary" style="flex:1;margin:0" onclick="window.print()">🖨️ Imprimir</button>
-      ${currentPerfil?.rol==='admin' ? `<button class="btn-danger" style="flex:1;margin:0" onclick="eliminarVenta('${v.id}')">Eliminar</button>` : ''}
+      ${(currentPerfil?.rol==='admin' || (typeof tienePerm==='function' && tienePerm('anular_ventas'))) ? `<button class="btn-danger" style="flex:1;margin:0" onclick="eliminarVenta('${v.id}')">Eliminar</button>` : ''}
     </div>`;
 }
 
@@ -303,6 +303,12 @@ async function facturarVenta(id) {
 }
 
 async function eliminarVenta(id) {
+  // Solo admin o empleado con permiso explícito de "anular_ventas"
+  if (typeof esAdmin === 'function' && !esAdmin()
+      && !(typeof tienePerm === 'function' && tienePerm('anular_ventas'))) {
+    if (typeof toast === 'function') toast('No tenés permisos para anular ventas', 'error');
+    return;
+  }
   confirmar('¿Eliminar esta venta? También se eliminará el registro financiero asociado.', async () => {
     await safeCall(async () => {
       // El trigger en BD podría manejar la eliminación, pero por seguridad borramos manualmente el movimiento

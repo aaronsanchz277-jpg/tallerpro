@@ -270,7 +270,8 @@ CREATE POLICY "reparaciones_modify_staff" ON reparaciones
   WITH CHECK (taller_id = public.taller_id_actual() AND public.rol_actual() IN ('admin','empleado'));
 
 -- Cliente puede actualizar solo su propia aprobación (campo aprobacion_cliente).
--- Lo dejamos abierto pero acotado a sus propias reparaciones.
+-- La policy permite la operación pero el trigger de abajo restringe que el
+-- único campo modificable sea `aprobacion_cliente`.
 DROP POLICY IF EXISTS "reparaciones_update_cliente" ON reparaciones;
 CREATE POLICY "reparaciones_update_cliente" ON reparaciones
   FOR UPDATE TO authenticated
@@ -284,6 +285,40 @@ CREATE POLICY "reparaciones_update_cliente" ON reparaciones
     AND public.rol_actual() = 'cliente'
     AND cliente_id = public.cliente_id_actual()
   );
+
+-- Trigger: el cliente solo puede modificar la columna `aprobacion_cliente`.
+-- Si intenta cambiar cualquier otro campo (costo, estado, descripcion,
+-- repuestos, etc.) abortamos la operación.
+CREATE OR REPLACE FUNCTION public.reparaciones_proteger_cliente_update()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  o jsonb := to_jsonb(OLD);
+  n jsonb := to_jsonb(NEW);
+  k text;
+BEGIN
+  -- Las RPC SECURITY DEFINER y el staff pasan sin chequeo.
+  IF current_user IS DISTINCT FROM 'authenticated' THEN RETURN NEW; END IF;
+  IF public.rol_actual() IN ('admin','empleado') THEN RETURN NEW; END IF;
+
+  -- Cliente: comparar fila vieja vs nueva, solo `aprobacion_cliente` puede
+  -- haber cambiado.
+  FOR k IN SELECT jsonb_object_keys(n) LOOP
+    IF k <> 'aprobacion_cliente' AND (o->k) IS DISTINCT FROM (n->k) THEN
+      RAISE EXCEPTION 'El cliente solo puede actualizar el campo aprobacion_cliente, intentó cambiar: %', k;
+    END IF;
+  END LOOP;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS reparaciones_proteger_cliente_update_trg ON reparaciones;
+CREATE TRIGGER reparaciones_proteger_cliente_update_trg
+  BEFORE UPDATE ON reparaciones
+  FOR EACH ROW
+  EXECUTE FUNCTION public.reparaciones_proteger_cliente_update();
 
 
 -- ---- INVENTARIO / AGENDA / MANTENIMIENTOS / PRESUPUESTOS / VENTAS ----
