@@ -463,27 +463,41 @@ async function guardarVale(empleadoId) {
     return;
   }
 
-  const { error } = await sb.from('vales_empleado').insert({
+  // `vales_empleado` NO tiene trigger en Postgres (a diferencia de los 7
+  // triggers de la Tarea #44). Por eso el JS sigue insertando el egreso
+  // a mano. Pedimos el id del vale recién creado para usarlo como
+  // `referencia_id` del movimiento y aprovechar el índice único
+  // `movimientos_financieros_referencia_unico` como seguro contra
+  // duplicados (y por si en el futuro se agrega un trigger).
+  const { data: valeNuevo, error } = await sb.from('vales_empleado').insert({
     empleado_id: empleadoId,
     monto,
     concepto,
     fecha,
     periodo_id: periodoId,
     taller_id: tid()
-  });
+  }).select('id').single();
   if (error) { toast('Error: ' + error.message, 'error'); return; }
 
   const { data: emp } = await sb.from('empleados').select('nombre').eq('id', empleadoId).single();
   const categoriaId = await obtenerCategoriaFinanciera('Vales/Adelantos', 'egreso');
-  if (categoriaId) {
-    await sb.from('movimientos_financieros').insert({
+  if (categoriaId && valeNuevo?.id) {
+    const { error: movErr } = await sb.from('movimientos_financieros').insert({
       taller_id: tid(),
       tipo: 'egreso',
       categoria_id: categoriaId,
       monto,
       concepto: 'Vale: ' + (emp?.nombre || '') + ' — ' + concepto,
-      fecha
+      fecha,
+      referencia_id: valeNuevo.id,
+      referencia_tabla: 'vales_empleado'
     });
+    // Si el índice único bloquea el insert (caso raro: ya existe un
+    // movimiento con esa referencia), lo ignoramos en silencio: la
+    // contabilidad ya quedó cubierta por el movimiento previo.
+    if (movErr && movErr.code !== '23505') {
+      console.warn('No se pudo registrar el movimiento del vale:', movErr.message);
+    }
   }
 
   clearCache('empleados');

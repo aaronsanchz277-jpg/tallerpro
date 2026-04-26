@@ -577,7 +577,7 @@ Reglas de oro:
    | Archivo | Caso | Compite con trigger? |
    |---|---|---|
    | `js/finances/finanzas.js` | Modal "Nuevo movimiento" del admin | No, no tiene tabla origen. |
-   | `js/hr/empleados.js` | Vale/adelanto al empleado | No, `vales_empleado` no tiene trigger. |
+   | `js/hr/empleados.js` | Vale/adelanto al empleado | No, `vales_empleado` no tiene trigger (confirmado en Tarea #49). El insert manual usa `referencia_id = vale.id` y `referencia_tabla = 'vales_empleado'`, así el índice único de `movimientos_financieros` evita doble registro si la función se reintenta. Si en el futuro se agrega un trigger en Postgres, el mismo índice impide la duplicación entre trigger y JS. |
    | `js/finances/cuentas.js` | Reparador retroactivo de cuentas viejas (Tarea #42) | Sí superficialmente, pero está pensado para cubrir cuentas anteriores a que existiera el trigger. |
    | `js/finances/conciliador.js` | Reparador genérico de movimientos faltantes en un día | Sí superficialmente. Igual que arriba: protegido por la doble verificación previa al insert. |
    | `js/workshop/reparaciones-detalle.js` | ~~Cobro completo al finalizar la OT~~ | **Eliminado en Tarea #47.** Ver más abajo. |
