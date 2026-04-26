@@ -567,28 +567,37 @@ function _setupBannerExito(pendientes) {
   document.body.appendChild(overlay);
 }
 
+// Punto único para encadenar el tutorial existente (`js/ux/tutorial.js`),
+// que es el tour 4-step del dashboard. Usa localStorage para no repetirse,
+// así que llamarlo dos veces es seguro. El delay le da tiempo a que el
+// dashboard se pinte y, en el camino "Cargá tu primer trabajo", a que el
+// usuario cierre o avance en el modal de reparaciones.
+function _setupDispararTutorial(delay) {
+  if (typeof iniciarTutorial !== 'function') return;
+  setTimeout(() => iniciarTutorial(), delay || 400);
+}
+
 function _setupCerrarBanner() {
   const o = document.getElementById('setup-wizard-exito');
   if (o) o.remove();
   if (typeof navigate === 'function') navigate('dashboard');
-  // Encadenamos el tutorial 4-step del dashboard (existe en js/ux/tutorial.js
-  // y usa localStorage para no repetirse). Lo lanzamos con un pequeño retraso
-  // para que el dashboard ya esté pintado y el tutorial pueda apuntar a sus
-  // elementos.
-  if (typeof iniciarTutorial === 'function') {
-    setTimeout(() => iniciarTutorial(), 400);
-  }
+  _setupDispararTutorial(400);
 }
 
 function _setupCerrarBannerYNuevoTrabajo() {
-  // Acá NO arrancamos el tutorial: el usuario eligió cargar un trabajo,
-  // sería molesto disparar tooltips encima del wizard de reparaciones.
   const o = document.getElementById('setup-wizard-exito');
   if (o) o.remove();
   if (typeof navigate === 'function') navigate('dashboard');
   if (typeof modalNuevaReparacionSimple === 'function') {
     modalNuevaReparacionSimple();
   }
+  // El tutorial igual queda encadenado, pero con delay más largo para no
+  // chocar con el modal del wizard de reparaciones. Si el usuario aún
+  // está cargando el trabajo a los 5s, el tour del dashboard quedará
+  // marcado como visto cuando sí lleguen al dashboard la próxima vez
+  // (porque el modal lo bloquea visualmente). Es la mejor concesión sin
+  // agregar dependencias entre módulos.
+  _setupDispararTutorial(5000);
 }
 
 // ─── TARJETA "CONFIGURACIÓN PENDIENTE" PARA DASHBOARD ───────────────────────
