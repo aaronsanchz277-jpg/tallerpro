@@ -284,10 +284,13 @@ async function cuentas_repararPagadasSinEgreso(items) {
         referencia_id: c.id,
         referencia_tabla: 'cuentas_pagar'
       });
-      if (insErr) errores.push(`${c.proveedor || c.id}: ${insErr.message}`);
+      // Siempre incluimos el ID en el mensaje para que el admin pueda
+      // buscar la cuenta exacta en la base aunque el proveedor sea
+      // ambiguo o falte.
+      if (insErr) errores.push(`ID ${c.id} (${c.proveedor || 'sin proveedor'}): ${insErr.message}`);
       else reparados++;
     } catch (e) {
-      errores.push(`${c.proveedor || c.id}: ${e.message}`);
+      errores.push(`ID ${c.id} (${c.proveedor || 'sin proveedor'}): ${e.message}`);
     }
   }
 
