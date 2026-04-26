@@ -1226,8 +1226,11 @@ END $$;
 --
 --   3. Los 7 triggers son IDEMPOTENTES vía
 --      `ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING`. Eso
---      requiere un UNIQUE INDEX sobre esas dos columnas; lo declaramos
---      en 3.F.0 abajo.
+--      requiere un UNIQUE INDEX sobre esas dos columnas (lo creamos en
+--      3.F.0 abajo). Usamos UNIQUE INDEX y no UNIQUE CONSTRAINT con
+--      nombre — para Postgres son equivalentes en cuanto a la
+--      inferencia del arbiter de ON CONFLICT, pero el INDEX es lo que
+--      ya existe en producción.
 --
 --   4. Los 7 triggers AUTOCREAN su categoría en `categorias_financieras`
 --      si no existe (Ventas, Reparaciones, Sueldos, Repuestos,

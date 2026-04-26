@@ -582,9 +582,11 @@ Reglas de oro:
    se lo come (caso real: tareas #43 y #48). Si tenés que agregar un
    insert manual, copiá el shape del modal de Finanzas, no de otro lado.
 3. **Idempotencia** vía `ON CONFLICT (referencia_id, referencia_tabla)
-   DO NOTHING`. Por eso la sección 3.F crea un `UNIQUE INDEX
-   movimientos_financieros_referencia_unico` sobre esas dos columnas.
-   Ese índice ya existe en producción (los triggers lo necesitan para
+   DO NOTHING`. Por eso la sección 3.F crea un `UNIQUE INDEX`
+   (`movimientos_financieros_referencia_unico`) sobre esas dos columnas.
+   Es **índice único**, no constraint nombrado: para Postgres son
+   equivalentes a la hora de inferir el arbiter del `ON CONFLICT`. El
+   índice ya existe en producción (los triggers lo necesitan para
    funcionar) pero el SQL lo declara explícitamente para que un
    Supabase nuevo lo tenga.
 4. **Categorías autocreadas**: cada trigger crea su categoría en
