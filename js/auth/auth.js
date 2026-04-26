@@ -322,12 +322,18 @@ function showAuthError(msg) {
 
 function switchLoginTab(tab) {
   loginTab = tab;
-  document.querySelectorAll('.login-tab').forEach((t,i) => {
-    t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='register')||(i===2&&tab==='nuevo-taller'));
-  });
+  // Marcar pestaña activa por id, no por índice (evita errores si cambia el orden).
+  document.querySelectorAll('.login-tab').forEach(b => b.classList.remove('active'));
+  const tabIds = { login:'lt-ingresar', 'soy-cliente':'tab-soy-cliente', 'nuevo-taller':'tab-nuevo-taller' };
+  const activeBtn = document.getElementById(tabIds[tab]);
+  if (activeBtn) activeBtn.classList.add('active');
+
   const regFields = document.getElementById('register-fields');
   if (regFields) regFields.style.display = tab==='register' ? 'block' : 'none';
-  document.getElementById('nuevo-taller-fields').style.display = tab==='nuevo-taller' ? 'block' : 'none';
+  const ntFields = document.getElementById('nuevo-taller-fields');
+  if (ntFields) ntFields.style.display = tab==='nuevo-taller' ? 'block' : 'none';
+  const cliFields = document.getElementById('soy-cliente-fields');
+  if (cliFields) cliFields.style.display = tab==='soy-cliente' ? 'block' : 'none';
   document.getElementById('forgot-link').style.display = tab==='login' ? 'block' : 'none';
   const forgotMode = tab === 'forgot';
   document.getElementById('auth-pass').style.display = forgotMode ? 'none' : 'block';
@@ -337,7 +343,7 @@ function switchLoginTab(tab) {
     document.getElementById('auth-btn').onclick = handleForgotPassword;
     document.getElementById('forgot-link').innerHTML = `<button onclick="switchLoginTab('login')" style="background:none;border:none;color:var(--text2);font-size:.8rem;cursor:pointer;text-decoration:underline">← Volver al login</button>`;
   } else {
-    const labels = { login:'INGRESAR', register:'REGISTRARME', 'nuevo-taller':'CREAR TALLER' };
+    const labels = { login:'INGRESAR', register:'REGISTRARME', 'nuevo-taller':'CREAR TALLER', 'soy-cliente':'CREAR MI CUENTA' };
     document.getElementById('auth-btn').textContent = labels[tab] || 'INGRESAR';
     document.getElementById('auth-btn').onclick = handleAuth;
   }
@@ -408,6 +414,45 @@ async function handleAuth() {
       if (error) throw new Error('Email o contraseña incorrectos');
       resetLoginAttempts();
       await loadPerfil(data.user);
+    } else if (loginTab === 'soy-cliente') {
+      const nombre = document.getElementById('cli-nombre').value.trim();
+      const telPrefix = document.getElementById('cli-tel-prefix')?.value || '';
+      const telRaw = document.getElementById('cli-tel')?.value.trim() || '';
+      const telefono = telRaw ? (telPrefix + ' ' + telRaw) : '';
+      const codigo = document.getElementById('cli-codigo').value.trim().toUpperCase();
+      if (!nombre) throw new Error('Ingresá tu nombre');
+      if (pass.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres');
+      // El código es REQUERIDO para que la cuenta quede vinculada al taller
+      // (sin código no hay forma de saber a qué taller pertenece, lo que dejaría
+      // a la cuenta en un limbo invisible para todos los admins).
+      if (!codigo) throw new Error('Pedile al taller el código de invitación e ingresalo abajo');
+
+      btn.textContent = 'CREANDO CUENTA...';
+
+      const { data, error } = await sb.auth.signUp({ email, password: pass });
+      if (error) throw new Error(error.message);
+      if (!data.user) throw new Error('Error al crear la cuenta');
+
+      // Aplica el código → vincula el perfil con el taller (y opcionalmente con un cliente).
+      const { data: result, error: rpcError } = await sb.rpc('aplicar_codigo', { p_codigo: codigo, p_user_id: data.user.id });
+      if (rpcError || !result?.ok) throw new Error(result?.error || rpcError?.message || 'Código inválido o ya utilizado');
+      await sb.from('perfiles').update({ nombre }).eq('id', data.user.id);
+      if (result.rol === 'cliente') {
+        const { data: perfil } = await sb.from('perfiles').select('cliente_id').eq('id', data.user.id).maybeSingle();
+        if (perfil?.cliente_id) {
+          await sb.from('clientes').update({ nombre, telefono: telefono || null }).eq('id', perfil.cliente_id);
+        }
+      }
+
+      // Login (signUp puede dejar la sesión abierta o no según confirmación de email).
+      const { data: loginData } = await sb.auth.signInWithPassword({ email, password: pass });
+      toast(`¡Bienvenido ${h(nombre)}!`, 'success');
+      if (loginData?.user) {
+        await loadPerfil(loginData.user);
+      } else {
+        switchLoginTab('login');
+        toast('Revisá tu email para confirmar la cuenta', 'info');
+      }
     } else if (loginTab === 'nuevo-taller') {
       const nombre = document.getElementById('reg-nombre-admin').value.trim();
       const tallerNombre = document.getElementById('reg-taller').value.trim();
@@ -446,7 +491,8 @@ async function handleAuth() {
     showAuthError(err.message);
   }).finally(() => {
     if (btn) {
-      btn.textContent = loginTab === 'login' ? 'INGRESAR' : 'CREAR TALLER';
+      const labels = { login:'INGRESAR', 'nuevo-taller':'CREAR TALLER', 'soy-cliente':'CREAR MI CUENTA' };
+      btn.textContent = labels[loginTab] || 'INGRESAR';
       btn.disabled = false;
     }
   });

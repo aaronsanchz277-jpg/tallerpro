@@ -108,10 +108,56 @@ async function pushCheckStock() {
   }, null, 'Error verificando stock');
 }
 
+// ─── CHECK PARA CLIENTES: cambios en sus reparaciones ────────────────────────
+// Avisa cuando cambia el estado de alguna reparación o cuando el taller carga
+// un presupuesto nuevo / queda pendiente de aprobación.
+async function pushCheckMisReps() {
+  if (!currentPerfil || Notification.permission !== 'granted') return;
+  if (currentPerfil.rol !== 'cliente') return;
+
+  await safeCall(async () => {
+    const { data: perfil } = await sb.from('perfiles').select('cliente_id').eq('id', currentUser.id).maybeSingle();
+    if (!perfil?.cliente_id) return;
+
+    const { data: reps } = await sb.from('reparaciones')
+      .select('id, descripcion, estado, aprobacion_cliente, costo, vehiculos(patente)')
+      .eq('cliente_id', perfil.cliente_id)
+      .order('updated_at', { ascending: false })
+      .limit(20);
+    if (!reps || reps.length === 0) return;
+
+    // Snapshot anterior por reparación: { estado, aprobacion_cliente, costo }.
+    const prev = JSON.parse(localStorage.getItem('tallerpro_notif_misreps') || '{}');
+    const next = {};
+    let cambiosNotificados = 0;
+
+    reps.forEach(r => {
+      next[r.id] = { e: r.estado, a: r.aprobacion_cliente || '', c: r.costo || 0 };
+      const before = prev[r.id];
+      // Solo notificar cuando ya teníamos un snapshot previo (evita spam la primera vez).
+      if (!before) return;
+      if (cambiosNotificados >= 3) return; // máximo 3 notifs por chequeo
+
+      const patente = r.vehiculos?.patente ? ' (' + r.vehiculos.patente + ')' : '';
+
+      if (before.e !== r.estado) {
+        pushNotify(`🔧 Tu trabajo cambió de estado`, `${r.descripcion}${patente}: ${estadoLabel ? estadoLabel(r.estado) : r.estado}`, 'rep-' + r.id, () => navigate('mis-reparaciones'));
+        cambiosNotificados++;
+      } else if (before.a !== (r.aprobacion_cliente || '') && r.aprobacion_cliente === 'pendiente') {
+        pushNotify(`📝 Presupuesto para aprobar`, `${r.descripcion}${patente}`, 'ppto-' + r.id, () => navigate('mis-presupuestos'));
+        cambiosNotificados++;
+      }
+    });
+
+    localStorage.setItem('tallerpro_notif_misreps', JSON.stringify(next));
+  }, null, 'Error verificando mis reparaciones');
+}
+
 async function pushRunChecks() {
   await pushCheckCitas();
   await pushCheckMantenimientos();
   await pushCheckStock();
+  await pushCheckMisReps();
 }
 
 function pushStartChecking() {

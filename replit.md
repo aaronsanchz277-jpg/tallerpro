@@ -65,3 +65,45 @@ Claves del jsonb `permisos` (default todo en `false`):
 `modificar_precios`. Se editan desde el modal
 "Editar empleado" cuando el empleado tiene un usuario vinculado (vía
 **Usuarios → Vincular**).
+
+## Login y portal real del cliente (Tarea #13)
+
+A partir de la Tarea #13, el cliente tiene su propia cuenta en TallerPro:
+
+1. **Registro libre con código** — pestaña "Soy cliente" en el login
+   (`index.html` + `js/auth/auth.js`). El cliente crea su cuenta con
+   nombre + email + contraseña + **código de invitación** (requerido).
+   El código lo emite el taller desde "Usuarios → Vincular" y lo aplica
+   la RPC `aplicar_codigo`, que asigna `taller_id` y opcionalmente
+   `cliente_id`. Sin código no se permite el alta porque la cuenta
+   quedaría invisible para todos los talleres.
+
+2. **Bandeja "Solicitudes de cliente"** — `js/hr/solicitudes-cliente.js`,
+   ruta `solicitudes`, sidebar admin → CLIENTES. Lista perfiles con
+   `rol=cliente`, `taller_id = mi taller` y `cliente_id IS NULL`
+   (cuentas creadas con código pero todavía sin un cliente del CRM
+   asociado), más los turnos en estado `pendiente`. El admin los
+   vincula a un cliente existente o crea uno nuevo.
+
+3. **"Mis presupuestos"** — `misPresupuestos()` en
+   `js/crm/cliente-view.js`, sidebar cliente. Muestra presupuestos
+   formales (`presupuestos_v2`) y reparaciones pendientes de aprobación
+   (`reparaciones.aprobacion_cliente='pendiente'`). El cliente aprueba,
+   rechaza o abre WhatsApp con el taller.
+
+4. **Comprobante PDF del cliente** — botón "Descargar comprobante PDF"
+   en `misReparaciones` para reparaciones finalizadas. Reusa
+   `generarCartaConformidad` (jsPDF cargado on-demand desde CDN).
+
+5. **Notificaciones del cliente** — `pushCheckMisReps` en
+   `js/integrations/push.js` corre en el ciclo de checks (cada 15 min)
+   y avisa cuando cambia el estado de una reparación o aparece un
+   presupuesto pendiente. Tracking en `localStorage` para evitar spam.
+
+**Drift de RLS pendiente**: la pantalla "Mis presupuestos" requiere una
+policy SQL adicional sobre `presupuestos_v2` que permita SELECT al
+cliente sobre filas con su `cliente_id` (similar a la policy
+`client_reparaciones` aplicada en Tarea #12). Sin esa policy la query
+devuelve [] sin romper la pantalla — el cliente verá solo las
+reparaciones pendientes de aprobación. Hay que sumarla a
+`supabase/rls_policies.sql` y aplicarla manualmente.

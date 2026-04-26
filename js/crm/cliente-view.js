@@ -46,7 +46,7 @@ async function misReparaciones() {
     <div class="section-header"><div class="section-title">${t('misReps')}</div></div>
     ${(data||[]).length===0 ? `<div class="empty"><p>${t('repSinDatos')}</p></div>` :
       (data||[]).map(r => `
-      <div class="card">
+      <div class="card" onclick="detalleReparacion('${r.id}')" style="cursor:pointer">
         <div class="card-header">
           <div class="card-avatar">🔧</div>
           <div class="card-info">
@@ -55,6 +55,111 @@ async function misReparaciones() {
           </div>
           <span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span>
         </div>
+        ${r.estado==='finalizado' ? `<div style="margin-top:.5rem;text-align:right">
+          <button onclick="event.stopPropagation();descargarComprobanteCliente('${r.id}')" style="background:rgba(0,229,255,.1);color:var(--accent);border:1px solid rgba(0,229,255,.3);border-radius:8px;padding:.35rem .7rem;font-size:.72rem;cursor:pointer;font-family:var(--font-head);letter-spacing:.5px">📥 Descargar comprobante PDF</button>
+        </div>` : ''}
       </div>`).join('')}`;
+}
+
+// ─── MIS PRESUPUESTOS (cliente) ──────────────────────────────────────────────
+async function misPresupuestos() {
+  if (currentPerfil?.rol !== 'cliente') { dashboard(); return; }
+
+  const { data: perfil } = await sb.from('perfiles').select('cliente_id').eq('id', currentUser.id).maybeSingle();
+  if (!perfil?.cliente_id) {
+    document.getElementById('main-content').innerHTML = `
+      <div class="empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+        <p style="font-size:1rem;margin-bottom:.5rem">${t('cuentaPendiente')||'Cuenta pendiente'}</p>
+        <p style="font-size:.8rem">Tu cuenta todavía no está vinculada al taller. Ingresá el código de invitación o pedile al taller que te vincule.</p>
+      </div>`;
+    return;
+  }
+
+  // 1) Presupuestos formales del cliente.
+  // NOTA: requiere policy RLS que permita SELECT al cliente sobre presupuestos_v2
+  // donde cliente_id = (SELECT cliente_id FROM perfiles WHERE id = auth.uid()).
+  // Si la policy no está aplicada, la query devuelve [] y mostramos solo las
+  // reparaciones pendientes de aprobación (que sí tienen su policy).
+  let pptos = [];
+  try {
+    const res = await sb.from('presupuestos_v2')
+      .select('id, descripcion, estado, total, created_at, vehiculos(patente,marca)')
+      .eq('cliente_id', perfil.cliente_id)
+      .order('created_at', { ascending: false });
+    if (!res.error) pptos = res.data || [];
+  } catch (_) { /* RLS sin policy → silencioso */ }
+
+  // 2) Reparaciones pendientes de aprobación (presupuesto que el taller carga directo en la OT).
+  const { data: repsPend } = await sb.from('reparaciones')
+    .select('id, descripcion, costo, fecha, aprobacion_cliente, vehiculos(patente,marca)')
+    .eq('cliente_id', perfil.cliente_id)
+    .eq('aprobacion_cliente', 'pendiente')
+    .gt('costo', 0)
+    .order('fecha', { ascending: false });
+
+  const tallerTel = currentPerfil?.talleres?.telefono?.replace(/\D/g,'') || '';
+  const tallerNombre = currentPerfil?.talleres?.nombre || 'el taller';
+
+  const pendCount = ((pptos||[]).filter(p => p.estado==='generado').length) + (repsPend?.length || 0);
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">Mis presupuestos${pendCount>0?` <span style="font-size:.7rem;color:var(--warning)">(${pendCount} pendiente${pendCount>1?'s':''})</span>`:''}</div>
+    </div>
+
+    ${(repsPend||[]).length>0 ? `
+      <div style="font-family:var(--font-head);font-size:.72rem;color:var(--warning);letter-spacing:1px;margin:1rem 0 .5rem">⏳ PENDIENTES DE APROBAR</div>
+      ${(repsPend||[]).map(r => `
+        <div class="card" style="border-left:3px solid var(--warning)">
+          <div class="card-header">
+            <div class="card-avatar">📝</div>
+            <div class="card-info">
+              <div class="card-name">${h(r.descripcion)}</div>
+              <div class="card-sub">${r.vehiculos?h(r.vehiculos.patente)+' · '+h(r.vehiculos.marca):''} · ${formatFecha(r.fecha)}</div>
+              <div style="font-family:var(--font-head);font-size:1rem;color:var(--accent);margin-top:.3rem">₲${gs(r.costo)}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-top:.6rem">
+            <button onclick="aprobarPresupuestoCliente('${r.id}','aprobado')" style="background:rgba(0,255,136,.15);color:var(--success);border:1px solid rgba(0,255,136,.3);border-radius:10px;padding:.55rem;font-family:var(--font-head);font-size:.85rem;cursor:pointer">✓ APROBAR</button>
+            <button onclick="aprobarPresupuestoCliente('${r.id}','rechazado')" style="background:rgba(255,68,68,.1);color:var(--danger);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:.55rem;font-family:var(--font-head);font-size:.85rem;cursor:pointer">✕ RECHAZAR</button>
+          </div>
+          ${tallerTel ? `<button onclick="window.open('https://wa.me/${tallerTel}?text=${encodeURIComponent('Hola! Tengo dudas sobre el presupuesto: '+(r.descripcion||''))}')" style="width:100%;margin-top:.4rem;background:rgba(37,211,102,.1);color:#25d366;border:1px solid rgba(37,211,102,.25);border-radius:8px;padding:.45rem;font-size:.78rem;cursor:pointer">💬 Tengo dudas — escribir al taller</button>` : ''}
+        </div>
+      `).join('')}
+    ` : ''}
+
+    ${(pptos||[]).length>0 ? `
+      <div style="font-family:var(--font-head);font-size:.72rem;color:var(--text2);letter-spacing:1px;margin:1rem 0 .5rem">📋 PRESUPUESTOS</div>
+      ${(pptos||[]).map(p => `
+        <div class="card">
+          <div class="card-header">
+            <div class="card-avatar">📋</div>
+            <div class="card-info">
+              <div class="card-name">${h(p.descripcion||'Presupuesto')}</div>
+              <div class="card-sub">${p.vehiculos?h(p.vehiculos.patente)+' · '+h(p.vehiculos.marca):''} · ${formatFecha(p.created_at?.split('T')[0])}</div>
+              <div style="font-family:var(--font-head);font-size:.95rem;color:var(--accent);margin-top:.2rem">₲${gs(p.total||0)}</div>
+            </div>
+            <span class="card-badge ${p.estado==='aprobado'?'badge-green':p.estado==='rechazado'?'badge-red':'badge-yellow'}">${(p.estado||'').toUpperCase()}</span>
+          </div>
+          ${tallerTel ? `<div style="margin-top:.5rem;text-align:right"><button onclick="window.open('https://wa.me/${tallerTel}?text=${encodeURIComponent('Hola! Sobre el presupuesto: '+(p.descripcion||''))}')" style="background:rgba(37,211,102,.1);color:#25d366;border:1px solid rgba(37,211,102,.25);border-radius:8px;padding:.35rem .7rem;font-size:.72rem;cursor:pointer">💬 Hablar con el taller</button></div>` : ''}
+        </div>
+      `).join('')}
+    ` : ''}
+
+    ${((pptos||[]).length===0 && (repsPend||[]).length===0) ? `<div class="empty"><p>Todavía no tenés presupuestos en ${h(tallerNombre)}.</p></div>` : ''}
+  `;
+}
+
+// ─── DESCARGAR COMPROBANTE (cliente) ─────────────────────────────────────────
+// Reusa el generador de "Carta de Conformidad" que ya existe para reparaciones
+// finalizadas. Es el comprobante cliente-friendly: trabajos hechos + total cobrado,
+// sin costos internos ni ganancia.
+async function descargarComprobanteCliente(repId) {
+  if (typeof generarCartaConformidad !== 'function') {
+    toast('No se pudo generar el PDF', 'error');
+    return;
+  }
+  await generarCartaConformidad(repId);
 }
 

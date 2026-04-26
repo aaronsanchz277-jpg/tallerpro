@@ -44,7 +44,7 @@
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.6rem;text-align:center">
         <div style="font-size:1.3rem">📱</div>
         <div style="font-size:.7rem;color:var(--accent);font-family:var(--font-head);margin-top:.2rem">PORTAL CLIENTE</div>
-        <div style="font-size:.65rem;color:var(--text2);margin-top:.15rem">Tu cliente ve su auto desde su cel</div>
+        <div style="font-size:.65rem;color:var(--text2);margin-top:.15rem">Sus autos, presupuestos y turnos</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.6rem;text-align:center">
         <div style="font-size:1.3rem">💰</div>
@@ -83,6 +83,7 @@
       <div id="login-normal">
         <div class="login-tabs">
           <button class="login-tab active" onclick="switchLoginTab('login')" id="lt-ingresar">Ingresar</button>
+          <button class="login-tab" id="tab-soy-cliente" onclick="switchLoginTab('soy-cliente')">Soy cliente</button>
           <button class="login-tab" id="tab-nuevo-taller" onclick="switchLoginTab('nuevo-taller')">Nuevo Taller</button>
         </div>
         <div id="nuevo-taller-fields" style="display:none">
@@ -92,6 +93,16 @@
           <div class="form-group"><label class="form-label">Tu nombre *</label><input class="form-input" id="reg-nombre-admin" placeholder="Tu nombre completo"></div>
           <div class="form-group"><label class="form-label">Nombre del taller *</label><input class="form-input" id="reg-taller" placeholder="Taller San José"></div>
           <div class="form-group"><label class="form-label">Teléfono del taller</label><input class="form-input" id="reg-tel" placeholder="+595 21 000 000"></div>
+        </div>
+        <div id="soy-cliente-fields" style="display:none">
+          <div style="background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.2);border-radius:8px;padding:.75rem;margin-bottom:1rem;font-size:.8rem;color:var(--text2)">
+            Creá tu cuenta para ver tus autos, presupuestos y turnos. <b style="color:var(--text)">Necesitás el código de invitación</b> que te dio el taller. Si todavía no lo tenés, pedíselo al taller.
+          </div>
+          <div class="form-group"><label class="form-label">Tu nombre *</label><input class="form-input" id="cli-nombre" placeholder="Tu nombre completo"></div>
+          <div class="form-group"><label class="form-label">Teléfono</label>
+            <div class="phone-wrap"><select class="phone-prefix" id="cli-tel-prefix"><option value="+595" selected>🇵🇾 +595</option><option value="+54">🇦🇷 +54</option><option value="+55">🇧🇷 +55</option><option value="+56">🇨🇱 +56</option><option value="+57">🇨🇴 +57</option><option value="+598">🇺🇾 +598</option></select><input class="form-input" id="cli-tel" type="tel" placeholder="0981 123 456" oninput="formatPhone(this)"></div>
+          </div>
+          <div class="form-group"><label class="form-label">Código de invitación *</label><input class="form-input" id="cli-codigo" placeholder="Código que te dio el taller" style="text-transform:uppercase;letter-spacing:3px"></div>
         </div>
         <form id="login-normal-form" onsubmit="event.preventDefault();const b=document.getElementById('auth-btn');if(!b||b.disabled)return false;b.click();return false">
           <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="auth-email" type="email" autocomplete="email" placeholder="tu@email.com"></div>
@@ -282,6 +293,7 @@
 <script src="./js/hr/usuarios.js"></script>
 <script src="./js/hr/mecanicos.js"></script>
 <script src="./js/hr/perfil.js"></script>
+<script src="./js/hr/solicitudes-cliente.js"></script>
 <script src="./js/config/balances.js"></script>
 
 <!-- Ventas -->
