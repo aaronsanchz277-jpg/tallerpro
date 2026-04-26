@@ -337,10 +337,15 @@ CREATE TRIGGER reparaciones_proteger_cliente_update_trg
 DO $$
 DECLARE
   t text;
+  -- Nombres reales verificados con `rg "from\('([a-z_]+)'" js/`. Si una
+  -- tabla no existe en este taller, IF EXISTS la salta sin error.
   staff_tables text[] := ARRAY[
-    'inventario','agenda','mantenimientos','presupuestos','presupuestos_v2',
-    'reparacion_mecanicos','items_reparacion',
-    'fotos_reparacion','checklist_recepcion','trabajos_empleado'
+    'inventario','movimientos_inventario','historial_precios','ubicaciones',
+    'agenda','citas','feriados','google_calendar_tokens',
+    'mantenimientos','presupuestos','presupuestos_v2',
+    'reparacion_mecanicos','reparacion_items','items_reparacion',
+    'fotos','fotos_reparacion','checklist_recepcion','checklist_plantillas',
+    'trabajos_empleado'
   ];
 BEGIN
   FOREACH t IN ARRAY staff_tables LOOP
@@ -643,11 +648,13 @@ DECLARE
   t text;
   -- Nombres reales de tablas usadas por el frontend (verificado con grep
   -- en js/finances/*.js, js/reports/*.js). NOTA: `gastos_taller` (no
-  -- `gastos`), `fiados` está protegida arriba con políticas finas.
+  -- `gastos`), `fiados` está protegida arriba con políticas finas. Las
+  -- tablas que no existan en el taller las salta `IF EXISTS`.
   admin_tables text[] := ARRAY[
     'gastos_taller','sueldos','liquidaciones','liquidaciones_sueldo',
     'cuentas_pagar','balances','movimiento_balance','cierres_caja',
-    'categorias_financieras','conciliaciones','suscripciones'
+    'categorias_financieras','conciliaciones','suscripciones',
+    'config_taller','config_keys','dashboard_config','super_admins'
   ];
 BEGIN
   FOREACH t IN ARRAY admin_tables LOOP
