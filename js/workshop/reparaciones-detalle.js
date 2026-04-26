@@ -29,9 +29,13 @@ async function detalleReparacion(id) {
   const totalPagado = (pagos || []).reduce((s, p) => s + parseFloat(p.monto || 0), 0);
   const saldo = parseFloat(r.costo || 0) - totalPagado;
 
+  const ORIGENES_VALIDOS = ['reparaciones','mis-trabajos','mis-reparaciones','dashboard','panel-trabajo'];
+  const fallbackOrigen = isCliente ? 'mis-reparaciones' : 'reparaciones';
+  const origenBack = ORIGENES_VALIDOS.includes(currentPage) ? currentPage : fallbackOrigen;
+
   document.getElementById('main-content').innerHTML = `
     <div class="detail-header">
-      <button class="back-btn" onclick="navigate('${isCliente ? 'mis-reparaciones' : 'reparaciones'}')">${t('volver')}</button>
+      <button class="back-btn" onclick="navigate('${origenBack}')">${t('volver')}</button>
       <div class="detail-avatar">${TIPO_ICONS[r.tipo_trabajo] || '🔧'}</div>
       <div><div class="detail-name" style="font-size:1rem">${h(r.descripcion)}</div><div class="detail-sub">${r.tipo_trabajo ? h(r.tipo_trabajo) + ' · ' : ''}${formatFecha(r.fecha)}</div></div>
     </div>
