@@ -82,21 +82,53 @@ async function guardarReparacion(id = null) {
   let vid = document.getElementById('f-vehiculo').value;
   const cid = document.getElementById('f-cliente').value;
 
-  const nvPatente = document.getElementById('f-nv-patente')?.value?.trim()?.toUpperCase();
+  const nvPatente = normalizarPatente(document.getElementById('f-nv-patente')?.value || '');
   if (!vid && nvPatente) {
-    const { data: nuevoVeh, error: vErr } = await sb.from('vehiculos').insert({
-      patente: nvPatente,
-      marca: document.getElementById('f-nv-marca')?.value || '',
-      modelo: document.getElementById('f-nv-modelo')?.value || '',
-      anio: parseInt(document.getElementById('f-nv-anio')?.value) || null,
-      color: document.getElementById('f-nv-color')?.value || null,
-      cliente_id: cid || null,
-      taller_id: tid()
-    }).select('id').single();
-    if (vErr) { toast('Error creando vehículo: ' + vErr.message, 'error'); return; }
-    vid = nuevoVeh.id;
-    toast('Vehículo ' + nvPatente + ' creado', 'success');
-    invalidateComponentCache();
+    const existente = await buscarVehiculoExistente(tid(), nvPatente);
+    if (existente) {
+      const propietario = existente.clientes?.nombre ? h(existente.clientes.nombre) : 'sin propietario';
+      const otroCliente = existente.cliente_id && cid && existente.cliente_id !== cid;
+      const aviso = otroCliente
+        ? `<br><br><b style="color:var(--warning)">Atención:</b> esa patente está a nombre de <b>${propietario}</b>, no del cliente seleccionado.`
+        : '';
+      const eleccion = await confirmarDuplicado({
+        titulo: 'Ya existe esa patente',
+        mensajeHtml: `La patente <b>${h(existente.patente)}</b> ya está registrada (${h(existente.marca||'')} ${h(existente.modelo||'')}) a nombre de <b>${propietario}</b>.${aviso}<br><br>¿Querés usar ese vehículo o crear otro igual?`
+      });
+      if (eleccion === 'cancelar') return;
+      if (eleccion === 'usar') {
+        vid = existente.id;
+        toast('Usando vehículo existente: ' + existente.patente, 'success');
+      } else {
+        const { data: nuevoVeh, error: vErr } = await sb.from('vehiculos').insert({
+          patente: nvPatente,
+          marca: document.getElementById('f-nv-marca')?.value || '',
+          modelo: document.getElementById('f-nv-modelo')?.value || '',
+          anio: parseInt(document.getElementById('f-nv-anio')?.value) || null,
+          color: document.getElementById('f-nv-color')?.value || null,
+          cliente_id: cid || null,
+          taller_id: tid()
+        }).select('id').single();
+        if (vErr) { toast('Error creando vehículo: ' + vErr.message, 'error'); return; }
+        vid = nuevoVeh.id;
+        toast('Vehículo ' + nvPatente + ' creado', 'success');
+        invalidateComponentCache();
+      }
+    } else {
+      const { data: nuevoVeh, error: vErr } = await sb.from('vehiculos').insert({
+        patente: nvPatente,
+        marca: document.getElementById('f-nv-marca')?.value || '',
+        modelo: document.getElementById('f-nv-modelo')?.value || '',
+        anio: parseInt(document.getElementById('f-nv-anio')?.value) || null,
+        color: document.getElementById('f-nv-color')?.value || null,
+        cliente_id: cid || null,
+        taller_id: tid()
+      }).select('id').single();
+      if (vErr) { toast('Error creando vehículo: ' + vErr.message, 'error'); return; }
+      vid = nuevoVeh.id;
+      toast('Vehículo ' + nvPatente + ' creado', 'success');
+      invalidateComponentCache();
+    }
   }
 
   const costoRep = parseFloat(document.getElementById('f-costo-rep')?.value) || 0;

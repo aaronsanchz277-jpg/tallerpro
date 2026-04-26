@@ -230,3 +230,39 @@ No requiere correr SQL nuevo. La pantalla respeta RLS porque consulta
 las tablas existentes (`pagos_reparacion`, `ventas`, `gastos_taller`,
 `movimientos_financieros`, `fiados`) con el `taller_id` del usuario
 actual.
+
+## Anti-duplicados clientes y vehículos (Tarea #19)
+
+A partir de la Tarea #19, antes de crear un cliente o un vehículo, la
+app chequea si ya existe uno equivalente en el mismo taller y, si lo
+hay, ofrece reusarlo en lugar de crear un duplicado.
+
+1. **Helpers compartidos** (`js/core/components.js`):
+   - `normalizarTelefono(t)` — solo dígitos.
+   - `normalizarPatente(p)` — uppercase y sin espacios.
+   - `buscarClienteExistente(tallerId, {telefono, ruc}, excludeId?)`
+     — match exacto por teléfono normalizado o por RUC/CI no vacío,
+     filtrado por `taller_id`.
+   - `buscarVehiculoExistente(tallerId, patente, excludeId?)` — match
+     exacto por patente normalizada, filtrado por `taller_id`.
+   - `confirmarDuplicado({titulo, mensajeHtml, ...})` — modal de
+     confirmación apilable (z-index 300) que NO cierra el modal de
+     fondo. Devuelve `'usar' | 'crear' | 'cancelar'`.
+
+2. **Cobertura completa**:
+   - **Cliente**: alta normal en CRM (`guardarCliente`), wizard de
+     reparación paso 1 (`wizardNextStep`), asistente IA
+     (`crear_cliente`).
+   - **Vehículo**: alta normal en CRM (`guardarVehiculo`, reemplaza
+     el bloqueo duro previo por la confirmación), wizard de reparación
+     paso 2, modal "nuevo trabajo" cuando crea vehículo en el momento
+     (`guardarReparacion`), asistente IA (`crear_vehiculo`).
+
+3. **Comportamiento de la IA**: como el flujo es no interactivo, si
+   detecta un duplicado simplemente **reutiliza el existente** y lo
+   informa por el chat + `console.log`. No crea duplicados ni pregunta.
+
+4. **Sin cambios en la base**: validación 100% en capa de app, sin
+   constraints UNIQUE adicionales, para permitir override consciente
+   del admin (ej. dos personas distintas con el mismo número, o dos
+   vehículos compartiendo patente vieja). No requiere correr SQL.

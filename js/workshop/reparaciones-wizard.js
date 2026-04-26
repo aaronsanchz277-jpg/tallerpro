@@ -135,13 +135,35 @@ async function wizardNextStep() {
     
     if (nombreNuevo) {
       const telInput = document.getElementById('wizard-tel-cliente');
-      const { data: nuevo } = await sb.from('clientes').insert({
-        nombre: nombreNuevo,
-        telefono: telInput ? telInput.value : null,
-        taller_id: tid()
-      }).select('id').single();
-      window._wizardData.cliente_id = nuevo.id;
-      invalidateComponentCache();
+      const telefono = telInput ? telInput.value : null;
+      const existente = await buscarClienteExistente(tid(), { telefono });
+      if (existente) {
+        const eleccion = await confirmarDuplicado({
+          titulo: 'Ya existe un cliente parecido',
+          mensajeHtml: `Encontramos a <b>${h(existente.nombre)}</b> con el mismo teléfono <b>${h(existente.telefono || telefono)}</b>.<br><br>¿Querés usar ese cliente o crear uno nuevo igual?`
+        });
+        if (eleccion === 'cancelar') return;
+        if (eleccion === 'usar') {
+          window._wizardData.cliente_id = existente.id;
+          toast('Usando cliente existente: ' + existente.nombre, 'success');
+        } else {
+          const { data: nuevo } = await sb.from('clientes').insert({
+            nombre: nombreNuevo,
+            telefono,
+            taller_id: tid()
+          }).select('id').single();
+          window._wizardData.cliente_id = nuevo.id;
+          invalidateComponentCache();
+        }
+      } else {
+        const { data: nuevo } = await sb.from('clientes').insert({
+          nombre: nombreNuevo,
+          telefono,
+          taller_id: tid()
+        }).select('id').single();
+        window._wizardData.cliente_id = nuevo.id;
+        invalidateComponentCache();
+      }
     } else {
       window._wizardData.cliente_id = clienteId;
     }
@@ -163,7 +185,7 @@ async function wizardNextStep() {
     const selVehiculo = document.getElementById('wizard-vehiculo');
     const vehiculoId = selVehiculo ? selVehiculo.value : null;
     const patenteInput = document.getElementById('wizard-patente');
-    const patenteNueva = patenteInput ? patenteInput.value.trim().toUpperCase() : '';
+    const patenteNueva = normalizarPatente(patenteInput ? patenteInput.value : '');
     const marcaInput = document.getElementById('wizard-marca');
     const marcaNueva = marcaInput ? marcaInput.value.trim() : '';
     
@@ -173,14 +195,41 @@ async function wizardNextStep() {
     }
     
     if (patenteNueva) {
-      const { data: nuevo } = await sb.from('vehiculos').insert({
-        patente: patenteNueva,
-        marca: marcaNueva || 'Sin marca',
-        cliente_id: window._wizardData.cliente_id,
-        taller_id: tid()
-      }).select('id').single();
-      window._wizardData.vehiculo_id = nuevo.id;
-      invalidateComponentCache();
+      const existente = await buscarVehiculoExistente(tid(), patenteNueva);
+      if (existente) {
+        const propietario = existente.clientes?.nombre ? h(existente.clientes.nombre) : 'sin propietario';
+        const otroCliente = existente.cliente_id && existente.cliente_id !== window._wizardData.cliente_id;
+        const aviso = otroCliente
+          ? `<br><br><b style="color:var(--warning)">Atención:</b> esa patente está a nombre de <b>${propietario}</b>, no del cliente seleccionado.`
+          : '';
+        const eleccion = await confirmarDuplicado({
+          titulo: 'Ya existe esa patente',
+          mensajeHtml: `La patente <b>${h(existente.patente)}</b> ya está registrada (${h(existente.marca||'')} ${h(existente.modelo||'')}) a nombre de <b>${propietario}</b>.${aviso}<br><br>¿Querés usar ese vehículo o crear otro igual?`
+        });
+        if (eleccion === 'cancelar') return;
+        if (eleccion === 'usar') {
+          window._wizardData.vehiculo_id = existente.id;
+          toast('Usando vehículo existente: ' + existente.patente, 'success');
+        } else {
+          const { data: nuevo } = await sb.from('vehiculos').insert({
+            patente: patenteNueva,
+            marca: marcaNueva || 'Sin marca',
+            cliente_id: window._wizardData.cliente_id,
+            taller_id: tid()
+          }).select('id').single();
+          window._wizardData.vehiculo_id = nuevo.id;
+          invalidateComponentCache();
+        }
+      } else {
+        const { data: nuevo } = await sb.from('vehiculos').insert({
+          patente: patenteNueva,
+          marca: marcaNueva || 'Sin marca',
+          cliente_id: window._wizardData.cliente_id,
+          taller_id: tid()
+        }).select('id').single();
+        window._wizardData.vehiculo_id = nuevo.id;
+        invalidateComponentCache();
+      }
     } else {
       window._wizardData.vehiculo_id = vehiculoId;
     }

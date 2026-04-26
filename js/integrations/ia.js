@@ -306,14 +306,29 @@ async function ia_ejecutar(a) {
 
     switch(a.accion) {
       case 'crear_cliente': {
-        const { data: nuevo, error } = await sb.from('clientes').insert({ nombre: a.nombre||'Sin nombre', telefono: clean(a.telefono), taller_id: tid() }).select().single();
+        const telefono = clean(a.telefono);
+        const ruc = clean(a.ruc);
+        const existenteCli = await buscarClienteExistente(tid(), { telefono, ruc });
+        if (existenteCli) {
+          console.log('[IA] Cliente duplicado detectado, reutilizando:', existenteCli.id, existenteCli.nombre);
+          ia_addMsg(`ℹ Ya existía el cliente "${h(existenteCli.nombre)}" (mismo teléfono/RUC). Reutilicé ese en lugar de crear duplicado. <button onclick="closeModal();navigate('clientes');detalleCliente('${existenteCli.id}')" style="margin-left:8px;background:var(--accent);color:#000;border:none;border-radius:12px;padding:2px 8px;font-size:.65rem;cursor:pointer;font-weight:600">Ver →</button>`, false);
+          break;
+        }
+        const { data: nuevo, error } = await sb.from('clientes').insert({ nombre: a.nombre||'Sin nombre', telefono, ruc, taller_id: tid() }).select().single();
         if (error) { ia_addMsg('Error: '+error.message, false); return; }
         invalidateComponentCache();
         ia_addMsg(`✓ Cliente "${a.nombre}" creado. <button onclick="closeModal();navigate('clientes');detalleCliente('${nuevo.id}')" style="margin-left:8px;background:var(--accent);color:#000;border:none;border-radius:12px;padding:2px 8px;font-size:.65rem;cursor:pointer;font-weight:600">Ver →</button>`, false);
         break;
       }
       case 'crear_vehiculo': {
-        const { data: nuevo, error } = await sb.from('vehiculos').insert({ patente:(a.patente||'').toUpperCase(), marca:a.marca||'', modelo:a.modelo||'', anio:parseInt(a.anio)||null, cliente_id:cleanUUID(a.cliente_id), taller_id:tid() }).select().single();
+        const patente = normalizarPatente(a.patente || '');
+        const existenteVeh = patente ? await buscarVehiculoExistente(tid(), patente) : null;
+        if (existenteVeh) {
+          console.log('[IA] Vehículo duplicado detectado, reutilizando:', existenteVeh.id, existenteVeh.patente);
+          ia_addMsg(`ℹ Ya existía el vehículo ${h(existenteVeh.patente)}${existenteVeh.clientes?.nombre ? ' ('+h(existenteVeh.clientes.nombre)+')' : ''}. Reutilicé ese en lugar de crear duplicado. <button onclick="closeModal();navigate('vehiculos');detalleVehiculo('${existenteVeh.id}')" style="margin-left:8px;background:var(--accent);color:#000;border:none;border-radius:12px;padding:2px 8px;font-size:.65rem;cursor:pointer;font-weight:600">Ver →</button>`, false);
+          break;
+        }
+        const { data: nuevo, error } = await sb.from('vehiculos').insert({ patente, marca:a.marca||'', modelo:a.modelo||'', anio:parseInt(a.anio)||null, cliente_id:cleanUUID(a.cliente_id), taller_id:tid() }).select().single();
         if (error) { ia_addMsg('Error: '+error.message, false); return; }
         invalidateComponentCache();
         ia_addMsg(`✓ Vehículo ${a.patente} registrado. <button onclick="closeModal();navigate('vehiculos');detalleVehiculo('${nuevo.id}')" style="margin-left:8px;background:var(--accent);color:#000;border:none;border-radius:12px;padding:2px 8px;font-size:.65rem;cursor:pointer;font-weight:600">Ver →</button>`, false);

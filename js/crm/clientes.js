@@ -102,22 +102,47 @@ async function guardarCliente(id=null) {
   await safeCall(async () => {
     const nombre = document.getElementById('f-nombre').value.trim();
     if (!validateRequired(nombre, 'Nombre')) return;
-    
+
+    const ruc = document.getElementById('f-ruc')?.value || null;
+    const telefono = document.getElementById('f-tel').value;
     const data = {
       nombre,
-      ruc: document.getElementById('f-ruc')?.value||null,
-      telefono: document.getElementById('f-tel').value,
+      ruc: ruc,
+      telefono,
       email: document.getElementById('f-email').value,
       taller_id: tid()
     };
-    
+
+    // Anti-duplicados: solo en alta nueva, por teléfono normalizado o RUC.
+    if (!id) {
+      const existente = await buscarClienteExistente(tid(), { telefono, ruc });
+      if (existente) {
+        const motivo = (ruc && existente.ruc && String(existente.ruc).trim() === String(ruc).trim())
+          ? `mismo RUC/CI <b>${h(String(ruc).trim())}</b>`
+          : `mismo teléfono <b>${h(existente.telefono || telefono)}</b>`;
+        const eleccion = await confirmarDuplicado({
+          titulo: 'Ya existe un cliente parecido',
+          mensajeHtml: `Encontramos a <b>${h(existente.nombre)}</b> con ${motivo}.<br><br>¿Querés usar ese cliente o crear uno nuevo igual?`
+        });
+        if (eleccion === 'cancelar') return;
+        if (eleccion === 'usar') {
+          toast('Usando cliente existente: ' + existente.nombre, 'success');
+          closeModal();
+          if (typeof detalleCliente === 'function') detalleCliente(existente.id);
+          else clientes();
+          return;
+        }
+        // 'crear' continúa
+      }
+    }
+
     const { error } = id ? await offlineUpdate('clientes', data, 'id', id) : await offlineInsert('clientes', data);
     if (error) { toast('Error: '+error.message,'error'); return; }
-    
+
     clearCache('clientes');
     invalidateComponentCache();
     toast(id ? 'Cliente actualizado' : 'Cliente guardado', 'success');
-    closeModal(); 
+    closeModal();
     clientes();
   }, 'btn-primary', 'No se pudo guardar el cliente');
 }

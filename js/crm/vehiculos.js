@@ -122,13 +122,29 @@ async function uploadFoto(vehiculoId) {
 }
 
 async function guardarVehiculo(id=null) {
-  const patente = document.getElementById('f-patente').value.trim().toUpperCase();
+  const patenteRaw = document.getElementById('f-patente').value.trim();
+  const patente = normalizarPatente(patenteRaw);
   if (!validateRequired(patente, 'Patente')) return;
-  
+
   const cid = document.getElementById('f-cliente').value;
 
-  const { data: existente } = await sb.from('vehiculos').select('id').eq('taller_id',tid()).eq('patente',patente).maybeSingle();
-  if (existente && existente.id !== id) { toast('Ya existe un vehículo con esa patente','error'); return; }
+  const existente = await buscarVehiculoExistente(tid(), patente, id);
+  if (existente) {
+    const propietario = existente.clientes?.nombre ? h(existente.clientes.nombre) : 'sin propietario';
+    const eleccion = await confirmarDuplicado({
+      titulo: 'Ya existe esa patente',
+      mensajeHtml: `La patente <b>${h(existente.patente)}</b> ya está registrada (${h(existente.marca||'')} ${h(existente.modelo||'')}) a nombre de <b>${propietario}</b>.<br><br>¿Querés usar ese vehículo o crear otro igual?`
+    });
+    if (eleccion === 'cancelar') return;
+    if (eleccion === 'usar') {
+      toast('Usando vehículo existente: ' + existente.patente, 'success');
+      closeModal();
+      if (typeof detalleVehiculo === 'function') detalleVehiculo(existente.id);
+      else vehiculos();
+      return;
+    }
+    // 'crear' continúa
+  }
 
   const vehiculoId = id || crypto.randomUUID();
   let fotoUrl = document.getElementById('f-foto-b64')?.value || null;
