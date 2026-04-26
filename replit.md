@@ -633,3 +633,43 @@ El flujo es:
 Esto cumple la regla de oro #1: el JS no escribe en
 `movimientos_financieros` para representar un cobro de reparación; lo
 hace el trigger cuando se inserta el `pagos_reparacion` correspondiente.
+
+## Comisiones del mecánico en su sueldo (Tareas #53 + #55)
+
+A partir de la Tarea #53 la ficha del empleado (`detalleEmpleado` en
+`js/hr/empleados.js`) muestra la sección **🔧 TRABAJOS COMO MECÁNICO**:
+una lista paginada (15 visibles + "Ver más") con todas las
+reparaciones donde fue asignado y el monto que le tocó (`pago` de
+`reparacion_mecanicos`), más el total de comisiones del período activo.
+
+La Tarea #55 cierra el caso "mecánico que cobra solo a comisión
+(sueldo base = 0)":
+
+1. **Resumen del mes con 4 columnas** (antes 3): SUELDO · **COMISIONES**
+   · VALES · A COBRAR. El neto ahora se calcula
+   `sueldo + comisionesMes − valesMes`, donde `comisionesMes` filtra
+   `trabajosMecanico` por mes calendario actual (mismo rango que
+   `valesMes`). Si el sueldo base es 0, la columna SUELDO se ve apagada
+   pero COMISIONES y A COBRAR muestran el monto real.
+2. **Info-grid**: en lugar de esconder el bloque de sueldo cuando
+   `emp.sueldo = 0`, muestra "Sin sueldo fijo (a comisión)" para que
+   no se confunda con dato faltante.
+3. **Liquidaciones automáticas** (`generarLiquidaciones` en
+   `js/finances/sueldos.js`): se agregó una 4ª query a
+   `reparacion_mecanicos` (con `inner join` a `reparaciones` para
+   filtrar por `taller_id` y por la fecha de la OT dentro del período).
+   El campo `total_extra` de `liquidaciones` ahora **suma dos fuentes**:
+   trabajos manuales (`trabajos_empleado`) + comisiones de OTs
+   (`reparacion_mecanicos.pago`). No se creó campo nuevo ni se tocó el
+   trigger `trigger_sueldo_pagado` ni el cálculo de `total_liquidado`
+   (sigue siendo `sueldo + bonos + extra − descuentos`, computado en BD
+   con fallback JS en `por-cobrar.js`).
+4. **Copy en cards de liquidación** (`sueldos.js > detallePeriodo` y
+   `por-cobrar.js > porPagar`): se reemplazó "Base · Bonos · Desc" por
+   "Base · **Trabajos+Comis.** · Bonos · Desc" (los componentes en cero
+   se omiten para no ensuciar el card), reflejando que el extra incluye
+   las dos fuentes.
+
+No requiere correr SQL nuevo: `total_extra` y `reparacion_mecanicos.pago`
+ya existen, y la RLS `reparacion_mecanicos_admin_all` permite a la app
+leer las comisiones del taller al generar liquidaciones.

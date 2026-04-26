@@ -103,7 +103,7 @@ async function detallePeriodo(periodoId) {
           <div class="card-avatar">👤</div>
           <div class="card-info">
             <div class="card-name">${h(l.empleados?.nombre||'?')}</div>
-            <div class="card-sub">Base: ₲${gs(l.sueldo_base)} · Bonos: ₲${gs(l.total_bonos)} · Desc: ₲${gs(l.total_descuentos)}</div>
+            <div class="card-sub">Base ₲${gs(l.sueldo_base)}${l.total_extra?' · Trabajos+Comis. ₲'+gs(l.total_extra):''}${l.total_bonos?' · Bonos ₲'+gs(l.total_bonos):''}${l.total_descuentos?' · Desc ₲'+gs(l.total_descuentos):''}</div>
           </div>
           <div style="text-align:right">
             <div style="font-family:var(--font-head);font-size:1rem;color:${l.estado==='pagado'?'var(--success)':'var(--accent)'}">₲${gs(l.total_liquidado)}</div>
@@ -128,11 +128,23 @@ async function generarLiquidaciones(periodoId) {
 
   const empIds = emps.map(e => e.id);
 
-  // ── Batch: 3 queries en lugar de 3·N ────────────────────────────────────────
-  const [yaLiquidados, vales, trabajos] = await Promise.all([
+  // ── Batch: 4 queries en lugar de 4·N ────────────────────────────────────────
+  // Tarea #55: agregamos `comisiones` (reparacion_mecanicos.pago) para
+  // sumarlas al `total_extra`, así un mecánico que cobra solo a comisión
+  // (sueldo base 0) recibe una liquidación con monto correcto.
+  // El `inner` join sobre reparaciones filtra por el taller actual y
+  // por la fecha de la reparación dentro del período (no por created_at
+  // de la asignación, que puede ser otro día).
+  const [yaLiquidados, vales, trabajos, comisiones] = await Promise.all([
     sb.from('liquidaciones').select('empleado_id').eq('periodo_id', periodoId).in('empleado_id', empIds),
     sb.from('vales_empleado').select('empleado_id, monto').in('empleado_id', empIds).gte('fecha', periodo.fecha_inicio).lte('fecha', periodo.fecha_fin),
     sb.from('trabajos_empleado').select('empleado_id, monto').in('empleado_id', empIds).gte('fecha', periodo.fecha_inicio).lte('fecha', periodo.fecha_fin),
+    sb.from('reparacion_mecanicos')
+      .select('empleado_id, pago, reparaciones!inner(fecha, taller_id)')
+      .in('empleado_id', empIds)
+      .eq('reparaciones.taller_id', tid())
+      .gte('reparaciones.fecha', periodo.fecha_inicio)
+      .lte('reparaciones.fecha', periodo.fecha_fin),
   ]);
 
   const yaSet = new Set((yaLiquidados.data || []).map(r => r.empleado_id));
@@ -144,6 +156,10 @@ async function generarLiquidaciones(periodoId) {
   (trabajos.data || []).forEach(t => {
     trabajosPorEmp[t.empleado_id] = (trabajosPorEmp[t.empleado_id] || 0) + parseFloat(t.monto || 0);
   });
+  const comisionesPorEmp = {};
+  (comisiones.data || []).forEach(c => {
+    comisionesPorEmp[c.empleado_id] = (comisionesPorEmp[c.empleado_id] || 0) + parseFloat(c.pago || 0);
+  });
 
   const filas = emps
     .filter(emp => !yaSet.has(emp.id))
@@ -154,7 +170,10 @@ async function generarLiquidaciones(periodoId) {
       sueldo_base: emp.sueldo || 0,
       total_bonos: 0,
       total_descuentos: valesPorEmp[emp.id] || 0,
-      total_extra: trabajosPorEmp[emp.id] || 0,
+      // total_extra suma DOS fuentes: trabajos manuales (`trabajos_empleado`)
+      // + comisiones de OTs (`reparacion_mecanicos.pago`). El admin puede
+      // editar este campo después si hace falta corregir.
+      total_extra: (trabajosPorEmp[emp.id] || 0) + (comisionesPorEmp[emp.id] || 0),
       estado: 'pendiente'
     }));
 

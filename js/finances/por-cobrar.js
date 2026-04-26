@@ -410,7 +410,7 @@ async function porPagar() {
             <div class="card-info">
               <div class="card-name">${h(l.empleados?.nombre || 'Empleado')}</div>
               <div class="card-sub">${periodoTxt}${cerrado?' · <span style="color:var(--text2)">período cerrado</span>':''}</div>
-              <div class="card-sub">Base ₲${gs(l.sueldo_base)} · Bonos ₲${gs(l.total_bonos)} · Desc ₲${gs(l.total_descuentos)}${l.total_extra?' · Extra ₲'+gs(l.total_extra):''}</div>
+              <div class="card-sub">Base ₲${gs(l.sueldo_base)}${l.total_extra?' · Trabajos+Comis. ₲'+gs(l.total_extra):''}${l.total_bonos?' · Bonos ₲'+gs(l.total_bonos):''}${l.total_descuentos?' · Desc ₲'+gs(l.total_descuentos):''}</div>
             </div>
             <div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
               <div style="font-family:var(--font-head);font-size:1rem;color:var(--danger)">₲${gs(l._total)}</div>

@@ -113,7 +113,10 @@ async function detalleEmpleado(id) {
     .reduce((s, v) => s + parseFloat(v.monto || 0), 0);
 
   const sueldo = parseFloat(emp?.sueldo || 0);
-  const neto = sueldo - totalValesMes;
+  // El "neto" del mes incluye sueldo base + comisiones por trabajos del mes
+  // − vales. Las comisiones se calculan más abajo (variable
+  // `totalComisionesMes`) una vez cargado `trabajosMecanico` (Tarea #55).
+  // Se asigna `neto` después de ese cálculo para que entre al render.
 
   // Construir HTML de vales agrupados
   let valesHTML = '';
@@ -215,6 +218,15 @@ async function detalleEmpleado(id) {
     .filter(rm => rm.reparaciones.fecha >= periodoInicio && rm.reparaciones.fecha <= periodoFin)
     .reduce((s, rm) => s + parseFloat(rm.pago || 0), 0);
 
+  // Tarea #55: comisiones del MES CALENDARIO actual, para sumar al neto
+  // del "Resumen del mes" de abajo (mismo rango que `totalValesMes`). Esto
+  // permite que un mecánico que cobra solo a comisión (sueldo base 0) vea
+  // su monto real a cobrar en lugar de "₲0".
+  const totalComisionesMes = trabajosMecanico
+    .filter(rm => rm.reparaciones.fecha >= primerDiaMes && rm.reparaciones.fecha <= ultimoDiaMes)
+    .reduce((s, rm) => s + parseFloat(rm.pago || 0), 0);
+  const neto = sueldo + totalComisionesMes - totalValesMes;
+
   // Render: lista paginada (15 visibles + "Ver más").
   const renderFilaTrab = rm => {
     const r = rm.reparaciones;
@@ -263,16 +275,22 @@ async function detalleEmpleado(id) {
     <div class="info-grid">
       <div class="info-item"><div class="label">${t('cliTel')}</div><div class="value">${h(emp.telefono || '-')}</div></div>
       <div class="info-item"><div class="label">Total horas</div><div class="value" style="color:var(--accent)">${totalHoras.toFixed(1)} hs</div></div>
-      ${verSensible && emp.sueldo ? `<div class="info-item"><div class="label">Sueldo</div><div class="value" style="color:var(--success)">₲${gs(emp.sueldo)}</div></div>` : ''}
+      ${verSensible ? (emp.sueldo
+        ? `<div class="info-item"><div class="label">Sueldo</div><div class="value" style="color:var(--success)">₲${gs(emp.sueldo)}</div></div>`
+        : `<div class="info-item"><div class="label">Sueldo</div><div class="value" style="color:var(--text2);font-size:.78rem;line-height:1.2">Sin sueldo fijo<br>(a comisión)</div></div>`) : ''}
     </div>
 
     ${verSensible ? `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
       <div style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px;margin-bottom:.5rem">💵 RESUMEN DEL MES</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-bottom:.5rem">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.4rem;margin-bottom:.5rem">
         <div style="background:var(--surface2);border-radius:8px;padding:.4rem;text-align:center">
           <div style="font-size:.55rem;color:var(--text2)">SUELDO</div>
-          <div style="font-family:var(--font-head);font-size:.85rem;color:var(--success)">₲${gs(sueldo)}</div>
+          <div style="font-family:var(--font-head);font-size:.85rem;color:${sueldo > 0 ? 'var(--success)' : 'var(--text2)'}">₲${gs(sueldo)}</div>
+        </div>
+        <div style="background:rgba(0,229,255,.08);border-radius:8px;padding:.4rem;text-align:center">
+          <div style="font-size:.55rem;color:var(--accent)">COMISIONES</div>
+          <div style="font-family:var(--font-head);font-size:.85rem;color:var(--accent)">+₲${gs(totalComisionesMes)}</div>
         </div>
         <div style="background:rgba(255,204,0,.08);border-radius:8px;padding:.4rem;text-align:center">
           <div style="font-size:.55rem;color:var(--warning)">VALES</div>
