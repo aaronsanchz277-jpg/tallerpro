@@ -481,16 +481,25 @@ en cuanto el repuesto entra al stock.
    y se puede personalizar (se persiste en `localStorage`).
 
 
-## Reparar cuentas viejas pagadas sin egreso (Tarea #42)
+## Reparar cuentas viejas pagadas sin egreso (Tarea #42, narrativa Tarea #46)
 
-Desde la **Tarea #35** existe un trigger en Supabase
-(`trg_cuenta_pagar_egreso` en `rls_policies.sql` sección 3.F) que inserta
-el egreso en `movimientos_financieros` en la misma transacción que el
-`UPDATE cuentas_pagar.pagada=true`. Casos nuevos no pueden quedar
-inconsistentes. Pero los pagos viejos hechos antes del fix podrían haber
-quedado con `pagada=true` sin egreso si la app o la red se cortaba entre
-los dos pasos. La Tarea #42 agrega una verificación de una sola vez (que
-también puede correrse cuando se quiera) para detectarlos y compensarlos.
+**Herramienta de mantenimiento** para detectar y reparar cuentas pagadas
+sin egreso en Finanzas. Útil en casos excepcionales: importación de
+datos viejos desde planilla, pagos creados manualmente por SQL que se
+saltearon el trigger, o datos previos a la existencia del trigger en
+talleres muy antiguos. **En operación normal el banner no debería
+aparecer**: el trigger `trigger_cuenta_pagada` (sección 3.F de
+`rls_policies.sql`) inserta el egreso en `movimientos_financieros` en la
+misma transacción que el `UPDATE cuentas_pagar.pagada=true`, así que
+casos nuevos no pueden quedar inconsistentes.
+
+> Nota histórica: la Tarea #42 fue creada con la motivación de "cerrar
+> el agujero histórico de #35", pero esa premisa era incorrecta. El
+> trigger ya existía en producción desde antes de #35 (era idempotente
+> con `ON CONFLICT`); el SQL de #35 jamás se aplicó y era redundante.
+> El reparador retroactivo encuentra 0 inconsistencias en talleres que
+> usaron la app desde el principio. La narrativa al usuario y este
+> texto fueron actualizados en la Tarea #46 para reflejar eso.
 
 1. **Detector** (`cuentas_detectarPagadasSinEgreso` en
    `js/finances/cuentas.js`). Trae todas las `cuentas_pagar` con
@@ -519,11 +528,12 @@ también puede correrse cuando se quiera) para detectarlos y compensarlos.
 4. **Aviso pasivo en Finanzas** (`finanzas_renderBannerCuentasViejas`
    en `js/finances/finanzas.js`). Cada vez que `finanzas_cargarDatos`
    pinta los movimientos, llama al detector en background. Si hay
-   cuentas viejas sin egreso, muestra arriba de la lista un banner
-   amarillo "⚠️ CAJA DESCUADRADA — N cuenta(s) pagada(s) sin egreso
-   (₲X total)" con botón **Revisar**. Si no hay nada, el banner queda
-   vacío y no aparece. Falla silenciosa: si la consulta tira error no
-   rompe la pantalla.
+   cuentas sin egreso, muestra arriba de la lista un banner amarillo
+   "⚠️ REVISAR CUENTAS — N cuenta(s) marcada(s) como pagada(s) sin
+   egreso registrado (₲X total)" con botón **Revisar**. Tono de aviso,
+   no de pánico (es termómetro, no agujero). Si no hay nada, el banner
+   queda vacío y no aparece. Falla silenciosa: si la consulta tira
+   error no rompe la pantalla.
 
 5. **Botón directo**. Además del banner automático, la barra de
    acciones de Finanzas suma "🧾 Cuentas viejas" para abrir la

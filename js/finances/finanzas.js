@@ -164,7 +164,7 @@ async function finanzas_cargarDatos() {
         <button class="btn-secondary" style="margin:0;font-size:.75rem;padding:.4rem .6rem" onclick="finanzas_modalCategorias()">📌 Categorías</button>
         <button onclick="modalCierreCaja()" style="background:rgba(255,204,0,.1);border:1px solid rgba(255,204,0,.25);color:var(--warning);border-radius:8px;padding:.4rem .6rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">💵 Cierre de caja</button>
         <button onclick="conciliador_modalConciliacion()" style="background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.25);color:var(--accent);border-radius:8px;padding:.4rem .6rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">🔍 Conciliar</button>
-        <button onclick="cuentas_modalRevisarPagadasSinEgreso()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">🧾 Cuentas viejas</button>
+        <button onclick="cuentas_modalRevisarPagadasSinEgreso()" title="Herramienta de mantenimiento: detecta y repara cuentas que figuran como pagadas sin tener su egreso en Finanzas (datos importados, pagos por SQL manual, etc.). En operación normal no aparece nada para reparar." style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.4rem .6rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">🧾 Cuentas viejas</button>
       </div>
       <div id="finanzas-banner-cuentas-viejas"></div>
     `;
@@ -230,8 +230,8 @@ async function finanzas_renderBannerCuentasViejas() {
     <div style="background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.3);border-radius:10px;padding:.7rem .85rem;margin-bottom:1rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
       <div style="font-size:1.4rem">⚠️</div>
       <div style="flex:1;min-width:200px">
-        <div style="font-family:var(--font-head);font-size:.78rem;color:var(--warning);letter-spacing:1px">CAJA DESCUADRADA</div>
-        <div style="font-size:.78rem;color:var(--text)">Hay <strong>${res.items.length}</strong> cuenta(s) pagada(s) sin egreso registrado (₲${gs(total)} en total).</div>
+        <div style="font-family:var(--font-head);font-size:.78rem;color:var(--warning);letter-spacing:1px">REVISAR CUENTAS</div>
+        <div style="font-size:.78rem;color:var(--text)">Hay <strong>${res.items.length}</strong> cuenta(s) marcada(s) como pagada(s) sin egreso registrado en Finanzas (₲${gs(total)} en total). Suele pasar con datos importados o pagos cargados por fuera de la app.</div>
       </div>
       <button onclick="cuentas_modalRevisarPagadasSinEgreso()" style="background:var(--warning);color:#000;border:none;border-radius:8px;padding:.4rem .8rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">Revisar</button>
     </div>

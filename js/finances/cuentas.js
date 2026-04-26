@@ -148,8 +148,10 @@ async function marcarCuentaPagada(id, onSuccess) {
     // Update condicional (.eq pagada=false): si dos pestañas chocan, solo
     // el primero entra; el resto recibe "ya estaba pagada". El INSERT del
     // egreso en movimientos_financieros lo dispara un TRIGGER en Supabase
-    // (trg_cuenta_pagar_egreso), en la misma transacción que este UPDATE,
-    // así que es atómico: si la app cae en el medio no queda caja descuadrada.
+    // (trigger_cuenta_pagada → registrar_movimiento_cuenta_pagada, ver
+    // sección 3.F de rls_policies.sql), en la misma transacción que este
+    // UPDATE, así que es atómico: si la app cae en el medio no queda
+    // caja descuadrada.
     const { data: actualizadas, error: updErr } = await sb.from('cuentas_pagar')
       .update({ pagada:true, fecha_pago:new Date().toISOString().split('T')[0] })
       .eq('id',id)
@@ -204,13 +206,18 @@ async function eliminarCuentaConSafeCall(id) {
   });
 }
 
-// ─── REPARACIÓN HISTÓRICA DE CUENTAS PAGADAS SIN EGRESO (Tarea #42) ─────────
-// Desde la Tarea #35 hay un trigger en Supabase que crea el egreso en la
-// misma transacción que el UPDATE pagada=true, así que casos nuevos no
-// pueden quedar inconsistentes. Pero pagos viejos hechos antes del fix
-// pudieron quedar con pagada=true sin movimiento_financiero asociado si
-// la app se cortó entre los dos pasos. Estas funciones detectan esos casos
-// históricos (sin filtro de fecha) y los compensan con el egreso faltante.
+// ─── REPARACIÓN DE CUENTAS PAGADAS SIN EGRESO (Tarea #42, narrativa #46) ────
+// HERRAMIENTA DE MANTENIMIENTO. En operación normal el trigger
+// `trigger_cuenta_pagada` (sección 3.F de rls_policies.sql) inserta el
+// egreso en `movimientos_financieros` en la misma transacción que el
+// UPDATE pagada=true → no se puede quedar nada inconsistente.
+//
+// Estas funciones existen para casos EXCEPCIONALES: importación de
+// datos viejos desde planilla, pagos creados por SQL manual que se
+// saltearon el trigger, o pagos previos a la existencia del trigger
+// en talleres muy antiguos. Detectan cuentas pagadas que no tienen su
+// egreso y las compensan. En un taller que vino usando la app desde
+// el principio el detector encuentra 0 inconsistencias.
 async function cuentas_detectarPagadasSinEgreso() {
   if (!tid()) return { ok: false, error: 'No hay taller activo', items: [] };
 
@@ -293,9 +300,12 @@ async function cuentas_modalRevisarPagadasSinEgreso() {
   if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede revisar inconsistencias de finanzas')) return;
 
   openModal(`
-    <div class="modal-title">🔧 Cuentas pagadas sin egreso</div>
+    <div class="modal-title">🧾 Revisar cuentas con egreso faltante</div>
+    <div style="font-size:.72rem;color:var(--text2);margin-bottom:.6rem;line-height:1.35">
+      Estas cuentas están marcadas como pagadas pero no tienen el egreso correspondiente en Finanzas. Suele pasar con datos importados de antes o pagos cargados por fuera de la app. Tocá <strong>Reparar</strong> para crear los egresos faltantes.
+    </div>
     <div id="cpse-resultado">
-      <div style="text-align:center;padding:1rem;color:var(--text2)">Buscando inconsistencias históricas…</div>
+      <div style="text-align:center;padding:1rem;color:var(--text2)">Buscando…</div>
     </div>
     <button class="btn-secondary" style="margin-top:1rem" onclick="closeModal()">Cerrar</button>
   `);
@@ -335,7 +345,7 @@ async function cuentas_renderRevisarPagadasSinEgreso() {
   cont.innerHTML = `
     <div style="background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.25);border-radius:10px;padding:.75rem;margin-bottom:.75rem">
       <div style="color:var(--warning);font-family:var(--font-head);font-size:.85rem;letter-spacing:1px;margin-bottom:.25rem">⚠️ ${items.length} CUENTA(S) SIN EGRESO</div>
-      <div style="font-size:.72rem;color:var(--text2)">Estas cuentas figuran como pagadas pero no tienen un egreso en Finanzas. Reparar inserta el egreso retroactivo (categoría <strong>Repuestos</strong>) usando la fecha de pago original.</div>
+      <div style="font-size:.72rem;color:var(--text2)">Reparar inserta el egreso faltante (categoría <strong>Repuestos</strong>) usando la fecha de pago original.</div>
       <div style="margin-top:.4rem;font-size:.78rem;color:var(--text)">Total a regularizar: <strong style="color:var(--danger);font-family:var(--font-head)">₲${gs(total)}</strong></div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;max-height:260px;overflow-y:auto;margin-bottom:.75rem">
@@ -356,17 +366,41 @@ async function cuentas_repararPagadasSinEgresoConSafeCall() {
     if (!res.ok) { toast('No se pudo verificar: ' + (res.error || ''), 'error'); return; }
 
     const out = await cuentas_repararPagadasSinEgreso(res.items || []);
-    if (out.reparados > 0) {
-      toast(`✅ Se insertaron ${out.reparados} egreso(s) retroactivo(s)`, 'success');
-    } else if (!out.errores.length) {
-      toast('No quedaban inconsistencias para reparar', 'info');
+    // Resumen final más claro: si el loop reparó N y falló M, decir
+    // ambos números. Hasta acá solo decía "X reparados", lo cual escondía
+    // que algunos no se habían podido insertar.
+    if (out.reparados > 0 && out.errores.length === 0) {
+      toast(`✅ Se insertaron ${out.reparados} egreso(s)`, 'success');
+    } else if (out.reparados > 0 && out.errores.length > 0) {
+      toast(`${out.reparados} reparados, ${out.errores.length} fallaron`, 'warning');
+    } else if (out.errores.length > 0) {
+      toast(`No se pudo reparar ninguna (${out.errores.length} error(es))`, 'error');
+    } else {
+      toast('No quedaban cuentas para reparar', 'info');
     }
+    // Re-render PRIMERO (reemplaza el innerHTML del slot completo) y
+    // recién después adjuntamos el bloque de detalle de errores, así no
+    // se pisa.
+    await cuentas_renderRevisarPagadasSinEgreso();
+
     if (out.errores.length) {
       console.warn('Errores reparando cuentas pagadas sin egreso:', out.errores);
-      toast(`Quedaron ${out.errores.length} error(es). Revisá la consola.`, 'error');
+      const slot = document.getElementById('cpse-resultado');
+      if (slot) {
+        // Botón con dataset para mostrar el detalle: evita serializar el
+        // texto dentro de un onclick inline (que se vuelve frágil con
+        // strings raros). Adjuntamos el listener al insertar.
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'background:rgba(255,68,68,.06);border:1px solid rgba(255,68,68,.25);border-radius:10px;padding:.6rem .75rem;margin-top:.6rem';
+        wrap.innerHTML = `
+          <div style="color:var(--danger);font-family:var(--font-head);font-size:.75rem;letter-spacing:1px;margin-bottom:.25rem">⚠️ ${out.errores.length} ERROR(ES) AL REPARAR</div>
+          <button type="button" id="cpse-ver-detalle" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:.3rem .6rem;font-size:.72rem;cursor:pointer">Ver detalle</button>`;
+        slot.appendChild(wrap);
+        const btnDet = wrap.querySelector('#cpse-ver-detalle');
+        if (btnDet) btnDet.addEventListener('click', () => alert(out.errores.join('\n')));
+      }
     }
 
-    await cuentas_renderRevisarPagadasSinEgreso();
     if (typeof finanzas_cargarDatos === 'function' && document.getElementById('finanzas-contenido-dinamico')) {
       finanzas_cargarDatos();
     }
