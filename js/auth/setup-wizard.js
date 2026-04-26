@@ -57,6 +57,17 @@ function _setupTienePWA() {
   return true;
 }
 
+// Feature-gate para el paso de logo. Hoy retorna false porque la columna
+// `logo_url` no existe en `talleres` y no hay bucket `logos` configurado.
+// Cuando esa infraestructura aterrice, alcanza con que el fallback de
+// loadPerfil cargue `logo_url` y este chequeo lo detecte (mismo patrón
+// que `_setupTieneMoneda`). El paso ya está reservado en `_setupListaCompleta`
+// como comentario para que el orden sea estable.
+function _setupTieneLogo() {
+  return currentPerfil?.talleres &&
+         'logo_url' in currentPerfil.talleres;
+}
+
 // ─── DECISIÓN: ¿corre el wizard? ────────────────────────────────────────────
 // Devuelve true si el admin del taller todavía no completó el setup
 // (queda al menos un paso pendiente, incluyendo el obligatorio "datos").
@@ -77,6 +88,7 @@ function setupPendiente() {
 function _setupListaCompleta() {
   const lista = ['datos'];
   if (_setupTieneMoneda()) lista.push('moneda');
+  if (_setupTieneLogo())   lista.push('logo');  // hoy no aplica; reservado
   lista.push('servicios');
   if (_setupTienePWA())    lista.push('pwa');
   return lista;
