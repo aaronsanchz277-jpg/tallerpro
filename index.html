@@ -265,6 +265,9 @@
 <script src="./js/dashboard/simple-mode.js?v=2"></script>
 <script src="./js/dashboard/modo-taller.js"></script>
 
+<!-- export-excel.js define loadXLSX, del que depende js/crm/importar.js — se carga primero. -->
+<script src="./js/reports/export-excel.js"></script>
+
 <!-- CRM -->
 <script src="./js/crm/clientes.js"></script>
 <script src="./js/crm/vehiculos.js"></script>
@@ -322,7 +325,7 @@
 <script src="./js/reports/flujo-caja.js"></script>
 <script src="./js/reports/comparativas.js"></script>
 <script src="./js/reports/tendencias.js"></script>
-<script src="./js/reports/export-excel.js"></script>
+<!-- export-excel.js ya se cargó arriba (lo necesita js/crm/importar.js). -->
 
 <!-- Integraciones -->
 <script src="./js/integrations/ia.js"></script>
