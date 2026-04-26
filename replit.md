@@ -868,6 +868,13 @@ primario "🔧 Cargá tu primer trabajo" que abre directamente
 secundario "Ir al dashboard". Reemplaza el toast simple para empujar
 al usuario hacia la primera carga real.
 
+Encadenado con el tutorial existente: si el usuario elige "Ir al
+dashboard", a los 400 ms se dispara `iniciarTutorial()`
+(`js/ux/tutorial.js`), que es el tour de 4 pasos sobre el dashboard
+y usa `localStorage.tallerpro_tutorial_visto` para no repetirse. Si
+elige "Cargá tu primer trabajo" en cambio, NO se dispara — sería
+molesto encimar tooltips al wizard de reparaciones.
+
 Tarjeta de pendientes en dashboard: `getSetupPendienteCard()` se
 inserta entre los banners (justo antes de `getInstallBanner()`). Cada
 ítem es un botón individual que llama a `_setupAbrirSoloPaso(clave)`

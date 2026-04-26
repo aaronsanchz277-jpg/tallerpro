@@ -557,10 +557,21 @@ function _setupCerrarBanner() {
   const o = document.getElementById('setup-wizard-exito');
   if (o) o.remove();
   if (typeof navigate === 'function') navigate('dashboard');
+  // Encadenamos el tutorial 4-step del dashboard (existe en js/ux/tutorial.js
+  // y usa localStorage para no repetirse). Lo lanzamos con un pequeño retraso
+  // para que el dashboard ya esté pintado y el tutorial pueda apuntar a sus
+  // elementos.
+  if (typeof iniciarTutorial === 'function') {
+    setTimeout(() => iniciarTutorial(), 400);
+  }
 }
 
 function _setupCerrarBannerYNuevoTrabajo() {
-  _setupCerrarBanner();
+  // Acá NO arrancamos el tutorial: el usuario eligió cargar un trabajo,
+  // sería molesto disparar tooltips encima del wizard de reparaciones.
+  const o = document.getElementById('setup-wizard-exito');
+  if (o) o.remove();
+  if (typeof navigate === 'function') navigate('dashboard');
   if (typeof modalNuevaReparacionSimple === 'function') {
     modalNuevaReparacionSimple();
   }
