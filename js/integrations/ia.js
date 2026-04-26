@@ -375,9 +375,25 @@ async function ia_ejecutar(a) {
         const { data: emps } = await sb.from('empleados').select('id,nombre').eq('taller_id',tid()).ilike('nombre','%'+escapeLikePattern(a.empleado_nombre||'')+'%').limit(1);
         if (!emps?.length) { ia_addMsg(`No encontré al empleado "${a.empleado_nombre}".`, false); return; }
         const emp = emps[0];
-        const { error } = await sb.from('vales_empleado').insert({ empleado_id:emp.id, monto:cleanNum(a.monto), concepto:a.concepto||'Vale', fecha:new Date().toISOString().split('T')[0], taller_id:tid() });
+        // Usamos el helper compartido con `empleados.js` para que el
+        // vale se inserte en `vales_empleado` Y como egreso en
+        // `movimientos_financieros` (categoría "Vales/Adelantos").
+        // Sin esto, los vales cargados desde el chat no aparecían en
+        // Finanzas y los números no cerraban (Tarea #51).
+        // ⚠ Dependencia implícita: `registrarValeYEgreso` está
+        // definida en `js/hr/empleados.js` y queda como global porque
+        // `index.html` carga `empleados.js` ANTES que `ia.js`. Si ese
+        // orden cambia o el helper se mueve a un módulo, hay que
+        // ajustar la carga.
+        const { error } = await registrarValeYEgreso({
+          empleadoId: emp.id,
+          monto: cleanNum(a.monto),
+          concepto: a.concepto || 'Vale',
+          empleadoNombre: emp.nombre
+        });
         if (error) { ia_addMsg('Error: '+error.message, false); return; }
         clearCache('empleados');
+        clearCache('finanzas');
         ia_addMsg(`✓ Vale de ₲${gs(cleanNum(a.monto))} registrado para ${emp.nombre}.`, false);
         break;
       }
