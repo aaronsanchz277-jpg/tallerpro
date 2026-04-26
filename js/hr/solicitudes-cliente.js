@@ -152,9 +152,11 @@ async function vincularPerfilCrearCliente(perfilId, nombre) {
 async function rechazarPerfilPendiente(perfilId) {
   confirmar('¿Rechazar esta solicitud? El usuario seguirá teniendo cuenta pero sin acceso a tu taller.', async () => {
     await safeCall(async () => {
-      // Desvincular del taller (no borramos al usuario, solo sacamos el taller_id).
-      const { error } = await sb.from('perfiles').update({ taller_id: null }).eq('id', perfilId);
+      // Usamos la RPC SECURITY DEFINER porque la policy `perfiles_update_propio_o_admin`
+      // exige WITH CHECK (taller_id = mi_taller) y al null-ear el campo el chequeo falla.
+      const { data, error } = await sb.rpc('admin_rechazar_perfil_pendiente', { p_perfil_id: perfilId });
       if (error) { toast('Error: '+error.message, 'error'); return; }
+      if (!data?.ok) { toast(data?.error || 'No se pudo rechazar', 'error'); return; }
       toast('Solicitud rechazada', 'success');
       solicitudesCliente();
     }, null, 'No se pudo rechazar la solicitud');

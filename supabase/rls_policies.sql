@@ -553,6 +553,59 @@ REVOKE ALL ON FUNCTION public.admin_vincular_cuenta_huerfana(text, uuid) FROM pu
 GRANT EXECUTE ON FUNCTION public.admin_vincular_cuenta_huerfana(text, uuid) TO authenticated;
 
 
+-- ---- RPC: rechazar (desvincular) perfil pendiente ──────────────────────────
+-- Tarea #13: el admin necesita rechazar perfiles vinculados a su taller pero
+-- sin cliente_id. La operación natural es setear taller_id=NULL en perfiles,
+-- pero la policy `perfiles_update_propio_o_admin` exige que el admin solo
+-- modifique filas que sigan apuntando a su taller (WITH CHECK), por lo que
+-- el admin no puede null-ear el campo desde el cliente. Se hace por RPC
+-- SECURITY DEFINER con validaciones explícitas.
+CREATE OR REPLACE FUNCTION public.admin_rechazar_perfil_pendiente(
+  p_perfil_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_taller uuid;
+  v_perfil record;
+BEGIN
+  -- Solo admin con taller asignado.
+  SELECT taller_id INTO v_admin_taller
+    FROM perfiles
+    WHERE id = auth.uid() AND rol = 'admin'
+    LIMIT 1;
+  IF v_admin_taller IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Solo el admin del taller puede rechazar cuentas');
+  END IF;
+
+  -- El perfil debe existir, ser cliente y pertenecer al taller del admin.
+  SELECT * INTO v_perfil FROM perfiles WHERE id = p_perfil_id LIMIT 1;
+  IF v_perfil IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'No encontramos esa cuenta');
+  END IF;
+  IF v_perfil.taller_id IS DISTINCT FROM v_admin_taller THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Esa cuenta no pertenece a tu taller');
+  END IF;
+  IF v_perfil.rol <> 'cliente' THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Solo se pueden rechazar cuentas de cliente');
+  END IF;
+
+  -- Desvincular del taller. No borramos al usuario; solo le quitamos el acceso.
+  UPDATE perfiles
+    SET taller_id = NULL,
+        cliente_id = NULL
+    WHERE id = p_perfil_id;
+
+  RETURN jsonb_build_object('ok', true);
+END $$;
+
+REVOKE ALL ON FUNCTION public.admin_rechazar_perfil_pendiente(uuid) FROM public;
+GRANT EXECUTE ON FUNCTION public.admin_rechazar_perfil_pendiente(uuid) TO authenticated;
+
+
 -- ---- VENTAS (admin + empleado escriben; cliente no ve nada) ----
 ALTER TABLE ventas ENABLE ROW LEVEL SECURITY;
 
