@@ -188,6 +188,70 @@ async function detalleEmpleado(id) {
   const _esPropio  = currentPerfil?.empleado_id && currentPerfil.empleado_id === id;
   const verSensible = _esAdmin || _esPropio;
 
+  // ─── TRABAJOS COMO MECÁNICO (Tarea #53) ──────────────────────────────────
+  // Reparaciones del taller donde el empleado está asignado, con el monto
+  // que le toca (campo `pago` de `reparacion_mecanicos`). Solo se renderiza
+  // si verSensible. La RLS `reparacion_mecanicos_empleado_select_own` deja
+  // al propio mecánico ver lo suyo; admin ve todo via la RLS de admin.
+  let trabajosMecanico = [];
+  if (verSensible) {
+    const { data: rmRaw } = await sb.from('reparacion_mecanicos')
+      .select('id, pago, horas, reparaciones(id, descripcion, fecha, vehiculos(patente,marca,modelo), clientes(nombre))')
+      .eq('empleado_id', id);
+    trabajosMecanico = (rmRaw || [])
+      .filter(rm => rm.reparaciones) // descartar filas huérfanas
+      .sort((a, b) => (b.reparaciones.fecha || '').localeCompare(a.reparaciones.fecha || ''));
+  }
+
+  // Período actual: el "abierto" del taller, o el mes en curso si no hay.
+  const periodoAbierto = periodos?.find(p => p.estado === 'abierto');
+  const periodoInicio = periodoAbierto ? periodoAbierto.fecha_inicio : primerDiaMes;
+  const periodoFin    = periodoAbierto ? periodoAbierto.fecha_fin    : ultimoDiaMes;
+  const periodoLabel  = periodoAbierto
+    ? `${formatFecha(periodoInicio)} – ${formatFecha(periodoFin)}`
+    : 'mes actual';
+
+  const totalComisionesPeriodo = trabajosMecanico
+    .filter(rm => rm.reparaciones.fecha >= periodoInicio && rm.reparaciones.fecha <= periodoFin)
+    .reduce((s, rm) => s + parseFloat(rm.pago || 0), 0);
+
+  // Render: lista paginada (15 visibles + "Ver más").
+  const renderFilaTrab = rm => {
+    const r = rm.reparaciones;
+    const veh = r.vehiculos
+      ? `${h(r.vehiculos.patente || '')}${r.vehiculos.marca ? ' ' + h(r.vehiculos.marca) : ''}${r.vehiculos.modelo ? ' ' + h(r.vehiculos.modelo) : ''}`.trim()
+      : (r.clientes?.nombre ? h(r.clientes.nombre) : '');
+    return `
+      <div onclick="detalleReparacion('${r.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .3rem;border-top:1px solid var(--border);cursor:pointer;gap:.5rem">
+        <div style="min-width:0;flex:1">
+          <div style="font-size:.82rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.descripcion || 'Trabajo')}</div>
+          <div style="font-size:.68rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${formatFecha(r.fecha)}${veh ? ' · ' + veh : ''}</div>
+        </div>
+        <span style="font-family:var(--font-head);color:var(--success);font-size:.85rem;white-space:nowrap">₲${gs(rm.pago || 0)}</span>
+      </div>`;
+  };
+  const LIMITE_VISIBLE = 15;
+  const visiblesHTML = trabajosMecanico.slice(0, LIMITE_VISIBLE).map(renderFilaTrab).join('');
+  const ocultos = trabajosMecanico.slice(LIMITE_VISIBLE);
+  const ocultosHTML = ocultos.length > 0
+    ? `<div id="trab-mec-extras" style="display:none">${ocultos.map(renderFilaTrab).join('')}</div>
+       <button onclick="this.previousElementSibling.style.display='block';this.style.display='none'" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:.4rem;font-size:.72rem;margin-top:.4rem;cursor:pointer;font-family:var(--font-head)">Ver ${ocultos.length} más</button>`
+    : '';
+  const trabajosMecHTML = !verSensible ? '' : `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+        <span style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px">🔧 TRABAJOS COMO MECÁNICO</span>
+        ${trabajosMecanico.length > 0 ? `<span style="font-size:.65rem;color:var(--text2)">${trabajosMecanico.length} en total</span>` : ''}
+      </div>
+      ${trabajosMecanico.length === 0
+        ? '<div style="font-size:.78rem;color:var(--text2);padding:.4rem 0">Todavía no tiene trabajos asignados.</div>'
+        : visiblesHTML + ocultosHTML + `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.6rem;padding-top:.5rem;border-top:1px solid var(--border)">
+            <div style="font-size:.72rem;color:var(--text2);line-height:1.2">Total del período<br><span style="font-size:.62rem;color:var(--text2)">(${periodoLabel})</span></div>
+            <span style="font-family:var(--font-head);color:var(--success);font-size:1rem">₲${gs(totalComisionesPeriodo)}</span>
+          </div>`}
+    </div>`;
+
   document.getElementById('main-content').innerHTML = `
     <div class="detail-header">
       <button class="back-btn" onclick="navigate('empleados')">${t('volver')}</button>
@@ -220,6 +284,8 @@ async function detalleEmpleado(id) {
         </div>
       </div>
     </div>
+
+    ${trabajosMecHTML}
 
     ${valesHTML}
     ` : `
