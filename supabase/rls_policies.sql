@@ -1188,6 +1188,89 @@ BEGIN
 END $$;
 
 
+-- =====================================================================
+-- 3.F · Egreso atómico al pagar una cuenta a proveedor (Tarea #35)
+-- =====================================================================
+-- Antes: el cliente hacía dos pasos (UPDATE cuentas_pagar.pagada = true,
+-- luego INSERT en movimientos_financieros) con rollback manual si fallaba
+-- el segundo. No es a prueba de cortes de red en el medio.
+--
+-- Ahora: un trigger AFTER UPDATE en cuentas_pagar inserta el egreso en
+-- la misma transacción. Si la transición de pagada=false→true se commitea,
+-- el movimiento financiero también; si falla algo, se aborta todo. Mismo
+-- patrón que el trigger de liquidaciones (sueldos) y reparaciones.
+--
+-- Idempotencia: solo dispara cuando OLD.pagada IS DISTINCT FROM TRUE y
+-- NEW.pagada = TRUE. Adicionalmente, el INSERT del egreso se saltea si
+-- ya existe un movimiento_financieros con referencia a esta cuenta
+-- (defensa para reproyecciones o reactivaciones).
+--
+-- La categoría "Repuestos" se autocrea si no existe en ese taller, para
+-- que el trigger nunca pueda fallar por catálogo faltante.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='cuentas_pagar')
+     AND EXISTS (SELECT 1 FROM information_schema.tables
+                 WHERE table_schema='public' AND table_name='movimientos_financieros')
+     AND EXISTS (SELECT 1 FROM information_schema.tables
+                 WHERE table_schema='public' AND table_name='categorias_financieras') THEN
+
+    CREATE OR REPLACE FUNCTION public.cuenta_pagar_egreso()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $fn$
+    DECLARE
+      v_categoria_id uuid;
+    BEGIN
+      IF (OLD.pagada IS DISTINCT FROM TRUE) AND NEW.pagada = TRUE THEN
+        -- Filtramos por tipo IN ('egreso','ambos') para no asociar el
+        -- egreso a una eventual categoría homónima de tipo 'ingreso'.
+        SELECT id INTO v_categoria_id
+          FROM categorias_financieras
+         WHERE taller_id = NEW.taller_id
+           AND nombre = 'Repuestos'
+           AND tipo IN ('egreso', 'ambos')
+         ORDER BY (tipo = 'egreso') DESC
+         LIMIT 1;
+
+        IF v_categoria_id IS NULL THEN
+          INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+          VALUES (NEW.taller_id, 'Repuestos', 'egreso', true)
+          RETURNING id INTO v_categoria_id;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM movimientos_financieros
+           WHERE referencia_tabla = 'cuentas_pagar'
+             AND referencia_id = NEW.id
+        ) THEN
+          INSERT INTO movimientos_financieros (
+            taller_id, tipo, categoria_id, monto, descripcion,
+            fecha, referencia_id, referencia_tabla
+          ) VALUES (
+            NEW.taller_id, 'egreso', v_categoria_id, NEW.monto,
+            'Pago proveedor: ' || COALESCE(NEW.proveedor, ''),
+            COALESCE(NEW.fecha_pago, CURRENT_DATE),
+            NEW.id, 'cuentas_pagar'
+          );
+        END IF;
+      END IF;
+      RETURN NEW;
+    END;
+    $fn$;
+
+    DROP TRIGGER IF EXISTS trg_cuenta_pagar_egreso ON cuentas_pagar;
+    CREATE TRIGGER trg_cuenta_pagar_egreso
+      AFTER UPDATE ON cuentas_pagar
+      FOR EACH ROW
+      EXECUTE FUNCTION public.cuenta_pagar_egreso();
+  END IF;
+END $$;
+
+
 -- ============================================================================
 -- LISTO. Validación recomendada después de aplicar:
 --   • Loguearte como ADMIN: tenés que ver todo (movimientos, sueldos, vales).

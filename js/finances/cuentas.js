@@ -145,16 +145,11 @@ async function marcarCuentaPagada(id, onSuccess) {
   if (_cuentaPagandoLock) return;
   _cuentaPagandoLock = true;
   try {
-    const { data:c, error: cErr } = await sb.from('cuentas_pagar').select('proveedor,monto,pagada').eq('id',id).single();
-    if (cErr || !c) { toast('No se encontró la cuenta', 'error'); return; }
-    if (c.pagada) {
-      toast('Esta cuenta ya estaba pagada', 'info');
-      if (typeof onSuccess === 'function') onSuccess(id); else detalleCuenta(id);
-      return;
-    }
-
     // Update condicional (.eq pagada=false): si dos pestañas chocan, solo
-    // el primero entra; el resto recibe "ya estaba pagada".
+    // el primero entra; el resto recibe "ya estaba pagada". El INSERT del
+    // egreso en movimientos_financieros lo dispara un TRIGGER en Supabase
+    // (trg_cuenta_pagar_egreso), en la misma transacción que este UPDATE,
+    // así que es atómico: si la app cae en el medio no queda caja descuadrada.
     const { data: actualizadas, error: updErr } = await sb.from('cuentas_pagar')
       .update({ pagada:true, fecha_pago:new Date().toISOString().split('T')[0] })
       .eq('id',id)
@@ -162,39 +157,15 @@ async function marcarCuentaPagada(id, onSuccess) {
       .select('id');
     if (updErr) { toast('Error: ' + updErr.message, 'error'); return; }
     if (!actualizadas || actualizadas.length === 0) {
-      toast('Esta cuenta ya estaba pagada', 'info');
-      if (typeof onSuccess === 'function') onSuccess(id); else detalleCuenta(id);
-      return;
-    }
-
-    // Integración con Finanzas. NO atómico (Supabase JS no tiene tx);
-    // si falla, ROLLBACK del update para no dejar caja descuadrada.
-    let egresoOk = true;
-    let egresoErr = null;
-    const categoriaId = await obtenerCategoriaFinanciera('Repuestos', 'egreso');
-    if (categoriaId) {
-      const insRes = await sb.from('movimientos_financieros').insert({
-        taller_id: tid(),
-        tipo: 'egreso',
-        categoria_id: categoriaId,
-        monto: c.monto,
-        descripcion: 'Pago proveedor: ' + c.proveedor,
-        fecha: new Date().toISOString().split('T')[0],
-        referencia_id: id,
-        referencia_tabla: 'cuentas_pagar'
-      });
-      if (insRes.error) { egresoOk = false; egresoErr = insRes.error.message; }
-    } else {
-      egresoOk = false;
-      egresoErr = 'No se pudo encontrar la categoría "Repuestos"';
-    }
-
-    if (!egresoOk) {
-      await sb.from('cuentas_pagar')
-        .update({ pagada:false, fecha_pago:null })
-        .eq('id', id);
-      toast('No se registró el egreso (' + (egresoErr || 'error') + '). Cuenta sigue pendiente.', 'error');
-      if (typeof onSuccess === 'function') onSuccess(id); else detalleCuenta(id);
+      // 0 filas afectadas puede ser por dos motivos: la cuenta ya estaba
+      // pagada, o el id no existe. Distinguimos para no mentir en el toast.
+      const { data: existe } = await sb.from('cuentas_pagar').select('id').eq('id', id).maybeSingle();
+      if (!existe) {
+        toast('No se encontró la cuenta', 'error');
+      } else {
+        toast('Esta cuenta ya estaba pagada', 'info');
+        if (typeof onSuccess === 'function') onSuccess(id); else detalleCuenta(id);
+      }
       return;
     }
 

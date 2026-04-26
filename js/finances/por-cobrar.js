@@ -424,7 +424,9 @@ async function porPagar() {
 }
 
 // Reusa la función canónica de cuentas.js (con sus protecciones:
-// anti-doble-click, update condicional, rollback si falla el egreso).
+// anti-doble-click, update condicional). El INSERT del egreso lo hace
+// un trigger en Supabase en la misma transacción del UPDATE, así que
+// es atómico — sin rollback manual del lado del cliente.
 // El callback se queda en Por pagar y refresca badges.
 function porPagar_pagarCuenta(id) {
   if (typeof marcarCuentaPagadaConSafeCall !== 'function') {
