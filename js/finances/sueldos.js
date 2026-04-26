@@ -6,12 +6,40 @@ async function sueldos() {
     return;
   }
   const { data: periodos } = await sb.from('periodos_sueldo').select('*').eq('taller_id', tid()).order('fecha_inicio', {ascending:false});
-  
+
+  // Tarea #57: el constraint EXCLUDE de la Tarea #56 evita NUEVOS solapados,
+  // pero los pares que ya estaban cargados antes del fix siguen ahí. Sobre la
+  // lista que ya trajimos, buscamos pares (a,b) cuyas fechas se cruzan
+  // (inicio_a ≤ fin_b AND fin_a ≥ inicio_b) y mostramos un cartel amarillo
+  // arriba para que el admin los revise. Si no hay solapamientos, no se
+  // renderiza nada (no agregar ruido).
+  const pares = [];
+  const lista = periodos || [];
+  for (let i = 0; i < lista.length; i++) {
+    for (let j = i + 1; j < lista.length; j++) {
+      const a = lista[i], b = lista[j];
+      if (a.fecha_inicio <= b.fecha_fin && a.fecha_fin >= b.fecha_inicio) {
+        pares.push([a, b]);
+      }
+    }
+  }
+  const avisoSolapados = pares.length ? `
+    <div style="background:#fff7d6;border:1px solid #e5b800;color:#7a5b00;border-radius:8px;padding:.85rem;margin-bottom:1rem">
+      <div style="font-family:var(--font-head);font-size:1rem;margin-bottom:.4rem">⚠ Hay períodos de sueldo solapados</div>
+      <div style="font-size:.85rem;margin-bottom:.4rem">
+        Revisalos para no pagar vales/comisiones dos veces:
+      </div>
+      <ul style="margin:.25rem 0 0 1.1rem;font-size:.85rem">
+        ${pares.map(([a,b]) => `<li>${formatFecha(a.fecha_inicio)} — ${formatFecha(a.fecha_fin)} ↔ ${formatFecha(b.fecha_inicio)} — ${formatFecha(b.fecha_fin)}</li>`).join('')}
+      </ul>
+    </div>` : '';
+
   document.getElementById('main-content').innerHTML = `
     <div class="section-header">
       <div class="section-title">💰 Sueldos</div>
       <button class="btn-add" onclick="modalNuevoPeriodo()">+ Período</button>
     </div>
+    ${avisoSolapados}
     ${(periodos||[]).length === 0 ? '<div class="empty"><p>No hay períodos de sueldo. Creá uno para empezar.</p></div>' :
       (periodos||[]).map(p => `
       <div class="card" onclick="detallePeriodo('${p.id}')">
