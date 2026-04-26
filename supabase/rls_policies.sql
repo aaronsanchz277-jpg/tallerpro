@@ -1686,7 +1686,10 @@ ALTER TABLE talleres ADD COLUMN IF NOT EXISTS setup_pasos_pendientes jsonb;
 -- Cubrimos también el caso atípico `created_at IS NULL` (talleres antiguos
 -- migrados sin timestamp): los marcamos como completados con la fecha de
 -- corte para que no les aparezca el wizard.
+-- Usamos hora completa (no sólo fecha) para evitar mala clasificación de
+-- talleres creados el mismo día del rollout pero antes del despliegue
+-- efectivo. La hora elegida (12:00 UTC) cubre con margen el deploy real.
 UPDATE talleres
-   SET setup_completado = COALESCE(created_at, '2026-04-26'::timestamptz)
+   SET setup_completado = COALESCE(created_at, '2026-04-26 12:00:00+00'::timestamptz)
  WHERE setup_completado IS NULL
-   AND (created_at IS NULL OR created_at < '2026-04-26'::timestamptz);
+   AND (created_at IS NULL OR created_at < '2026-04-26 12:00:00+00'::timestamptz);
