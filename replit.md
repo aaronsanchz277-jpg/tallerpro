@@ -580,7 +580,7 @@ Reglas de oro:
    | `js/hr/empleados.js` | Vale/adelanto al empleado | No, `vales_empleado` no tiene trigger. |
    | `js/finances/cuentas.js` | Reparador retroactivo de cuentas viejas (Tarea #42) | Sí superficialmente, pero está pensado para cubrir cuentas anteriores a que existiera el trigger. |
    | `js/finances/conciliador.js` | Reparador genérico de movimientos faltantes en un día | Sí superficialmente. Igual que arriba: protegido por la doble verificación previa al insert. |
-   | `js/workshop/reparaciones-detalle.js` | Cobro completo al finalizar la OT | Sí: competiría con `trigger_pago_reparacion_movimiento` si el mismo flujo crea un `pagos_reparacion`. Hoy convive porque el insert directo usa `referencia_tabla='reparaciones'` y el trigger usa `'pagos_reparacion'`, así que el `ON CONFLICT` no matchea (oportunidad futura: simplificar). |
+   | `js/workshop/reparaciones-detalle.js` | ~~Cobro completo al finalizar la OT~~ | **Eliminado en Tarea #47.** Ver más abajo. |
    | `js/workshop/inventario.js` | Egreso por compra al contado (sin pasar por `cuentas_pagar`) | No compite con triggers. **Bug abierto**: usa la columna `descripcion` en vez de `concepto` y el insert revienta en silencio. Cubierto por la Tarea #48. |
 
    Si tenés que sumar uno nuevo, primero preguntate si el evento ya
@@ -608,3 +608,28 @@ Reglas de oro:
    con `DROP TRIGGER IF EXISTS` y `DROP FUNCTION IF EXISTS` antes de
    crear el bloque nuevo, así una base que llegó a aplicar el SQL de #35
    queda limpia.
+
+### Finalizar una reparación NO crea ingreso automático (Tarea #47)
+
+Hasta la Tarea #47, `cambiarEstado('finalizado')` en
+`js/workshop/reparaciones-detalle.js` insertaba un `movimientos_financieros`
+"fantasma" cuando la OT se finalizaba sin pagos registrados (asumía
+que se cobró en efectivo de palabra). Eso creaba ingresos sin
+contrapartida real (sin `pagos_reparacion`, sin método, sin cobrador).
+
+Ahora **finalizar una reparación nunca inserta movimientos por sí sola**.
+El flujo es:
+
+1. Si hay saldo > 0 al finalizar, se muestra un confirm con dos
+   opciones claras: **cobrar ahora** (abre `modalPagosReparacion` y el
+   trigger `trigger_pago_reparacion_movimiento` se encarga del ingreso)
+   o **dejar Por cobrar** (finaliza igual; la OT aparece en
+   💰 Por cobrar (#34) hasta que se cargue el pago real).
+2. El copy del confirm distingue "ningún pago" vs "saldo parcial" para
+   que el admin entienda qué decisión está tomando.
+3. Tras finalizar con saldo > 0, un toast confirma "Quedó en 💰 Por cobrar
+   (₲X)".
+
+Esto cumple la regla de oro #1: el JS no escribe en
+`movimientos_financieros` para representar un cobro de reparación; lo
+hace el trigger cuando se inserta el `pagos_reparacion` correspondiente.

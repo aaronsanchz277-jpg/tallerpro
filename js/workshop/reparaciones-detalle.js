@@ -207,45 +207,51 @@ async function detalleReparacion(id) {
 }
 
 async function cambiarEstado(id, estado) {
-  const { data: rep } = await sb.from('reparaciones').select('costo, descripcion, clientes(nombre)').eq('id', id).single();
+  // Solo necesitamos el costo para calcular saldo. Antes traíamos
+  // descripcion/clientes(nombre) para armar el "concepto" del INSERT
+  // manual; ese INSERT se eliminó en Tarea #47.
+  const { data: rep } = await sb.from('reparaciones').select('costo').eq('id', id).single();
 
+  // Si pasamos a "finalizado" y todavía hay saldo pendiente, ofrecemos
+  // cobrarlo ahora. Si el admin elige "no", el trabajo queda finalizado
+  // pero con saldo > 0 → aparece automáticamente en 💰 Por cobrar (#34)
+  // hasta que se registre el pago real.
+  //
+  // ⚠️ Tarea #47: antes había un INSERT manual a `movimientos_financieros`
+  // cuando totalPagado === 0 (ingreso fantasma del costo total). Se sacó
+  // porque rompía la regla "los movimientos vienen de los triggers" y
+  // creaba ingresos sin contrapartida real (sin pagos_reparacion, sin
+  // método, sin cobrador). Ahora el ingreso aparece SOLO cuando se
+  // registra un pago vía modalPagosReparacion (lo dispara el trigger
+  // `registrar_movimiento_pago_reparacion`).
+  let saldoFinal = 0;
   if (estado === 'finalizado') {
     const { data: pagos } = await sb.from('pagos_reparacion').select('monto').eq('reparacion_id', id);
     const totalPagado = (pagos || []).reduce((s, p) => s + parseFloat(p.monto || 0), 0);
     const saldo = parseFloat(rep.costo || 0) - totalPagado;
+    saldoFinal = saldo;
 
     if (saldo > 0) {
-      const confirmMsg = `Queda un saldo pendiente de ₲${gs(saldo)}. ¿Registrar pago completo ahora?`;
+      // Copy distinto según haya pagos parciales o ningún pago, así el
+      // admin entiende exactamente qué decisión está tomando.
+      const confirmMsg = totalPagado === 0
+        ? `No registraste ningún pago para este trabajo (₲${gs(saldo)}).\n\n¿Querés cobrarlo ahora?\n\n• Aceptar → registrás el pago ahora\n• Cancelar → finalizo igual y queda en 💰 Por cobrar para registrar el pago después`
+        : `Queda un saldo pendiente de ₲${gs(saldo)}.\n\n¿Querés cobrar ahora la diferencia?\n\n• Aceptar → registrás el pago ahora\n• Cancelar → finalizo igual y el saldo queda en 💰 Por cobrar`;
       if (confirm(confirmMsg)) {
         closeModal();
         await modalPagosReparacion(id, saldo);
         return;
       }
     }
-
-    if (totalPagado === 0 && rep.costo > 0) {
-      const categoriaId = await obtenerCategoriaFinanciera('Reparaciones', 'ingreso');
-      if (categoriaId) {
-        const { data: existe } = await sb.from('movimientos_financieros').select('id').eq('taller_id', tid()).eq('referencia_id', id).eq('referencia_tabla', 'reparaciones').limit(1);
-        if (!existe?.length) {
-          await sb.from('movimientos_financieros').insert({
-            taller_id: tid(),
-            tipo: 'ingreso',
-            categoria_id: categoriaId,
-            monto: rep.costo,
-            concepto: 'Trabajo: ' + (rep.descripcion || '') + (rep.clientes ? ' — ' + rep.clientes.nombre : ''),
-            fecha: new Date().toISOString().split('T')[0],
-            referencia_id: id,
-            referencia_tabla: 'reparaciones'
-          });
-        }
-      }
-    }
   }
 
   await offlineUpdate('reparaciones', { estado }, 'id', id);
   clearCache('reparaciones');
-  toast('Estado actualizado', 'success');
+  if (estado === 'finalizado' && saldoFinal > 0) {
+    toast(`Trabajo finalizado. Quedó en 💰 Por cobrar (₲${gs(saldoFinal)})`, 'info');
+  } else {
+    toast('Estado actualizado', 'success');
+  }
   detalleReparacion(id);
 }
 
