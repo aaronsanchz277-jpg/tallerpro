@@ -21,12 +21,12 @@ function ia_init() {
   fab.id = 'ia-fab';
   fab.onclick = ia_toggleChat;
   fab.innerHTML = '🤖';
-  fab.style.cssText = 'position:fixed;bottom:75px;right:16px;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#0099cc);display:flex;align-items:center;justify-content:center;font-size:1.4rem;cursor:pointer;z-index:99;box-shadow:0 4px 20px rgba(0,229,255,.35);transition:transform .2s';
+  fab.style.cssText = 'position:fixed;bottom:150px;right:16px;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#0099cc);display:flex;align-items:center;justify-content:center;font-size:1.4rem;cursor:pointer;z-index:99;box-shadow:0 4px 20px rgba(0,229,255,.35);transition:transform .2s';
   document.body.appendChild(fab);
 
   const chat = document.createElement('div');
   chat.id = 'ia-chat';
-  chat.style.cssText = 'display:none;position:fixed;bottom:135px;right:16px;width:340px;max-height:500px;background:var(--surface);border:1px solid var(--border);border-radius:16px;z-index:99;box-shadow:0 8px 40px rgba(0,0,0,.4);flex-direction:column;overflow:hidden';
+  chat.style.cssText = 'display:none;position:fixed;bottom:210px;right:16px;width:min(340px,calc(100vw - 32px));max-height:min(500px,calc(100vh - 230px));background:var(--surface);border:1px solid var(--border);border-radius:16px;z-index:99;box-shadow:0 8px 40px rgba(0,0,0,.4);flex-direction:column;overflow:hidden';
   chat.innerHTML = `
     <div style="padding:.75rem 1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
       <div style="display:flex;align-items:center;gap:.5rem">

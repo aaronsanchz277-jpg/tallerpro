@@ -82,7 +82,7 @@ async function porCobrar() {
       .order('created_at', { ascending: true })
       .limit(FIADO_LIMIT),
     sb.from('movimientos_financieros')
-      .select('id,monto,descripcion,referencia_tabla,created_at')
+      .select('id,monto,concepto,referencia_tabla,created_at')
       .eq('taller_id', tallerId)
       .eq('tipo', 'ingreso')
       .eq('fecha', hoy)
@@ -202,7 +202,7 @@ async function porCobrar() {
           const hora = m.created_at ? new Date(m.created_at).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' }) : '';
           return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.35rem 0;border-bottom:1px solid rgba(0,255,136,.08)">
             <div style="min-width:0;flex:1">
-              <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.descripcion || 'Ingreso')}</div>
+              <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.concepto || 'Ingreso')}</div>
               <div style="font-size:.65rem;color:var(--text2)">${hora}${m.referencia_tabla?' · '+h(m.referencia_tabla):''}</div>
             </div>
             <div style="font-family:var(--font-head);color:var(--success);font-size:.85rem;flex-shrink:0;margin-left:.5rem">+₲${gs(m.monto)}</div>
