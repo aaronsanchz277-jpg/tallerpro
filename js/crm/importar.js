@@ -454,9 +454,18 @@ function pasoResumenImport() {
 
     <div style="display:flex;gap:.5rem">
       <button class="btn-secondary" style="margin:0;flex:1" onclick="pasoMapeoImport()">← Atrás</button>
-      <button class="btn-primary" style="margin:0;flex:1" onclick="ejecutarImport()" ${total === 0 ? 'disabled' : ''}>Importar ${total > 0 ? `${total} fila${total===1?'':'s'}` : ''}</button>
+      <button class="btn-primary" style="margin:0;flex:1" onclick="ejecutarImport()" ${total === 0 ? 'disabled' : ''}>${total > 0 ? _resumirCTAImport(clientesNuevos.length, vehiculosNuevos.length) : 'Importar'}</button>
     </div>
   `);
+}
+
+// Texto del botón final, separando entidades. Una fila puede aportar 1
+// cliente + 1 vehículo, así que sumar "X filas" sobrecuenta. Mostramos
+// los dos contadores explícitamente.
+function _resumirCTAImport(nC, nV) {
+  if (nC > 0 && nV > 0) return `Importar ${nC} cliente${nC===1?'':'s'} y ${nV} vehículo${nV===1?'':'s'}`;
+  if (nC > 0) return `Importar ${nC} cliente${nC===1?'':'s'}`;
+  return `Importar ${nV} vehículo${nV===1?'':'s'}`;
 }
 
 // ─── PASO 4: Ejecutar import ────────────────────────────────────────────────
