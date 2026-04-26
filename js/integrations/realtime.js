@@ -44,7 +44,7 @@ function realtime_init() {
       }
     })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ventas', filter: `taller_id=eq.${tid()}` }, (payload) => {
-      toast(`Venta registrada: ₲${gs(payload.new.total)}`, 'success');
+      toast(`Venta registrada: ${fm(payload.new.total)}`, 'success');
     })
     .subscribe();
 }

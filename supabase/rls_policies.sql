@@ -1638,3 +1638,16 @@ END $$;
 --       sb.from('vales_empleado').select('*')            → solo los suyos.
 --   • Loguearte como CLIENTE: solo ve sus propios vehículos y reparaciones.
 -- ============================================================================
+
+
+-- ============================================================================
+-- TAREA #61 — MONEDA CONFIGURABLE POR TALLER
+-- ----------------------------------------------------------------------------
+-- Cada taller puede definir su moneda (símbolo + locale) y país.
+-- Default Paraguay (₲ / es-PY / PY) para no romper talleres existentes.
+-- Idempotente: se puede correr varias veces sin error.
+-- ============================================================================
+ALTER TABLE talleres ADD COLUMN IF NOT EXISTS moneda_simbolo TEXT NOT NULL DEFAULT '₲';
+ALTER TABLE talleres ADD COLUMN IF NOT EXISTS moneda_locale  TEXT NOT NULL DEFAULT 'es-PY';
+ALTER TABLE talleres ADD COLUMN IF NOT EXISTS pais           TEXT NOT NULL DEFAULT 'PY';
+

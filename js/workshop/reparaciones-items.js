@@ -9,7 +9,7 @@ function renderItemsReparacion(items) {
   return items.map(i => `
     <div class="factura-item">
       <span>${h(i.descripcion)} ${i.cantidad>1?`x${i.cantidad}`:''}</span>
-      <span>₲${gs(i.total || i.precio_unitario * i.cantidad)}</span>
+      <span>${fm(i.total || i.precio_unitario * i.cantidad)}</span>
     </div>
   `).join('');
 }
@@ -28,7 +28,7 @@ async function modalAgregarItemReparacion(repId) {
     <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="item-desc" placeholder="Ej: Cambio de aceite"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Cantidad</label><input class="form-input" id="item-cant" type="number" value="1" min="1"></div>
-      <div class="form-group"><label class="form-label">Precio unit. ₲</label><input class="form-input" id="item-precio" type="number" value="0"></div>
+      <div class="form-group"><label class="form-label">Precio unit. ${monedaActual().simbolo}</label><input class="form-input" id="item-precio" type="number" value="0"></div>
     </div>
     <div class="form-group"><label class="form-label">O seleccionar del inventario</label>
       <select class="form-input" id="item-inv" onchange="llenarDesdeInventario()">

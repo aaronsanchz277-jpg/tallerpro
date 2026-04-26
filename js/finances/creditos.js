@@ -16,7 +16,7 @@ async function creditos({ filtro='pendiente' }={}) {
       <div class="section-title">${t('credTitulo')}</div>
       <button class="btn-add" onclick="modalNuevoCredito()">+ Nuevo</button>
     </div>
-    ${filtro==='pendiente'?`<div style="background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center"><span style="color:var(--text2);font-size:.8rem">${t('credTotalPend')}</span><span style="font-family:var(--font-head);font-size:1.4rem;color:var(--danger)">₲${gs(total)}</span></div>`:''}
+    ${filtro==='pendiente'?`<div style="background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center"><span style="color:var(--text2);font-size:.8rem">${t('credTotalPend')}</span><span style="font-family:var(--font-head);font-size:1.4rem;color:var(--danger)">${fm(total)}</span></div>`:''}
     <div class="tabs">
       <button class="tab ${filtro==='pendiente'?'active':''}" onclick="creditos({filtro:'pendiente'})">${t('credPendientes')}</button>
       <button class="tab ${filtro==='pagado'?'active':''}" onclick="creditos({filtro:'pagado'})">${t('credPagados')}</button>
@@ -32,7 +32,7 @@ async function creditos({ filtro='pendiente' }={}) {
             <div class="card-sub">${h(f.descripcion||t('sinDescripcion'))} · ${formatFecha(f.fecha)}</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
-            <div style="font-family:var(--font-head);font-size:1.1rem;color:${f.pagado?'var(--success)':'var(--danger)'}">₲${gs(f.monto)}</div>
+            <div style="font-family:var(--font-head);font-size:1.1rem;color:${f.pagado?'var(--success)':'var(--danger)'}">${fm(f.monto)}</div>
             ${!f.pagado?`<button onclick="marcarPagadoConSafeCall('${f.id}')" style="font-size:.7rem;background:rgba(0,255,136,.15);color:var(--success);border:1px solid rgba(0,255,136,.3);border-radius:6px;padding:2px 8px;cursor:pointer;margin-top:4px">${t('credPagar')}</button>`:`<span style="font-size:.7rem;color:var(--success)">${t('credPagadoLabel')}</span>`}
           </div>
         </div>

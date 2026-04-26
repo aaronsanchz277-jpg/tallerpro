@@ -119,7 +119,7 @@ async function exportarReportePDF(titulo, contenidoId) {
 }
 
 function formatearMoneda(valor) {
-  return '₲' + gs(valor);
+  return fm(valor);
 }
 
 function formatearPorcentaje(valor, total) {

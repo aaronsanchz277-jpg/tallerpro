@@ -80,7 +80,7 @@ async function detalleVehiculo(id) {
       <div class="info-item"><div class="label">Modelo</div><div class="value">${h(v.modelo||'-')}</div></div>
       <div class="info-item"><div class="label">Año</div><div class="value">${h(v.anio||'-')}</div></div>
       <div class="info-item"><div class="label">Propietario</div><div class="value">${v.clientes?h(v.clientes.nombre):t('vehSinProp')}</div></div>
-      <div class="info-item"><div class="label">Total facturado</div><div class="value" style="color:var(--accent)">₲${gs(totalGastado)}</div></div>
+      <div class="info-item"><div class="label">Total facturado</div><div class="value" style="color:var(--accent)">${fm(totalGastado)}</div></div>
     </div>
     ${canEdit ? `<div style="display:flex;gap:.5rem;margin-bottom:1rem">
       <button class="btn-secondary" style="margin:0" onclick="modalEditarVehiculo('${id}')">${t('editarBtn')}</button>
@@ -90,7 +90,7 @@ async function detalleVehiculo(id) {
     <div class="sub-section">
       <div class="sub-section-title">📋 HISTORIAL COMPLETO (${(reps||[]).length + (mants||[]).length})</div>
       ${(reps||[]).length===0 && (mants||[]).length===0 ? '<p style="color:var(--text2);font-size:.85rem">Sin historial</p>' : ''}
-      ${(reps||[]).map(r => { const tieneCostos = parseFloat(r.costo_repuestos||0) > 0 || (pagoMecPorRep[r.id] || 0) > 0; return `<div class="card" style="margin-bottom:.5rem" onclick="detalleReparacion('${r.id}')"><div class="card-header"><div class="card-avatar">🔧</div><div class="card-info"><div class="card-name">${h(r.descripcion)}</div><div class="card-sub">₲${gs(r.costo)}${tieneCostos?' · Ganancia: ₲'+gs(gananciaDeRep(r)):''} · ${formatFecha(r.fecha)}</div></div><span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span></div></div>`; }).join('')}
+      ${(reps||[]).map(r => { const tieneCostos = parseFloat(r.costo_repuestos||0) > 0 || (pagoMecPorRep[r.id] || 0) > 0; return `<div class="card" style="margin-bottom:.5rem" onclick="detalleReparacion('${r.id}')"><div class="card-header"><div class="card-avatar">🔧</div><div class="card-info"><div class="card-name">${h(r.descripcion)}</div><div class="card-sub">${fm(r.costo)}${tieneCostos?' · Ganancia: ' + monedaActual().simbolo + gs(gananciaDeRep(r)):''} · ${formatFecha(r.fecha)}</div></div><span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span></div></div>`; }).join('')}
       ${(mants||[]).map(m => `<div class="card" style="margin-bottom:.5rem"><div class="card-header"><div class="card-avatar">🛡️</div><div class="card-info"><div class="card-name">${h(m.tipo||'Mantenimiento')}</div><div class="card-sub">${m.kilometraje?m.kilometraje+' km · ':''}${m.fecha_realizado?formatFecha(m.fecha_realizado):''}</div></div><span class="card-badge badge-blue">Preventivo</span></div></div>`).join('')}
     </div>`;
 }

@@ -134,7 +134,7 @@ async function detalleEmpleado(id) {
             <span style="font-family:var(--font-head); font-size:.8rem; color:var(--accent);">
               📅 ${formatFecha(p.fecha_inicio)} – ${formatFecha(p.fecha_fin)} ${p.estado === 'abierto' ? '(abierto)' : ''}
             </span>
-            <span style="font-family:var(--font-head); color:var(--warning);">Total: ₲${gs(totalPeriodo)}</span>
+            <span style="font-family:var(--font-head); color:var(--warning);">Total: ${fm(totalPeriodo)}</span>
           </div>
           ${valesDelPeriodo.map(v => `
             <div style="display:flex; justify-content:space-between; align-items:center; padding:.4rem .3rem; border-top:1px solid var(--border);">
@@ -143,7 +143,7 @@ async function detalleEmpleado(id) {
                 <div style="font-size:.68rem; color:var(--text2);">${formatFecha(v.fecha)}</div>
               </div>
               <div style="display:flex; align-items:center; gap:.4rem;">
-                <span style="font-family:var(--font-head); color:var(--warning); font-size:.85rem;">-₲${gs(v.monto)}</span>
+                <span style="font-family:var(--font-head); color:var(--warning); font-size:.85rem;">-${fm(v.monto)}</span>
                 <button onclick="eliminarVale('${v.id}','${id}')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.7rem;">✕</button>
               </div>
             </div>
@@ -160,7 +160,7 @@ async function detalleEmpleado(id) {
         <div style="margin-bottom:1rem; background:var(--surface); border-radius:10px; padding:.5rem; border:1px dashed var(--danger);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem; padding:0 .3rem">
             <span style="font-family:var(--font-head); font-size:.8rem; color:var(--danger);">⚠️ Sin período asignado</span>
-            <span style="font-family:var(--font-head); color:var(--warning);">Total: ₲${gs(totalSinPeriodo)}</span>
+            <span style="font-family:var(--font-head); color:var(--warning);">Total: ${fm(totalSinPeriodo)}</span>
           </div>
           ${valesSinPeriodo.map(v => `
             <div style="display:flex; justify-content:space-between; align-items:center; padding:.4rem .3rem; border-top:1px solid var(--border);">
@@ -169,7 +169,7 @@ async function detalleEmpleado(id) {
                 <div style="font-size:.68rem; color:var(--text2);">${formatFecha(v.fecha)}</div>
               </div>
               <div style="display:flex; align-items:center; gap:.4rem;">
-                <span style="font-family:var(--font-head); color:var(--warning); font-size:.85rem;">-₲${gs(v.monto)}</span>
+                <span style="font-family:var(--font-head); color:var(--warning); font-size:.85rem;">-${fm(v.monto)}</span>
                 <button onclick="eliminarVale('${v.id}','${id}')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.7rem;">✕</button>
               </div>
             </div>
@@ -239,7 +239,7 @@ async function detalleEmpleado(id) {
           <div style="font-size:.82rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.descripcion || 'Trabajo')}</div>
           <div style="font-size:.68rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${formatFecha(r.fecha)}${veh ? ' · ' + veh : ''}</div>
         </div>
-        <span style="font-family:var(--font-head);color:var(--success);font-size:.85rem;white-space:nowrap">₲${gs(rm.pago || 0)}</span>
+        <span style="font-family:var(--font-head);color:var(--success);font-size:.85rem;white-space:nowrap">${fm(rm.pago || 0)}</span>
       </div>`;
   };
   const LIMITE_VISIBLE = 15;
@@ -260,7 +260,7 @@ async function detalleEmpleado(id) {
         : visiblesHTML + ocultosHTML}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.6rem;padding-top:.5rem;border-top:1px solid var(--border)">
         <div style="font-size:.72rem;color:var(--text2);line-height:1.2">Total comisiones del período actual<br><span style="font-size:.62rem;color:var(--text2)">(${periodoLabel})</span></div>
-        <span style="font-family:var(--font-head);color:var(--success);font-size:1rem">₲${gs(totalComisionesPeriodo)}</span>
+        <span style="font-family:var(--font-head);color:var(--success);font-size:1rem">${fm(totalComisionesPeriodo)}</span>
       </div>
     </div>`;
 
@@ -276,7 +276,7 @@ async function detalleEmpleado(id) {
       <div class="info-item"><div class="label">${t('cliTel')}</div><div class="value">${h(emp.telefono || '-')}</div></div>
       <div class="info-item"><div class="label">Total horas</div><div class="value" style="color:var(--accent)">${totalHoras.toFixed(1)} hs</div></div>
       ${verSensible ? (emp.sueldo
-        ? `<div class="info-item"><div class="label">Sueldo</div><div class="value" style="color:var(--success)">₲${gs(emp.sueldo)}</div></div>`
+        ? `<div class="info-item"><div class="label">Sueldo</div><div class="value" style="color:var(--success)">${fm(emp.sueldo)}</div></div>`
         : `<div class="info-item"><div class="label">Sueldo</div><div class="value" style="color:var(--text2);font-size:.78rem;line-height:1.2">Sin sueldo fijo<br>(a comisión)</div></div>`) : ''}
     </div>
 
@@ -286,19 +286,19 @@ async function detalleEmpleado(id) {
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:.4rem;margin-bottom:.5rem">
         <div style="background:var(--surface2);border-radius:8px;padding:.4rem;text-align:center">
           <div style="font-size:.55rem;color:var(--text2)">SUELDO</div>
-          <div style="font-family:var(--font-head);font-size:.85rem;color:${sueldo > 0 ? 'var(--success)' : 'var(--text2)'}">₲${gs(sueldo)}</div>
+          <div style="font-family:var(--font-head);font-size:.85rem;color:${sueldo > 0 ? 'var(--success)' : 'var(--text2)'}">${fm(sueldo)}</div>
         </div>
         <div style="background:rgba(0,255,136,.08);border-radius:8px;padding:.4rem;text-align:center">
           <div style="font-size:.55rem;color:var(--success)">COMISIONES</div>
-          <div style="font-family:var(--font-head);font-size:.85rem;color:var(--success)">+₲${gs(totalComisionesMes)}</div>
+          <div style="font-family:var(--font-head);font-size:.85rem;color:var(--success)">+${fm(totalComisionesMes)}</div>
         </div>
         <div style="background:rgba(255,204,0,.08);border-radius:8px;padding:.4rem;text-align:center">
           <div style="font-size:.55rem;color:var(--warning)">VALES</div>
-          <div style="font-family:var(--font-head);font-size:.85rem;color:var(--warning)">-₲${gs(totalValesMes)}</div>
+          <div style="font-family:var(--font-head);font-size:.85rem;color:var(--warning)">-${fm(totalValesMes)}</div>
         </div>
         <div style="background:${neto >= 0 ? 'rgba(0,255,136,.08)' : 'rgba(255,68,68,.08)'};border-radius:8px;padding:.4rem;text-align:center">
           <div style="font-size:.55rem;color:${neto >= 0 ? 'var(--success)' : 'var(--danger)'}">A COBRAR</div>
-          <div style="font-family:var(--font-head);font-size:.85rem;color:${neto >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(neto)}</div>
+          <div style="font-family:var(--font-head);font-size:.85rem;color:${neto >= 0 ? 'var(--success)' : 'var(--danger)'}">${fm(neto)}</div>
         </div>
       </div>
     </div>
@@ -536,7 +536,7 @@ async function modalNuevoVale(empleadoId, periodoSeleccionadoId = null) {
         <button onclick="event.preventDefault(); document.getElementById('nuevo-periodo-form').style.display='none'" class="btn-secondary" style="margin:0; padding:.5rem; font-size:.8rem">Cancelar</button>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Monto ₲ *</label>${renderMontoInput('f-vale-monto', '', '50000')}</div>
+    <div class="form-group"><label class="form-label">Monto ${monedaActual().simbolo} *</label>${renderMontoInput('f-vale-monto', '', '50000')}</div>
     <div class="form-group"><label class="form-label">Concepto</label><input class="form-input" id="f-vale-concepto" placeholder="Almuerzo, adelanto, etc."></div>
     <div class="form-group"><label class="form-label">Fecha</label>${renderFechaInput('f-vale-fecha')}</div>
     <button class="btn-primary" onclick="guardarValeConSafeCall('${empleadoId}')">Registrar vale</button>
@@ -636,7 +636,7 @@ function modalNuevoEmpleado() {
     <div class="modal-title">${t("modNuevoEmpleado")}</div>
     <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" placeholder="Carlos Rodríguez"></div>
     <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" placeholder="Mecánico, Electricista..."></div>
-    <div class="form-group"><label class="form-label">Sueldo mensual ₲</label>${renderMontoInput('f-sueldo', '', '0')}</div>
+    <div class="form-group"><label class="form-label">Sueldo mensual ${monedaActual().simbolo}</label>${renderMontoInput('f-sueldo', '', '0')}</div>
     <div class="form-group"><label class="form-label">Teléfono</label>${phoneInput('f-tel', '', '0981 123 456')}</div>
     <button class="btn-primary" onclick="guardarEmpleadoConSafeCall()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
@@ -709,7 +709,7 @@ async function modalEditarEmpleado(id) {
     <div class="modal-title">${t("modEditarEmpleado")}</div>
     <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="f-nombre" value="${h(e.nombre || '')}"></div>
     <div class="form-group"><label class="form-label">Rol</label><input class="form-input" id="f-rol" value="${h(e.rol || '')}"></div>
-    <div class="form-group"><label class="form-label">Sueldo mensual ₲</label>${renderMontoInput('f-sueldo', e.sueldo || 0)}</div>
+    <div class="form-group"><label class="form-label">Sueldo mensual ${monedaActual().simbolo}</label>${renderMontoInput('f-sueldo', e.sueldo || 0)}</div>
     <div class="form-group"><label class="form-label">Teléfono</label>${phoneInput('f-tel', e.telefono, '0981 123 456')}</div>
     ${permisosHTML}
     <button class="btn-primary" onclick="guardarEmpleadoConPermisosConSafeCall('${id}', ${perfilVinculado ? `'${perfilVinculado.id}'` : 'null'})">${t('actualizar')}</button>

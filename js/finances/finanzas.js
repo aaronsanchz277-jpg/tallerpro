@@ -148,15 +148,15 @@ async function finanzas_cargarDatos() {
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:12px;padding:.75rem;text-align:center">
           <div style="font-size:.6rem;color:var(--success);letter-spacing:1px;font-family:var(--font-head)">INGRESOS ${balanceId ? '(Balance)' : ''}</div>
-          <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--success)">₲${gs(totalIngresos)}</div>
+          <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--success)">${fm(totalIngresos)}</div>
         </div>
         <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:12px;padding:.75rem;text-align:center">
           <div style="font-size:.6rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">EGRESOS ${balanceId ? '(Balance)' : ''}</div>
-          <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--danger)">₲${gs(totalEgresos)}</div>
+          <div style="font-family:var(--font-head);font-size:1.1rem;color:var(--danger)">${fm(totalEgresos)}</div>
         </div>
         <div style="background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:.75rem;text-align:center">
           <div style="font-size:.6rem;color:var(--accent);letter-spacing:1px;font-family:var(--font-head)">BALANCE NETO ${balanceId ? '(Balance)' : ''}</div>
-          <div style="font-family:var(--font-head);font-size:1.1rem;color:${balanceNeto >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(balanceNeto)}</div>
+          <div style="font-family:var(--font-head);font-size:1.1rem;color:${balanceNeto >= 0 ? 'var(--success)' : 'var(--danger)'}">${fm(balanceNeto)}</div>
         </div>
       </div>
 
@@ -178,9 +178,9 @@ async function finanzas_cargarDatos() {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;background:var(--surface2);padding:.4rem .6rem;border-radius:8px">
             <div style="font-family:var(--font-head);font-size:.9rem;color:var(--accent);letter-spacing:1px">${formatFecha(fecha)}</div>
             <div style="display:flex;gap:1rem;font-size:.75rem">
-              <span style="color:var(--success)">+₲${gs(grupo.ingresos)}</span>
-              <span style="color:var(--danger)">-₲${gs(grupo.egresos)}</span>
-              <span style="color:${netoDia >= 0 ? 'var(--accent)' : 'var(--danger)'};font-weight:bold">=₲${gs(netoDia)}</span>
+              <span style="color:var(--success)">+${fm(grupo.ingresos)}</span>
+              <span style="color:var(--danger)">-${fm(grupo.egresos)}</span>
+              <span style="color:${netoDia >= 0 ? 'var(--accent)' : 'var(--danger)'};font-weight:bold">=${fm(netoDia)}</span>
             </div>
           </div>
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
@@ -199,7 +199,7 @@ async function finanzas_cargarDatos() {
                   <div style="font-size:.68rem;color:var(--text2)">${h(m.categorias_financieras?.nombre || 'Sin categoría')}</div>
                   ${balancesAsignados.length > 0 ? `<div style="font-size:.65rem;color:var(--accent)">💰 ${balancesAsignados.length} balance(s)</div>` : ''}
                 </div>
-                <div style="font-family:var(--font-head);font-size:.95rem;color:${esIngreso ? 'var(--success)' : 'var(--danger)'};flex-shrink:0">${esIngreso ? '+' : '-'}₲${gs(m.monto)}</div>
+                <div style="font-family:var(--font-head);font-size:.95rem;color:${esIngreso ? 'var(--success)' : 'var(--danger)'};flex-shrink:0">${esIngreso ? '+' : '-'}${fm(m.monto)}</div>
               </div>`;
             }).join('')}
           </div>
@@ -231,7 +231,7 @@ async function finanzas_renderBannerCuentasViejas() {
       <div style="font-size:1.4rem">⚠️</div>
       <div style="flex:1;min-width:200px">
         <div style="font-family:var(--font-head);font-size:.78rem;color:var(--warning);letter-spacing:1px">REVISAR CUENTAS</div>
-        <div style="font-size:.78rem;color:var(--text)">Hay <strong>${res.items.length}</strong> cuenta(s) marcada(s) como pagada(s) sin egreso registrado en Finanzas (₲${gs(total)} total). Suele pasar con datos importados o pagos cargados por fuera de la app.</div>
+        <div style="font-size:.78rem;color:var(--text)">Hay <strong>${res.items.length}</strong> cuenta(s) marcada(s) como pagada(s) sin egreso registrado en Finanzas (${fm(total)} total). Suele pasar con datos importados o pagos cargados por fuera de la app.</div>
       </div>
       <button onclick="cuentas_modalRevisarPagadasSinEgreso()" style="background:var(--warning);color:#000;border:none;border-radius:8px;padding:.4rem .8rem;font-size:.75rem;cursor:pointer;font-family:var(--font-head)">Revisar</button>
     </div>
@@ -288,7 +288,7 @@ async function finanzas_modalNuevo(tipo) {
     <input type="hidden" id="f-fin-tipo" value="${tipo}">
     <div class="form-group"><label class="form-label">Concepto *</label><input class="form-input" id="f-fin-concepto" placeholder="${tipo === 'ingreso' ? 'Pago reparación motor' : 'Compra de filtros'}" autocomplete="off"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Monto (₲) *</label>${renderMontoInput('f-fin-monto', '', '0')}</div>
+      <div class="form-group"><label class="form-label">Monto (${monedaActual().simbolo}) *</label>${renderMontoInput('f-fin-monto', '', '0')}</div>
       <div class="form-group"><label class="form-label">Fecha</label>${renderFechaInput('f-fin-fecha')}</div>
     </div>
     <div class="form-group"><label class="form-label">Categoría</label>
@@ -407,7 +407,7 @@ async function finanzas_modalEditar(id) {
     <input type="hidden" id="f-fin-tipo" value="${m.tipo}">
     <div class="form-group"><label class="form-label">Concepto *</label><input class="form-input" id="f-fin-concepto" value="${h(m.concepto)}"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Monto (₲) *</label>${renderMontoInput('f-fin-monto', m.monto)}</div>
+      <div class="form-group"><label class="form-label">Monto (${monedaActual().simbolo}) *</label>${renderMontoInput('f-fin-monto', m.monto)}</div>
       <div class="form-group"><label class="form-label">Fecha</label>${renderFechaInput('f-fin-fecha', m.fecha)}</div>
     </div>
     <div class="form-group"><label class="form-label">Categoría</label>

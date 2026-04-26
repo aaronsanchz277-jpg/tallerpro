@@ -117,7 +117,7 @@ async function misPresupuestos() {
             <div class="card-info">
               <div class="card-name">${h(r.descripcion)}</div>
               <div class="card-sub">${r.vehiculos?h(r.vehiculos.patente)+' · '+h(r.vehiculos.marca):''} · ${formatFecha(r.fecha)}</div>
-              <div style="font-family:var(--font-head);font-size:1rem;color:var(--accent);margin-top:.3rem">₲${gs(r.costo)}</div>
+              <div style="font-family:var(--font-head);font-size:1rem;color:var(--accent);margin-top:.3rem">${fm(r.costo)}</div>
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-top:.6rem">
@@ -140,7 +140,7 @@ async function misPresupuestos() {
             <div class="card-info">
               <div class="card-name">${h(p.descripcion||'Presupuesto')}</div>
               <div class="card-sub">${p.vehiculos?h(p.vehiculos.patente)+' · '+h(p.vehiculos.marca):''} · ${formatFecha(p.created_at?.split('T')[0])}</div>
-              <div style="font-family:var(--font-head);font-size:.95rem;color:var(--accent);margin-top:.2rem">₲${gs(p.total||0)}</div>
+              <div style="font-family:var(--font-head);font-size:.95rem;color:var(--accent);margin-top:.2rem">${fm(p.total||0)}</div>
             </div>
             <span class="card-badge ${p.estado==='aprobado'?'badge-green':p.estado==='rechazado'?'badge-red':'badge-yellow'}">${(p.estado||'').toUpperCase()}</span>
           </div>

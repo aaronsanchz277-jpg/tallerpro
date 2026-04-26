@@ -231,8 +231,8 @@ function fab_cobrarReparacion_filtrar(q) {
         ${diasTxt ? `<div style="font-size:.65rem;margin-top:2px">${diasTxt}</div>` : ''}
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:var(--font-head);font-size:.85rem;color:${r.saldo > 0 ? 'var(--danger)' : 'var(--success)'}">${r.saldo > 0 ? 'Saldo ₲'+gs(r.saldo) : '✓ Pagado'}</div>
-        <div style="font-size:.65rem;color:var(--text2)">de ₲${gs(r.costo)}</div>
+        <div style="font-family:var(--font-head);font-size:.85rem;color:${r.saldo > 0 ? 'var(--danger)' : 'var(--success)'}">${r.saldo > 0 ? 'Saldo ' + monedaActual().simbolo + gs(r.saldo) : '✓ Pagado'}</div>
+        <div style="font-size:.65rem;color:var(--text2)">de ${fm(r.costo)}</div>
       </div>
     </div>`;
   }).join('');

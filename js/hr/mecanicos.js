@@ -13,7 +13,7 @@ function repMecanicos_renderChips(mecanicos) {
       <div style="width:22px;height:22px;border-radius:50%;background:rgba(0,229,255,.15);display:flex;align-items:center;justify-content:center;font-size:.6rem;color:var(--accent);font-weight:700">${h(m.empleados?.nombre || '?').charAt(0)}</div>
       <span>${h(m.empleados?.nombre || '?')}</span>
       <span style="color:var(--text2)">${m.horas||0}h</span>
-      ${m.pago ? `<span style="color:var(--success)">₲${gs(m.pago)}</span>` : ''}
+      ${m.pago ? `<span style="color:var(--success)">${fm(m.pago)}</span>` : ''}
     </div>`).join('');
 }
 
@@ -40,12 +40,12 @@ async function repMecanicos_modal(repId) {
               <input type="number" value="${m.horas||0}" min="0" step="0.5" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px;color:var(--text);font-size:.8rem;text-align:center" onchange="repMecanicos_actualizarConSafeCall('${m.id}','horas',this.value,'${repId}')">
             </div>
             <div style="flex:1">
-              <div style="font-size:.6rem;color:var(--text2);margin-bottom:2px">PAGO ₲</div>
+              <div style="font-size:.6rem;color:var(--text2);margin-bottom:2px">PAGO ${monedaActual().simbolo}</div>
               <input type="number" value="${m.pago||0}" min="0" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 6px;color:var(--success);font-size:.8rem;text-align:center" onchange="repMecanicos_actualizarConSafeCall('${m.id}','pago',this.value,'${repId}')">
             </div>
           </div>
         </div>`).join('')}
-      ${mecanicos.length > 0 ? `<div style="text-align:right;font-size:.75rem;color:var(--text2);padding-top:.2rem">Total pagos: <strong style="color:var(--success)">₲${gs(mecanicos.reduce((s,m)=>s+parseFloat(m.pago||0),0))}</strong></div>` : ''}
+      ${mecanicos.length > 0 ? `<div style="text-align:right;font-size:.75rem;color:var(--text2);padding-top:.2rem">Total pagos: <strong style="color:var(--success)">${fm(mecanicos.reduce((s,m)=>s+parseFloat(m.pago||0),0))}</strong></div>` : ''}
     </div>
     <div style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px;margin-bottom:.4rem">AGREGAR MECÁNICO</div>
     <div style="display:flex;gap:.4rem">

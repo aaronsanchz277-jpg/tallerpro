@@ -91,9 +91,9 @@ function renderDashboardKPIs(stats, config) {
     vehiculos: () => `<div class="stat-card" onclick="navigate('vehiculos')"><div class="stat-value">${stats.total_vehiculos}</div><div class="stat-label">${t('kpiVehiculos')}</div></div>`,
     en_progreso: () => `<div class="stat-card" onclick="reparaciones({filtro:'en_progreso'})"><div class="stat-value" style="color:var(--accent2)">${stats.en_progreso}</div><div class="stat-label">${t('kpiEnProgreso')}</div></div>`,
     hoy: () => `<div class="stat-card" onclick="reparaciones({filtro:'hoy'})"><div class="stat-value" style="color:var(--success)">${stats.reparaciones_hoy}</div><div class="stat-label">${t('kpiHoy')}</div></div>`,
-    creditos: () => `<div class="stat-card" onclick="navigate('creditos')"><div class="stat-value" style="color:var(--danger)">₲${gs(stats.creditos_pendientes)}</div><div class="stat-label">${t('kpiCreditos')}</div></div>`,
-    ingresos_mes: () => `<div class="stat-card"><div class="stat-value" style="color:var(--success)">₲${gs(stats.ingresos_mes)}</div><div class="stat-label">${t('kpiIngresosMes')}</div></div>`,
-    ganancia_neta: () => `<div class="stat-card"><div class="stat-value" style="color:${stats.ganancia_neta >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(stats.ganancia_neta)}</div><div class="stat-label">${t('kpiGananciaNeta')}</div></div>`,
+    creditos: () => `<div class="stat-card" onclick="navigate('creditos')"><div class="stat-value" style="color:var(--danger)">${fm(stats.creditos_pendientes)}</div><div class="stat-label">${t('kpiCreditos')}</div></div>`,
+    ingresos_mes: () => `<div class="stat-card"><div class="stat-value" style="color:var(--success)">${fm(stats.ingresos_mes)}</div><div class="stat-label">${t('kpiIngresosMes')}</div></div>`,
+    ganancia_neta: () => `<div class="stat-card"><div class="stat-value" style="color:${stats.ganancia_neta >= 0 ? 'var(--success)' : 'var(--danger)'}">${fm(stats.ganancia_neta)}</div><div class="stat-label">${t('kpiGananciaNeta')}</div></div>`,
     vehiculos_hoy: () => `<div class="stat-card" onclick="reparaciones({filtro:'hoy'})"><div class="stat-value" style="color:var(--accent2)">${stats.vehiculos_hoy}</div><div class="stat-label">${t('kpiVehiculosHoy')}</div></div>`,
     stock_bajo: () => `<div class="stat-card" onclick="navigate('inventario')"><div class="stat-value" style="color:var(--warning)">${stats.stock_bajo?.length || 0}</div><div class="stat-label">${t('kpiStockBajo')}</div></div>`
   };
@@ -199,9 +199,9 @@ async function dashboard() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
               ${t('dashPagosParciales')}
             </div>
-            <div style="font-family:var(--font-head);color:var(--warning);font-size:1rem">₲${gs(totalDeuda)}</div>
+            <div style="font-family:var(--font-head);color:var(--warning);font-size:1rem">${fm(totalDeuda)}</div>
           </div>
-          ${deudores.slice(0, 3).map(d => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(d.clientes?.nombre || t('sinCliente'))} — <span style="color:var(--warning)">${t('debe')} ₲${gs(d.saldo)}</span></div>`).join('')}
+          ${deudores.slice(0, 3).map(d => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(d.clientes?.nombre || t('sinCliente'))} — <span style="color:var(--warning)">${t('debe')} ${fm(d.saldo)}</span></div>`).join('')}
           ${deudores.length > 3 ? `<div style="font-size:.7rem;color:var(--text2);margin-top:.3rem">${t('yMas', { count: deudores.length - 3 })}</div>` : ''}
         </div>`;
       }
@@ -225,9 +225,9 @@ async function dashboard() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
             ${t('dashCuentasPorPagar')}
           </div>
-          <div style="font-family:var(--font-head);color:var(--danger);font-size:1rem">₲${gs(totalUrgente)}</div>
+          <div style="font-family:var(--font-head);color:var(--danger);font-size:1rem">${fm(totalUrgente)}</div>
         </div>
-        ${urgentes.slice(0, 3).map(c => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(c.proveedor)} — ₲${gs(c.monto)}${c.fecha_vencimiento < hoyStr ? ' <span style="color:var(--danger)">' + t('dashVencida') + '</span>' : ' ' + t('dashVence') + ' ' + formatFecha(c.fecha_vencimiento)}</div>`).join('')}
+        ${urgentes.slice(0, 3).map(c => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(c.proveedor)} — ${fm(c.monto)}${c.fecha_vencimiento < hoyStr ? ' <span style="color:var(--danger)">' + t('dashVencida') + '</span>' : ' ' + t('dashVence') + ' ' + formatFecha(c.fecha_vencimiento)}</div>`).join('')}
       </div>`;
     }
   }
@@ -255,7 +255,7 @@ async function dashboard() {
                   <span style="color:${m.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'};font-weight:bold">${m.tipo === 'ingreso' ? '↑' : '↓'}</span>
                   <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.concepto || m.categorias_financieras?.nombre || t('movimiento'))}</span>
                 </div>
-                <span style="font-family:var(--font-head);color:${m.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'}">${m.tipo === 'ingreso' ? '+' : '-'}₲${gs(m.monto)}</span>
+                <span style="font-family:var(--font-head);color:${m.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'}">${m.tipo === 'ingreso' ? '+' : '-'}${fm(m.monto)}</span>
               </div>
             `).join('')}
           </div>`;
@@ -375,7 +375,7 @@ async function dashboard() {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
         <div>
           <div style="font-size:.72rem;color:var(--text2);letter-spacing:1px;font-family:var(--font-head)">${t('dashIngresosMes')}</div>
-          <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--success)">₲${gs(ingresosMesFiltrado)}</div>
+          <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--success)">${fm(ingresosMesFiltrado)}</div>
           <div style="font-size:.7rem;color:var(--text2);margin-top:.2rem">${_dashboardBalanceId ? 'Balance seleccionado' : 'Todos los balances'}</div>
         </div>
         <div style="font-size:2rem;">
@@ -558,13 +558,13 @@ async function reportes() {
     <div style="padding:.25rem 0">
       <div style="font-family:var(--font-head);font-size:.8rem;color:var(--text2);letter-spacing:2px;margin-bottom:.75rem">${t('repGanancias')}</div>
       <div class="stats-grid" style="margin-bottom:1rem">
-        <div class="stat-card"><div class="stat-value" style="font-size:1.3rem">₲${gs(ganHoy)}</div><div class="stat-label">${t('repHoy2')}</div></div>
-        <div class="stat-card"><div class="stat-value" style="font-size:1.3rem">₲${gs(ganSemana)}</div><div class="stat-label">${t('repSemana')}</div></div>
+        <div class="stat-card"><div class="stat-value" style="font-size:1.3rem">${fm(ganHoy)}</div><div class="stat-label">${t('repHoy2')}</div></div>
+        <div class="stat-card"><div class="stat-value" style="font-size:1.3rem">${fm(ganSemana)}</div><div class="stat-label">${t('repSemana')}</div></div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
         <div>
           <div style="font-size:.72rem;color:var(--text2);letter-spacing:1px;font-family:var(--font-head)">${t('repMes')} — INGRESOS TOTALES (filtrado)</div>
-          <div style="font-family:var(--font-head);font-size:2rem;font-weight:700;color:var(--success)">₲${gs(ingresosTotalMes)}</div>
+          <div style="font-family:var(--font-head);font-size:2rem;font-weight:700;color:var(--success)">${fm(ingresosTotalMes)}</div>
         </div>
         <div style="font-size:2.5rem;">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -574,14 +574,14 @@ async function reportes() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
         <div style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:12px;padding:.75rem">
           <div style="font-size:.68rem;color:var(--success);font-family:var(--font-head);letter-spacing:1px">${t('dashGananciaNeta')}</div>
-          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${gananciaNeta>=0?'var(--success)':'var(--danger)'}">₲${gs(gananciaNeta)}</div>
+          <div style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;color:${gananciaNeta>=0?'var(--success)':'var(--danger)'}">${fm(gananciaNeta)}</div>
         </div>
       </div>
       ` : ''}
       <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
         <div>
           <div style="font-size:.72rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">${t('repFiados')}</div>
-          <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--danger)">₲${gs(totalCréditos)}</div>
+          <div style="font-family:var(--font-head);font-size:1.8rem;font-weight:700;color:var(--danger)">${fm(totalCréditos)}</div>
         </div>
         <button onclick="navigate('creditos')" style="background:rgba(255,68,68,.15);border:1px solid rgba(255,68,68,.3);color:var(--danger);border-radius:8px;padding:.5rem .75rem;font-size:.8rem;cursor:pointer">${t('repVerCreditos')}</button>
       </div>
@@ -594,7 +594,7 @@ async function reportes() {
               <span style="font-family:var(--font-head);font-size:.85rem;color:var(--accent2)">#${i+1}</span>
               <span style="font-size:.85rem">${h(desc)}</span>
             </div>
-            <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">₲${gs(total)}</span>
+            <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">${fm(total)}</span>
           </div>`).join('')}
       </div>` : `<div class="empty"><p>${t('repSinReps2')}</p></div>`}
 
@@ -623,7 +623,7 @@ async function reportes() {
                   <div style="width:28px;height:28px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:var(--accent)">${h(nombre).charAt(0)}</div>
                   <span style="font-size:.85rem;font-weight:500">${h(nombre)}</span>
                 </div>
-                <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">₲${gs(s.ingresos)}</span>
+                <span style="font-family:var(--font-head);color:var(--success);font-size:.9rem">${fm(s.ingresos)}</span>
               </div>
               <div style="display:flex;gap:1rem;font-size:.72rem;color:var(--text2);margin-left:2.3rem">
                 <span>${s.finalizadas} finalizadas</span>

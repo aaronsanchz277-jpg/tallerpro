@@ -124,7 +124,7 @@ async function reporteTendencias() {
             maintainAspectRatio: false,
             plugins: { legend: { labels: { color: '#8888aa', boxWidth: 12, padding: 10 } } },
             scales: {
-              y: { beginAtZero: true, ticks: { color: '#8888aa', callback: v => '₲' + gs(v) }, grid: { color: '#2a2a3a' } },
+              y: { beginAtZero: true, ticks: { color: '#8888aa', callback: v => fm(v) }, grid: { color: '#2a2a3a' } },
               x: { ticks: { color: '#8888aa' }, grid: { display: false } }
             }
           }

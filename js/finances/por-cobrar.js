@@ -144,12 +144,12 @@ async function porCobrar() {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
       <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.25);border-radius:12px;padding:.75rem;text-align:center">
         <div style="font-size:.65rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">TE DEBEN</div>
-        <div style="font-family:var(--font-head);font-size:1.4rem;color:var(--danger);margin-top:.2rem">₲${gs(totalPendiente)}</div>
+        <div style="font-family:var(--font-head);font-size:1.4rem;color:var(--danger);margin-top:.2rem">${fm(totalPendiente)}</div>
         <div style="font-size:.65rem;color:var(--text2);margin-top:.15rem">${repsPend.length} reparación(es) · ${fiados.length} fiado(s)</div>
       </div>
       <div style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.25);border-radius:12px;padding:.75rem;text-align:center">
         <div style="font-size:.65rem;color:var(--success);letter-spacing:1px;font-family:var(--font-head)">HOY COBRASTE</div>
-        <div style="font-family:var(--font-head);font-size:1.4rem;color:var(--success);margin-top:.2rem">₲${gs(totalCobradoHoy)}</div>
+        <div style="font-family:var(--font-head);font-size:1.4rem;color:var(--success);margin-top:.2rem">${fm(totalCobradoHoy)}</div>
         <div style="font-size:.65rem;color:var(--text2);margin-top:.15rem">ingresos del día</div>
       </div>
     </div>
@@ -181,10 +181,10 @@ async function porCobrar() {
             <div class="card-info">
               <div class="card-name">${h(r.descripcion || 'Reparación')}</div>
               <div class="card-sub">${h(cliente)}${marca?' · '+h(marca):''}${r.fecha?' · '+formatFecha(r.fecha):''} · ${diasTxt}</div>
-              <div class="card-sub">Total ₲${gs(r.costo)} · Pagado ₲${gs(r.pagado)}</div>
+              <div class="card-sub">Total ${fm(r.costo)} · Pagado ${fm(r.pagado)}</div>
             </div>
             <div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-              <div style="font-family:var(--font-head);font-size:1rem;color:var(--danger)">₲${gs(r.saldo)}</div>
+              <div style="font-family:var(--font-head);font-size:1rem;color:var(--danger)">${fm(r.saldo)}</div>
               <button onclick="porCobrar_cobrarReparacion('${r.id}')" style="font-size:.7rem;background:var(--success);color:#000;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600">💰 Cobrar</button>
               <button onclick="detalleReparacion('${r.id}')" style="font-size:.65rem;background:none;color:var(--text2);border:none;cursor:pointer;padding:0">Ver detalle →</button>
             </div>
@@ -205,7 +205,7 @@ async function porCobrar() {
               <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.concepto || 'Ingreso')}</div>
               <div style="font-size:.65rem;color:var(--text2)">${hora}${m.referencia_tabla?' · '+h(m.referencia_tabla):''}</div>
             </div>
-            <div style="font-family:var(--font-head);color:var(--success);font-size:.85rem;flex-shrink:0;margin-left:.5rem">+₲${gs(m.monto)}</div>
+            <div style="font-family:var(--font-head);color:var(--success);font-size:.85rem;flex-shrink:0;margin-left:.5rem">+${fm(m.monto)}</div>
           </div>`;
         }).join('')}
         ${movHoy.length > 20 ? `<div style="text-align:center;font-size:.7rem;color:var(--text2);padding:.4rem 0">… y ${movHoy.length - 20} más. Ver todos en <a href="javascript:navigate('finanzas-movimientos')" style="color:var(--accent)">Movimientos</a></div>` : ''}
@@ -231,7 +231,7 @@ async function porCobrar() {
               <div class="card-sub">${h(f.descripcion || 'Sin descripción')}${fecha?' · '+formatFecha(fecha):''} · ${diasTxt}</div>
             </div>
             <div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-              <div style="font-family:var(--font-head);font-size:1rem;color:var(--danger)">₲${gs(f.monto)}</div>
+              <div style="font-family:var(--font-head);font-size:1rem;color:var(--danger)">${fm(f.monto)}</div>
               <button onclick="porCobrar_marcarFiadoPagado('${f.id}')" style="font-size:.7rem;background:var(--success);color:#000;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600">✓ Cobrar</button>
             </div>
           </div>
@@ -356,12 +356,12 @@ async function porPagar() {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
       <div style="background:rgba(255,68,68,.08);border:1px solid ${vencidas.length?'var(--danger)':'rgba(255,68,68,.25)'};border-radius:12px;padding:.75rem;text-align:center">
         <div style="font-size:.65rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">DEBÉS</div>
-        <div style="font-family:var(--font-head);font-size:1.4rem;color:var(--danger);margin-top:.2rem">₲${gs(totalDeuda)}</div>
+        <div style="font-family:var(--font-head);font-size:1.4rem;color:var(--danger);margin-top:.2rem">${fm(totalDeuda)}</div>
         <div style="font-size:.65rem;color:var(--text2);margin-top:.15rem">${cuentas.length} cuenta(s) · ${liqs.length} sueldo(s)${vencidas.length?' · <span style="color:var(--danger)">'+vencidas.length+' vencida(s)</span>':''}</div>
       </div>
       <div style="background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.25);border-radius:12px;padding:.75rem;text-align:center">
         <div style="font-size:.65rem;color:var(--warning);letter-spacing:1px;font-family:var(--font-head)">HOY PAGASTE</div>
-        <div style="font-family:var(--font-head);font-size:1.4rem;color:var(--warning);margin-top:.2rem">₲${gs(totalPagadoHoy)}</div>
+        <div style="font-family:var(--font-head);font-size:1.4rem;color:var(--warning);margin-top:.2rem">${fm(totalPagadoHoy)}</div>
         <div style="font-size:.65rem;color:var(--text2);margin-top:.15rem">egresos del día</div>
       </div>
     </div>
@@ -385,7 +385,7 @@ async function porPagar() {
               <div class="card-sub">${c.fecha_vencimiento?'Vence: '+formatFecha(c.fecha_vencimiento):'Sin fecha'}${c.notas?' · '+h(c.notas):''}</div>
             </div>
             <div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-              <div style="font-family:var(--font-head);font-size:1rem;color:var(--danger)">₲${gs(c.monto)}</div>
+              <div style="font-family:var(--font-head);font-size:1rem;color:var(--danger)">${fm(c.monto)}</div>
               <button onclick="porPagar_pagarCuenta('${c.id}')" style="font-size:.7rem;background:var(--success);color:#000;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600">✓ Pagar</button>
               <button onclick="detalleCuenta('${c.id}')" style="font-size:.65rem;background:none;color:var(--text2);border:none;cursor:pointer;padding:0">Ver detalle →</button>
             </div>
@@ -410,10 +410,10 @@ async function porPagar() {
             <div class="card-info">
               <div class="card-name">${h(l.empleados?.nombre || 'Empleado')}</div>
               <div class="card-sub">${periodoTxt}${cerrado?' · <span style="color:var(--text2)">período cerrado</span>':''}</div>
-              <div class="card-sub">Base ₲${gs(l.sueldo_base)}${l.total_extra?' · Trabajos y comisiones ₲'+gs(l.total_extra):''}${l.total_bonos?' · Bonos ₲'+gs(l.total_bonos):''}${l.total_descuentos?' · Desc ₲'+gs(l.total_descuentos):''}</div>
+              <div class="card-sub">Base ${fm(l.sueldo_base)}${l.total_extra?' · Trabajos y comisiones ' + monedaActual().simbolo + gs(l.total_extra):''}${l.total_bonos?' · Bonos ' + monedaActual().simbolo + gs(l.total_bonos):''}${l.total_descuentos?' · Desc ' + monedaActual().simbolo + gs(l.total_descuentos):''}</div>
             </div>
             <div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-              <div style="font-family:var(--font-head);font-size:1rem;color:var(--danger)">₲${gs(l._total)}</div>
+              <div style="font-family:var(--font-head);font-size:1rem;color:var(--danger)">${fm(l._total)}</div>
               <button onclick="porPagar_pagarSueldo('${l.id}')" style="font-size:.7rem;background:var(--success);color:#000;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600">✓ Pagar</button>
             </div>
           </div>

@@ -22,7 +22,7 @@ async function cuentasPagar({ filtro='pendiente' }={}) {
     <div style="background:var(--surface);border:1px solid ${vencidas.length?'var(--danger)':'var(--border)'};border-radius:12px;padding:1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:.7rem;color:${totalPendiente>0?'var(--danger)':'var(--success)'};letter-spacing:1px;font-family:var(--font-head)">TOTAL POR PAGAR</div>
-        <div style="font-family:var(--font-head);font-size:1.8rem;color:${totalPendiente>0?'var(--danger)':'var(--success)'}">₲${gs(totalPendiente)}</div>
+        <div style="font-family:var(--font-head);font-size:1.8rem;color:${totalPendiente>0?'var(--danger)':'var(--success)'}">${fm(totalPendiente)}</div>
         <div style="font-size:.7rem;color:var(--text2)">${pendientes.length} pendiente(s)${vencidas.length?' · <span style="color:var(--danger)">'+vencidas.length+' vencida(s)</span>':''}</div>
       </div>
       <div style="font-size:2rem">${vencidas.length?'🚨':'📋'}</div>
@@ -30,7 +30,7 @@ async function cuentasPagar({ filtro='pendiente' }={}) {
 
     ${porVencer.length > 0 ? `<div style="background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.3);border-radius:10px;padding:.75rem;margin-bottom:1rem">
       <div style="font-size:.7rem;color:var(--warning);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.3rem">⏰ VENCEN ESTA SEMANA</div>
-      ${porVencer.map(c => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(c.proveedor)} — ₲${gs(c.monto)} · ${formatFecha(c.fecha_vencimiento)}</div>`).join('')}
+      ${porVencer.map(c => `<div style="font-size:.78rem;color:var(--text2);padding:.15rem 0">${h(c.proveedor)} — ${fm(c.monto)} · ${formatFecha(c.fecha_vencimiento)}</div>`).join('')}
     </div>` : ''}
 
     <div class="tabs">
@@ -46,7 +46,7 @@ async function cuentasPagar({ filtro='pendiente' }={}) {
             <div class="card-avatar" style="font-size:1.2rem">${c.pagada?'✅':vencida?'🚨':'📄'}</div>
             <div class="card-info">
               <div class="card-name">${h(c.proveedor)}</div>
-              <div class="card-sub">₲${gs(c.monto)} · Vence: ${c.fecha_vencimiento?formatFecha(c.fecha_vencimiento):'Sin fecha'}</div>
+              <div class="card-sub">${fm(c.monto)} · Vence: ${c.fecha_vencimiento?formatFecha(c.fecha_vencimiento):'Sin fecha'}</div>
               ${c.notas?`<div class="card-sub">${h(c.notas)}</div>`:''}
             </div>
             <span class="card-badge ${c.pagada?'badge-green':vencida?'badge-red':'badge-yellow'}">${c.pagada?'Pagada':vencida?'Vencida':'Pendiente'}</span>
@@ -60,7 +60,7 @@ function modalNuevaCuenta() {
     <div class="modal-title">Nueva cuenta a pagar</div>
     <div class="form-group"><label class="form-label">Proveedor *</label><input class="form-input" id="f-proveedor" placeholder="Distribuidora X, Repuestera Y..."></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Monto ₲ *</label>${renderMontoInput('f-monto', '', '500000')}</div>
+      <div class="form-group"><label class="form-label">Monto ${monedaActual().simbolo} *</label>${renderMontoInput('f-monto', '', '500000')}</div>
       <div class="form-group"><label class="form-label">Fecha vencimiento</label>${renderFechaInput('f-vence')}</div>
     </div>
     <div class="form-group"><label class="form-label">Concepto / Notas</label><input class="form-input" id="f-notas" placeholder="Factura #123, repuestos..."></div>
@@ -116,7 +116,7 @@ async function detalleCuenta(id) {
       <div><div class="detail-name">${h(c.proveedor)}</div><div class="detail-sub">${c.pagada?'Pagada':vencida?'VENCIDA':'Pendiente'}</div></div>
     </div>
     <div class="info-grid">
-      <div class="info-item"><div class="label">Monto</div><div class="value" style="color:var(--danger);font-family:var(--font-head);font-size:1.3rem">₲${gs(c.monto)}</div></div>
+      <div class="info-item"><div class="label">Monto</div><div class="value" style="color:var(--danger);font-family:var(--font-head);font-size:1.3rem">${fm(c.monto)}</div></div>
       <div class="info-item"><div class="label">Vencimiento</div><div class="value" style="color:${vencida?'var(--danger)':'var(--text)'}">${c.fecha_vencimiento?formatFecha(c.fecha_vencimiento):'Sin fecha'}</div></div>
       ${c.notas?`<div class="info-item" style="grid-column:1/-1"><div class="label">Notas</div><div class="value">${h(c.notas)}</div></div>`:''}
       <div class="info-item"><div class="label">Estado</div><div class="value"><span class="card-badge ${c.pagada?'badge-green':vencida?'badge-red':'badge-yellow'}">${c.pagada?'Pagada':vencida?'Vencida':'Pendiente'}</span></div></div>
@@ -186,7 +186,7 @@ async function modalEditarCuenta(id) {
     <div class="modal-title">Editar cuenta</div>
     <div class="form-group"><label class="form-label">Proveedor *</label><input class="form-input" id="f-proveedor" value="${h(c.proveedor||'')}"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Monto ₲</label>${renderMontoInput('f-monto', c.monto||0)}</div>
+      <div class="form-group"><label class="form-label">Monto ${monedaActual().simbolo}</label>${renderMontoInput('f-monto', c.monto||0)}</div>
       <div class="form-group"><label class="form-label">Fecha vencimiento</label>${renderFechaInput('f-vence', c.fecha_vencimiento)}</div>
     </div>
     <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="f-notas" value="${h(c.notas||'')}"></div>
@@ -341,7 +341,7 @@ async function cuentas_renderRevisarPagadasSinEgreso() {
         <div style="font-size:.68rem;color:var(--text2)">Pago: ${c.fecha_pago ? formatFecha(c.fecha_pago) : '<span style="color:var(--warning)">sin fecha — se usará hoy</span>'}</div>
         ${c.notas ? `<div style="font-size:.65rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(c.notas)}</div>` : ''}
       </div>
-      <div style="font-family:var(--font-head);font-size:.9rem;color:var(--danger);flex-shrink:0">-₲${gs(c.monto)}</div>
+      <div style="font-family:var(--font-head);font-size:.9rem;color:var(--danger);flex-shrink:0">-${fm(c.monto)}</div>
     </div>
   `).join('');
 
@@ -349,7 +349,7 @@ async function cuentas_renderRevisarPagadasSinEgreso() {
     <div style="background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.25);border-radius:10px;padding:.75rem;margin-bottom:.75rem">
       <div style="color:var(--warning);font-family:var(--font-head);font-size:.85rem;letter-spacing:1px;margin-bottom:.25rem">⚠️ ${items.length} CUENTA(S) SIN EGRESO</div>
       <div style="font-size:.72rem;color:var(--text2)">Reparar inserta el egreso faltante (categoría <strong>Repuestos</strong>) usando la fecha de pago original.</div>
-      <div style="margin-top:.4rem;font-size:.78rem;color:var(--text)">Total a regularizar: <strong style="color:var(--danger);font-family:var(--font-head)">₲${gs(total)}</strong></div>
+      <div style="margin-top:.4rem;font-size:.78rem;color:var(--text)">Total a regularizar: <strong style="color:var(--danger);font-family:var(--font-head)">${fm(total)}</strong></div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;max-height:260px;overflow-y:auto;margin-bottom:.75rem">
       ${filas}

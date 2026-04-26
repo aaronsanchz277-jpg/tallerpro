@@ -25,15 +25,15 @@ async function modalPagosReparacion(repId, montoSugerido = null, onSuccess = nul
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem;margin-bottom:1rem">
       <div style="background:var(--surface2);border-radius:10px;padding:.5rem;text-align:center">
         <div style="font-size:.55rem;color:var(--text2);letter-spacing:1px">TOTAL</div>
-        <div style="font-family:var(--font-head);font-size:.95rem;color:var(--text)">₲${gs(rep?.costo||0)}</div>
+        <div style="font-family:var(--font-head);font-size:.95rem;color:var(--text)">${fm(rep?.costo||0)}</div>
       </div>
       <div style="background:rgba(0,255,136,.08);border-radius:10px;padding:.5rem;text-align:center">
         <div style="font-size:.55rem;color:var(--success);letter-spacing:1px">PAGADO</div>
-        <div style="font-family:var(--font-head);font-size:.95rem;color:var(--success)">₲${gs(totalPagado)}</div>
+        <div style="font-family:var(--font-head);font-size:.95rem;color:var(--success)">${fm(totalPagado)}</div>
       </div>
       <div style="background:${saldo>0?'rgba(255,68,68,.08)':'rgba(0,255,136,.08)'};border-radius:10px;padding:.5rem;text-align:center">
         <div style="font-size:.55rem;color:${saldo>0?'var(--danger)':'var(--success)'};letter-spacing:1px">SALDO</div>
-        <div style="font-family:var(--font-head);font-size:.95rem;color:${saldo>0?'var(--danger)':'var(--success)'}">₲${gs(saldo)}</div>
+        <div style="font-family:var(--font-head);font-size:.95rem;color:${saldo>0?'var(--danger)':'var(--success)'}">${fm(saldo)}</div>
       </div>
     </div>
     ${(pagos||[]).length > 0 ? `
@@ -44,13 +44,13 @@ async function modalPagosReparacion(repId, montoSugerido = null, onSuccess = nul
             <div style="font-size:.82rem">${h(p.metodo||'Efectivo')}</div>
             <div style="font-size:.68rem;color:var(--text2)">${formatFecha(p.fecha)}${p.notas?' · '+h(p.notas):''}</div>
           </div>
-          <div style="font-family:var(--font-head);color:var(--success);font-size:.9rem">₲${gs(p.monto)}</div>
+          <div style="font-family:var(--font-head);color:var(--success);font-size:.9rem">${fm(p.monto)}</div>
         </div>`).join('')}
     </div>` : ''}
     ${saldo > 0 ? `
     <div style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px;margin-bottom:.4rem">REGISTRAR PAGO</div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Monto ₲</label><input class="form-input" id="f-pago-monto" type="number" value="${saldo}" min="1"></div>
+      <div class="form-group"><label class="form-label">Monto ${monedaActual().simbolo}</label><input class="form-input" id="f-pago-monto" type="number" value="${saldo}" min="1"></div>
       <div class="form-group"><label class="form-label">Método</label>
         <select class="form-input" id="f-pago-metodo">
           <option value="Efectivo">Efectivo</option>
@@ -114,7 +114,7 @@ async function guardarPagoReparacion(repId) {
 
       if (monto > saldoActual + 0.01) {
         const exceso = monto - saldoActual;
-        const ok = confirm(`Te estás pasando ₲${gs(exceso)} del saldo (queda ₲${gs(saldoActual)}).\n\n¿Es propina o vale extra del cliente?`);
+        const ok = confirm(`Te estás pasando ${fm(exceso)} del saldo (queda ${fm(saldoActual)}).\n\n¿Es propina o vale extra del cliente?`);
         if (!ok) { restaurarBtn(); return; }
       }
 

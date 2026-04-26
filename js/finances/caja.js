@@ -227,15 +227,15 @@ async function cajaDelDia_cargarDatos(fecha) {
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:.75rem">
         <div style="background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);border-radius:12px;padding:.7rem;text-align:center">
           <div style="font-size:.6rem;color:var(--success);letter-spacing:1px;font-family:var(--font-head)">INGRESOS</div>
-          <div style="font-family:var(--font-head);font-size:1.15rem;color:var(--success)">₲${gs(totalIngresos)}</div>
+          <div style="font-family:var(--font-head);font-size:1.15rem;color:var(--success)">${fm(totalIngresos)}</div>
         </div>
         <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:12px;padding:.7rem;text-align:center">
           <div style="font-size:.6rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">EGRESOS</div>
-          <div style="font-family:var(--font-head);font-size:1.15rem;color:var(--danger)">₲${gs(totalEgresos)}</div>
+          <div style="font-family:var(--font-head);font-size:1.15rem;color:var(--danger)">${fm(totalEgresos)}</div>
         </div>
         <div style="background:${saldo>=0?'rgba(0,229,255,.08)':'rgba(255,68,68,.08)'};border:1px solid ${saldo>=0?'rgba(0,229,255,.25)':'rgba(255,68,68,.25)'};border-radius:12px;padding:.7rem;text-align:center">
           <div style="font-size:.6rem;color:${saldo>=0?'var(--accent)':'var(--danger)'};letter-spacing:1px;font-family:var(--font-head)">SALDO</div>
-          <div style="font-family:var(--font-head);font-size:1.15rem;color:${saldo>=0?'var(--accent)':'var(--danger)'}">₲${gs(saldo)}</div>
+          <div style="font-family:var(--font-head);font-size:1.15rem;color:${saldo>=0?'var(--accent)':'var(--danger)'}">${fm(saldo)}</div>
         </div>
       </div>
 
@@ -253,11 +253,11 @@ async function cajaDelDia_cargarDatos(fecha) {
         ${Object.entries(porMetodo).filter(([,v])=>v>0).map(([met,total]) => `
           <div style="display:flex;justify-content:space-between;padding:.25rem 0;font-size:.8rem">
             <span>${met==='Efectivo'?'💵':met==='Transferencia'?'🏦':met==='Tarjeta'?'💳':met==='Crédito'?'📋':'📎'} ${met}</span>
-            <span style="font-family:var(--font-head);color:var(--success)">₲${gs(total)}</span>
+            <span style="font-family:var(--font-head);color:var(--success)">${fm(total)}</span>
           </div>`).join('') || '<div style="font-size:.78rem;color:var(--text2)">Sin cobros</div>'}
         <div style="display:flex;justify-content:space-between;padding:.4rem 0 0;border-top:1px solid var(--border);margin-top:.4rem;font-size:.8rem">
           <span style="color:var(--text2)">Efectivo en caja (cobros − gastos)</span>
-          <span style="font-family:var(--font-head);color:${efectivoEnCaja>=0?'var(--accent)':'var(--danger)'}">₲${gs(efectivoEnCaja)}</span>
+          <span style="font-family:var(--font-head);color:${efectivoEnCaja>=0?'var(--accent)':'var(--danger)'}">${fm(efectivoEnCaja)}</span>
         </div>
       </div>
 
@@ -278,7 +278,7 @@ async function cajaDelDia_cargarDatos(fecha) {
                 </div>
                 <div style="font-size:.68rem;color:var(--text2);margin-top:2px">${horaDe(it.ts)}${it.sub ? ' · '+h(it.sub) : ''}</div>
               </div>
-              <div style="font-family:var(--font-head);font-size:.95rem;color:${it.tipo==='ingreso'?'var(--success)':'var(--danger)'};flex-shrink:0">${it.tipo==='ingreso'?'+':'-'}₲${gs(it.monto)}</div>
+              <div style="font-family:var(--font-head);font-size:.95rem;color:${it.tipo==='ingreso'?'var(--success)':'var(--danger)'};flex-shrink:0">${it.tipo==='ingreso'?'+':'-'}${fm(it.monto)}</div>
             </div>
           `).join('')}
         </div>
@@ -292,7 +292,7 @@ async function cajaDelDia_cargarDatos(fecha) {
     if (cierre && banner) {
       const cuandoTxt = cierre.cerrado_at ? new Date(cierre.cerrado_at).toLocaleString('es-AR') : '';
       document.getElementById('caja-banner-texto').textContent =
-        `🔒 Caja cerrada${cierre.cerrado_por ? ' por '+cierre.cerrado_por : ''}${cuandoTxt ? ' — '+cuandoTxt : ''}. Saldo declarado: ₲${gs(cierre.saldo||0)}`;
+        `🔒 Caja cerrada${cierre.cerrado_por ? ' por '+cierre.cerrado_por : ''}${cuandoTxt ? ' — '+cuandoTxt : ''}. Saldo declarado: ${fm(cierre.saldo||0)}`;
       banner.style.display = 'flex';
       if (btnCerrar) {
         btnCerrar.textContent = '✓ Cerrada';
@@ -310,7 +310,7 @@ async function cajaDelDia_cargarDatos(fecha) {
 function _kpiMini(label, monto, color) {
   return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.5rem .6rem">
     <div style="font-size:.55rem;color:var(--text2);letter-spacing:1px;font-family:var(--font-head)">${label}</div>
-    <div style="font-family:var(--font-head);font-size:.95rem;color:${color}">₲${gs(monto||0)}</div>
+    <div style="font-family:var(--font-head);font-size:.95rem;color:${color}">${fm(monto||0)}</div>
   </div>`;
 }
 
@@ -427,18 +427,18 @@ async function cargarDatosCierreCaja(fecha) {
     contenido.innerHTML = `
       <div style="background:${netoHoy >= 0 ? 'rgba(0,255,136,.06)' : 'rgba(255,68,68,.06)'};border:1px solid ${netoHoy >= 0 ? 'rgba(0,255,136,.2)' : 'rgba(255,68,68,.2)'};border-radius:12px;padding:1rem;margin-bottom:1rem;text-align:center">
         <div style="font-size:.65rem;color:${netoHoy >= 0 ? 'var(--success)' : 'var(--danger)'};letter-spacing:1px;font-family:var(--font-head)">RESULTADO DEL DÍA</div>
-        <div style="font-family:var(--font-head);font-size:2rem;color:${netoHoy >= 0 ? 'var(--success)' : 'var(--danger)'}">₲${gs(netoHoy)}</div>
+        <div style="font-family:var(--font-head);font-size:2rem;color:${netoHoy >= 0 ? 'var(--success)' : 'var(--danger)'}">${fm(netoHoy)}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
-        <div style="background:rgba(0,255,136,.06);border-radius:10px;padding:.6rem;text-align:center"><div style="font-size:.6rem;color:var(--success)">ENTRADAS</div><div style="font-family:var(--font-head);font-size:1.1rem;color:var(--success)">₲${gs(ingresosHoy)}</div></div>
-        <div style="background:rgba(255,68,68,.06);border-radius:10px;padding:.6rem;text-align:center"><div style="font-size:.6rem;color:var(--danger)">SALIDAS</div><div style="font-family:var(--font-head);font-size:1.1rem;color:var(--danger)">₲${gs(egresosHoy)}</div></div>
+        <div style="background:rgba(0,255,136,.06);border-radius:10px;padding:.6rem;text-align:center"><div style="font-size:.6rem;color:var(--success)">ENTRADAS</div><div style="font-family:var(--font-head);font-size:1.1rem;color:var(--success)">${fm(ingresosHoy)}</div></div>
+        <div style="background:rgba(255,68,68,.06);border-radius:10px;padding:.6rem;text-align:center"><div style="font-size:.6rem;color:var(--danger)">SALIDAS</div><div style="font-family:var(--font-head);font-size:1.1rem;color:var(--danger)">${fm(egresosHoy)}</div></div>
       </div>
       <div style="font-size:.7rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">COBROS POR MÉTODO</div>
-      ${Object.entries(porMetodo).filter(([, v]) => v > 0).map(([met, total]) => `<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.82rem"><span>${met === 'Efectivo' ? '💵' : met === 'Transferencia' ? '🏦' : met === 'Tarjeta' ? '💳' : met === 'Crédito' ? '📋' : '📎'} ${met}</span><span style="font-family:var(--font-head);color:var(--success)">₲${gs(total)}</span></div>`).join('') || '<div style="font-size:.8rem;color:var(--text2);padding:.3rem 0">Sin cobros este día</div>'}
-      ${Object.keys(egresosPorCat).length > 0 ? `<div style="font-size:.7rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px;margin:.75rem 0 .4rem">GASTOS POR CATEGORÍA</div>${Object.entries(egresosPorCat).map(([cat, total]) => `<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.82rem"><span>${cat}</span><span style="font-family:var(--font-head);color:var(--danger)">-₲${gs(total)}</span></div>`).join('')}` : ''}
+      ${Object.entries(porMetodo).filter(([, v]) => v > 0).map(([met, total]) => `<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.82rem"><span>${met === 'Efectivo' ? '💵' : met === 'Transferencia' ? '🏦' : met === 'Tarjeta' ? '💳' : met === 'Crédito' ? '📋' : '📎'} ${met}</span><span style="font-family:var(--font-head);color:var(--success)">${fm(total)}</span></div>`).join('') || '<div style="font-size:.8rem;color:var(--text2);padding:.3rem 0">Sin cobros este día</div>'}
+      ${Object.keys(egresosPorCat).length > 0 ? `<div style="font-size:.7rem;color:var(--danger);font-family:var(--font-head);letter-spacing:1px;margin:.75rem 0 .4rem">GASTOS POR CATEGORÍA</div>${Object.entries(egresosPorCat).map(([cat, total]) => `<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.82rem"><span>${cat}</span><span style="font-family:var(--font-head);color:var(--danger)">-${fm(total)}</span></div>`).join('')}` : ''}
       <div style="background:var(--surface2);border-radius:10px;padding:.75rem;margin-top:1rem;text-align:center">
         <div style="font-size:.65rem;color:var(--accent);letter-spacing:1px;font-family:var(--font-head)">EFECTIVO EN CAJA</div>
-        <div style="font-family:var(--font-head);font-size:1.5rem;color:${efectivoEnCaja >= 0 ? 'var(--accent)' : 'var(--danger)'}">₲${gs(efectivoEnCaja)}</div>
+        <div style="font-family:var(--font-head);font-size:1.5rem;color:${efectivoEnCaja >= 0 ? 'var(--accent)' : 'var(--danger)'}">${fm(efectivoEnCaja)}</div>
         <div style="font-size:.65rem;color:var(--text2)">Efectivo cobrado menos gastos del día</div>
       </div>
     `;

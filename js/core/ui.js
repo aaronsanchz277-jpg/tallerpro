@@ -25,10 +25,29 @@ function closeModal() {
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const tid = () => currentPerfil?.taller_id;
 
+// ─── MONEDA CONFIGURABLE POR TALLER ──────────────────────────────────────────
+// Lee la configuración del taller actual (símbolo + locale + país) con
+// fallback Paraguay para que la app siga funcionando antes de tener perfil
+// cargado o si el taller todavía no tiene los campos guardados en la DB.
+function monedaActual() {
+  const t = (typeof currentPerfil !== 'undefined' && currentPerfil) ? currentPerfil.talleres : null;
+  return {
+    simbolo: (t && t.moneda_simbolo) || '₲',
+    locale:  (t && t.moneda_locale)  || 'es-PY',
+    pais:    (t && t.pais)           || 'PY'
+  };
+}
+
 function gs(n) {
   let num = parseFloat(n);
   if (isNaN(num)) num = 0;
-  return num.toLocaleString('es-PY');
+  return num.toLocaleString(monedaActual().locale);
+}
+
+// fm = "format money": símbolo + número con separador de miles según locale.
+// Pegado (sin espacio) porque ese es el patrón hardcodeado original (`${fm(x)}`).
+function fm(n) {
+  return monedaActual().simbolo + gs(n);
 }
 
 function formatPhone(input) {

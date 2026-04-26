@@ -45,7 +45,7 @@ async function misTrabajos({ filtro='en_progreso' }={}) {
             <div class="card-info">
               <div class="card-name">${h(r.descripcion)}</div>
               <div class="card-sub">${r.vehiculos ? h(r.vehiculos.patente)+' · '+h(r.vehiculos.marca) : t('sinVehiculo')} · ${r.clientes ? h(r.clientes.nombre) : ''}</div>
-              <div class="card-sub">${formatFecha(r.fecha)} ${r.costo ? '· ₲'+gs(r.costo) : ''}</div>
+              <div class="card-sub">${formatFecha(r.fecha)} ${r.costo ? '· ' + monedaActual().simbolo + gs(r.costo) : ''}</div>
             </div>
             <span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span>
           </div>
@@ -115,7 +115,7 @@ async function modalGestionarTaller(tallerId, tallerNombre) {
     <div class="modal-title">Gestionar: ${tallerNombre}</div>
     <div class="form-group"><label class="form-label">Plan</label>
       <select class="form-input" id="f-sa-plan">
-        ${(planes||[]).map(p => `<option value="${p.id}" ${sub?.plan_id===p.id?'selected':''}>${h(p.nombre)} — ₲${gs(p.precio)}/mes</option>`).join('')}
+        ${(planes||[]).map(p => `<option value="${p.id}" ${sub?.plan_id===p.id?'selected':''}>${h(p.nombre)} — ₲${(p.precio||0).toLocaleString('es-PY')}/mes</option>`).join('')}
       </select>
     </div>
     <div class="form-group"><label class="form-label">Estado</label>
@@ -179,18 +179,41 @@ async function activarPlan365Dias(tallerId, subId) {
 }
 
 // ─── CONFIGURAR DATOS DEL TALLER (solo admin o superadmin) ───────────────────
+// País / Moneda: presets para los países hispanohablantes más comunes en
+// los que opera la app. La elección define el símbolo (₲, $, Bs, etc.) y
+// el locale que usa toLocaleString para los separadores de miles.
+// Default Paraguay: mantiene el comportamiento histórico de la app.
+const MONEDA_PRESETS = [
+  { pais: 'PY', label: '🇵🇾 Paraguay (₲)',   simbolo: '₲',  locale: 'es-PY' },
+  { pais: 'AR', label: '🇦🇷 Argentina ($)',  simbolo: '$',  locale: 'es-AR' },
+  { pais: 'UY', label: '🇺🇾 Uruguay ($U)',   simbolo: '$U', locale: 'es-UY' },
+  { pais: 'BO', label: '🇧🇴 Bolivia (Bs)',   simbolo: 'Bs', locale: 'es-BO' },
+  { pais: 'CL', label: '🇨🇱 Chile ($)',      simbolo: '$',  locale: 'es-CL' },
+  { pais: 'PE', label: '🇵🇪 Perú (S/)',      simbolo: 'S/', locale: 'es-PE' },
+  { pais: 'CO', label: '🇨🇴 Colombia ($)',   simbolo: '$',  locale: 'es-CO' },
+  { pais: 'MX', label: '🇲🇽 México ($)',     simbolo: '$',  locale: 'es-MX' }
+];
+
 async function modalConfigDatos() {
   const { data: taller } = await sb.from('talleres').select('*').eq('id', tid()).single();
   if (!taller) return;
+  const paisActual = taller.pais || 'PY';
   openModal(`
     <div class="modal-title">⚙️ Configurar Taller</div>
     <div class="form-group"><label class="form-label">Nombre del taller</label><input class="form-input" id="f-taller-nombre" value="${h(taller.nombre||'')}"></div>
     <div class="form-group"><label class="form-label">RUC</label><input class="form-input" id="f-taller-ruc" value="${h(taller.ruc||'')}" placeholder="80012345-6"></div>
     <div class="form-group"><label class="form-label">Teléfono / WhatsApp principal</label>${phoneInput('f-taller-tel',taller.telefono,'0981 123 456')}</div>
     <div class="form-group"><label class="form-label">Dirección</label><input class="form-input" id="f-taller-dir" value="${h(taller.direccion||'')}" placeholder="Av. Ejemplo 123"></div>
+    <div class="form-group">
+      <label class="form-label">País / Moneda</label>
+      <select class="form-input" id="f-taller-pais">
+        ${MONEDA_PRESETS.map(p => `<option value="${p.pais}" ${p.pais===paisActual?'selected':''}>${p.label}</option>`).join('')}
+      </select>
+    </div>
     <div style="background:var(--surface2);border-radius:8px;padding:.75rem;margin-top:.5rem;margin-bottom:1rem">
       <div style="font-size:.75rem;color:var(--text2)">💡 El RUC y dirección aparecen en las facturas</div>
       <div style="font-size:.75rem;color:var(--text2)">💡 El teléfono se usa para WhatsApp</div>
+      <div style="font-size:.75rem;color:var(--text2)">💡 La moneda se aplica en toda la app (montos, PDFs, dashboard)</div>
     </div>
     <button class="btn-primary" onclick="guardarConfigDatos()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
@@ -201,14 +224,26 @@ async function guardarConfigDatos() {
   const ruc = document.getElementById('f-taller-ruc').value.trim();
   const telefono = document.getElementById('f-taller-tel').value.trim();
   const direccion = document.getElementById('f-taller-dir').value.trim();
+  const pais = document.getElementById('f-taller-pais').value;
   if (!nombre) { toast('El nombre es obligatorio','error'); return; }
-  const { error } = await sb.from('talleres').update({ nombre, ruc, telefono, direccion }).eq('id', tid());
+  const preset = MONEDA_PRESETS.find(p => p.pais === pais) || MONEDA_PRESETS[0];
+  const { error } = await sb.from('talleres').update({
+    nombre, ruc, telefono, direccion,
+    pais: preset.pais,
+    moneda_simbolo: preset.simbolo,
+    moneda_locale:  preset.locale
+  }).eq('id', tid());
   if (error) { toast('Error: '+error.message,'error'); return; }
+  // Actualizar el perfil en memoria para que la moneda nueva tenga efecto
+  // sin tener que cerrar sesión y volver a entrar.
   if (currentPerfil?.talleres) {
     currentPerfil.talleres.nombre = nombre;
     currentPerfil.talleres.telefono = telefono;
     currentPerfil.talleres.ruc = ruc;
     currentPerfil.talleres.direccion = direccion;
+    currentPerfil.talleres.pais = preset.pais;
+    currentPerfil.talleres.moneda_simbolo = preset.simbolo;
+    currentPerfil.talleres.moneda_locale = preset.locale;
   }
   toast('Taller actualizado','success');
   closeModal();
@@ -334,19 +369,19 @@ async function miCobro() {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
           <div style="background:var(--surface2);border-radius:8px;padding:.6rem;text-align:center">
             <div style="font-size:.6rem;color:var(--text2);letter-spacing:1px">SUELDO BASE</div>
-            <div style="font-family:var(--font-head);font-size:1rem;color:var(--success);margin-top:.2rem">₲${gs(totalSueldo)}</div>
+            <div style="font-family:var(--font-head);font-size:1rem;color:var(--success);margin-top:.2rem">${fm(totalSueldo)}</div>
           </div>
           <div style="background:rgba(0,229,255,.08);border-radius:8px;padding:.6rem;text-align:center">
             <div style="font-size:.6rem;color:var(--accent);letter-spacing:1px">COMISIONES</div>
-            <div style="font-family:var(--font-head);font-size:1rem;color:var(--accent);margin-top:.2rem">+₲${gs(totalComisiones)}</div>
+            <div style="font-family:var(--font-head);font-size:1rem;color:var(--accent);margin-top:.2rem">+${fm(totalComisiones)}</div>
           </div>
           <div style="background:rgba(255,204,0,.08);border-radius:8px;padding:.6rem;text-align:center">
             <div style="font-size:.6rem;color:var(--warning);letter-spacing:1px">VALES TOMADOS</div>
-            <div style="font-family:var(--font-head);font-size:1rem;color:var(--warning);margin-top:.2rem">-₲${gs(totalVales)}</div>
+            <div style="font-family:var(--font-head);font-size:1rem;color:var(--warning);margin-top:.2rem">-${fm(totalVales)}</div>
           </div>
           <div style="background:${totalNeto>=0?'rgba(0,255,136,.12)':'rgba(255,68,68,.12)'};border-radius:8px;padding:.6rem;text-align:center;border:1px solid ${totalNeto>=0?'rgba(0,255,136,.3)':'rgba(255,68,68,.3)'}">
             <div style="font-size:.6rem;color:${totalNeto>=0?'var(--success)':'var(--danger)'};letter-spacing:1px">A COBRAR</div>
-            <div style="font-family:var(--font-head);font-size:1.1rem;color:${totalNeto>=0?'var(--success)':'var(--danger)'};margin-top:.2rem;font-weight:700">₲${gs(totalNeto)}</div>
+            <div style="font-family:var(--font-head);font-size:1.1rem;color:${totalNeto>=0?'var(--success)':'var(--danger)'};margin-top:.2rem;font-weight:700">${fm(totalNeto)}</div>
           </div>
         </div>
       </div>
@@ -365,7 +400,7 @@ async function miCobro() {
                 <div class="card-name">${h(c.rep.descripcion || 'Reparación')}</div>
                 <div class="card-sub">${c.rep.vehiculos ? h(c.rep.vehiculos.patente) + ' · ' : ''}${formatFecha(c.rep.fecha)}${c.horas > 0 ? ` · ⏱ ${c.horas} hs` : ''}</div>
               </div>
-              <div style="font-family:var(--font-head);color:var(--accent);font-size:.95rem">+₲${gs(c.pago)}</div>
+              <div style="font-family:var(--font-head);color:var(--accent);font-size:.95rem">+${fm(c.pago)}</div>
             </div>
           </div>`).join('')}
 
@@ -382,7 +417,7 @@ async function miCobro() {
                 <div class="card-name">${h(v.concepto || 'Vale')}</div>
                 <div class="card-sub">${formatFecha(v.fecha)}</div>
               </div>
-              <div style="font-family:var(--font-head);color:var(--warning);font-size:.95rem">-₲${gs(v.monto)}</div>
+              <div style="font-family:var(--font-head);color:var(--warning);font-size:.95rem">-${fm(v.monto)}</div>
             </div>
           </div>`).join('')}
 

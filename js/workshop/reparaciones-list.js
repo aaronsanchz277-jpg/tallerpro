@@ -154,7 +154,7 @@ async function reparaciones({ filtro='todos', search='', offset=0, tipo='', meca
           <div class="card-info">
             <div class="card-name">${h(r.descripcion)}</div>
             <div class="card-sub">${r.tipo_trabajo?h(r.tipo_trabajo)+' · ':''}${r.vehiculos?h(r.vehiculos.marca)+' '+h(r.vehiculos.patente):''} ${r.clientes?' · '+h(r.clientes.nombre):''}</div>
-            <div class="card-sub">₲${gs(r.costo)} · ${formatFecha(r.fecha)}</div>
+            <div class="card-sub">${fm(r.costo)} · ${formatFecha(r.fecha)}</div>
             ${dispo}
             ${espera}
           </div>

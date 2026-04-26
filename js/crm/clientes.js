@@ -72,12 +72,12 @@ async function detalleCliente(id) {
       <div class="info-item"><div class="label">${t('cliTel')}</div><div class="value">${h(c.telefono||'-')}</div></div>
       <div class="info-item"><div class="label">${t('cliEmail')}</div><div class="value">${h(c.email||'-')}</div></div>
       <div class="info-item"><div class="label">${t('cliVehiculos')}</div><div class="value">${(veh||[]).length}</div></div>
-      <div class="info-item"><div class="label">${t('cliFiadoPend')}</div><div class="value" style="color:${totalCrédito>0?'var(--danger)':'var(--success)'}">₲${gs(totalCrédito)}</div></div>
+      <div class="info-item"><div class="label">${t('cliFiadoPend')}</div><div class="value" style="color:${totalCrédito>0?'var(--danger)':'var(--success)'}">${fm(totalCrédito)}</div></div>
     </div>
 
     ${(citas||[]).length > 0 || totalCrédito > 0 ? `<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1rem">
       ${(citas||[]).map(ci => `<div style="background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);border-radius:8px;padding:.4rem .6rem;font-size:.72rem;color:var(--accent)">📅 ${formatFecha(ci.fecha)}${ci.hora?' '+ci.hora.slice(0,5):''} — ${h(ci.descripcion||'Turno')}</div>`).join('')}
-      ${totalCrédito > 0 ? `<div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:8px;padding:.4rem .6rem;font-size:.72rem;color:var(--danger)">⚠ Debe ₲${gs(totalCrédito)}</div>` : ''}
+      ${totalCrédito > 0 ? `<div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.2);border-radius:8px;padding:.4rem .6rem;font-size:.72rem;color:var(--danger)">⚠ Debe ${fm(totalCrédito)}</div>` : ''}
     </div>` : ''}
 
     ${canEdit ? `
@@ -100,7 +100,7 @@ async function detalleCliente(id) {
     <div class="sub-section">
       <div class="sub-section-title">${t('cliUltReps')}</div>
       ${(reps||[]).length===0 ? '<p style="color:var(--text2);font-size:.85rem">Sin trabajos</p>' :
-        (reps||[]).map(r => `<div class="card" style="margin-bottom:.5rem" onclick="detalleReparacion('${r.id}')"><div class="card-header"><div class="card-info"><div class="card-name">${h(r.descripcion)}</div><div class="card-sub">₲${gs(r.costo)} · ${formatFecha(r.fecha)}</div></div><span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span></div></div>`).join('')}
+        (reps||[]).map(r => `<div class="card" style="margin-bottom:.5rem" onclick="detalleReparacion('${r.id}')"><div class="card-header"><div class="card-info"><div class="card-name">${h(r.descripcion)}</div><div class="card-sub">${fm(r.costo)} · ${formatFecha(r.fecha)}</div></div><span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span></div></div>`).join('')}
     </div>`;
 }
 

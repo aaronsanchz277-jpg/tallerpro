@@ -232,7 +232,7 @@ async function pushCheckMisPresupuestos() {
       if (n >= 3) return;
       if (p.estado === 'generado' && prev[p.id] !== 'generado') {
         const total = (typeof gs === 'function') ? gs(p.total||0) : (p.total||0);
-        pushNotify(`📋 Nuevo presupuesto`, `${p.descripcion || 'Presupuesto'} — ₲${total}`, 'pv2-' + p.id, () => navigate('mis-presupuestos'));
+        pushNotify(`📋 Nuevo presupuesto`, `${p.descripcion || 'Presupuesto'} — ${monedaActual().simbolo}${total}`, 'pv2-' + p.id, () => navigate('mis-presupuestos'));
         n++;
       }
     });

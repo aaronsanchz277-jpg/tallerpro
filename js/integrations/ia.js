@@ -203,7 +203,7 @@ async function ia_enviar() {
   await safeCall(async () => {
     const ctx = await ia_getContexto();
     const deudoresInfo = ctx.deudores.length > 0 
-      ? ctx.deudores.map(d => `${d.clientes?.nombre || 'Sin nombre'}: ₲${gs(d.monto)}`).join(', ')
+      ? ctx.deudores.map(d => `${d.clientes?.nombre || 'Sin nombre'}: ${fm(d.monto)}`).join(', ')
       : 'No hay deudores';
 
     const sysPrompt = `Sos la secretaria IA de un taller mecánico en Paraguay. Tu nombre es TallerIA.
@@ -220,7 +220,7 @@ CONTEXTO ACTUAL DEL TALLER "${currentPerfil?.talleres?.nombre || 'Taller'}":
 - Clientes (${ctx.totalCli} total): ${JSON.stringify(ctx.clientes.slice(0,10).map(c=>({id:c.id,n:c.nombre,t:c.telefono})))}
 - Vehículos (${ctx.totalVeh} total): ${JSON.stringify(ctx.vehiculos.slice(0,10).map(v=>({id:v.id,p:v.patente,m:v.marca+' '+(v.modelo||'')})))}
 - Trabajos activos (${ctx.repsPend.length}): ${JSON.stringify(ctx.repsPend.slice(0,10).map(r=>({id:r.id,desc:r.descripcion,est:r.estado,auto:r.vehiculos?.patente,cli:r.clientes?.nombre})))}
-- Ingresos hoy: ₲${ctx.ingresosHoy.toLocaleString()}
+- Ingresos hoy: ${monedaActual().simbolo}${ctx.ingresosHoy.toLocaleString()}
 - Stock bajo: ${ctx.invBajo.length > 0 ? ctx.invBajo.map(i=>i.nombre+' ('+i.cantidad+')').join(', ') : 'todo OK'}
 - Deudores: ${deudoresInfo}
 - Fecha: ${ctx.hoy}
@@ -362,13 +362,13 @@ async function ia_ejecutar(a) {
         const hoy = new Date().toISOString().split('T')[0];
         const { data } = await sb.from('reparaciones').select('costo').eq('taller_id',tid()).eq('estado','finalizado').eq('fecha',hoy);
         const total = (data||[]).reduce((s,r)=>s+parseFloat(r.costo||0),0);
-        ia_addMsg(`📊 Ingresos de hoy: ₲${gs(total)} (${data?.length||0} trabajos finalizados).`, false);
+        ia_addMsg(`📊 Ingresos de hoy: ${fm(total)} (${data?.length||0} trabajos finalizados).`, false);
         break;
       }
       case 'consultar_deudores': {
         const { data } = await sb.from('fiados').select('monto,clientes(nombre)').eq('taller_id',tid()).eq('pagado',false);
         if (!data?.length) { ia_addMsg('No hay deudores. ¡Excelente! 🎉', false); return; }
-        ia_addMsg(`Deudores:\n${data.map(d=>'• '+(d.clientes?.nombre||'Sin nombre')+': ₲'+gs(d.monto)).join('\n')}`, false);
+        ia_addMsg(`Deudores:\n${data.map(d=>'• '+(d.clientes?.nombre||'Sin nombre')+': ' + monedaActual().simbolo + gs(d.monto)).join('\n')}`, false);
         break;
       }
       case 'registrar_vale': {
@@ -394,7 +394,7 @@ async function ia_ejecutar(a) {
         if (error) { ia_addMsg('Error: '+error.message, false); return; }
         clearCache('empleados');
         clearCache('finanzas');
-        ia_addMsg(`✓ Vale de ₲${gs(cleanNum(a.monto))} registrado para ${emp.nombre}.`, false);
+        ia_addMsg(`✓ Vale de ${fm(cleanNum(a.monto))} registrado para ${emp.nombre}.`, false);
         break;
       }
       case 'mensaje':

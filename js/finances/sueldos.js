@@ -158,8 +158,8 @@ async function detallePeriodo(periodoId) {
       <div><div class="detail-name">${formatFecha(periodo.fecha_inicio)} — ${formatFecha(periodo.fecha_fin)}</div><div class="detail-sub">${periodo.estado==='cerrado'?'Cerrado':'Abierto'}</div></div>
     </div>
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-value" style="font-size:1.2rem">₲${gs(totalLiquidado)}</div><div class="stat-label">TOTAL</div></div>
-      <div class="stat-card"><div class="stat-value" style="font-size:1.2rem;color:var(--success)">₲${gs(totalPagado)}</div><div class="stat-label">PAGADO</div></div>
+      <div class="stat-card"><div class="stat-value" style="font-size:1.2rem">${fm(totalLiquidado)}</div><div class="stat-label">TOTAL</div></div>
+      <div class="stat-card"><div class="stat-value" style="font-size:1.2rem;color:var(--success)">${fm(totalPagado)}</div><div class="stat-label">PAGADO</div></div>
     </div>
     ${periodo.estado==='abierto'?`<button class="btn-primary" style="margin-bottom:1rem" onclick="generarLiquidacionesConSafeCall('${periodoId}')">⚡ Generar liquidaciones</button>`:''}
     ${(liquidaciones||[]).length === 0 ? '<div class="empty"><p>Sin liquidaciones. Tocá "Generar liquidaciones" para crear.</p></div>' :
@@ -169,10 +169,10 @@ async function detallePeriodo(periodoId) {
           <div class="card-avatar">👤</div>
           <div class="card-info">
             <div class="card-name">${h(l.empleados?.nombre||'?')}</div>
-            <div class="card-sub">Base ₲${gs(l.sueldo_base)}${l.total_extra?' · Trabajos y comisiones ₲'+gs(l.total_extra):''}${l.total_bonos?' · Bonos ₲'+gs(l.total_bonos):''}${l.total_descuentos?' · Desc ₲'+gs(l.total_descuentos):''}</div>
+            <div class="card-sub">Base ${fm(l.sueldo_base)}${l.total_extra?' · Trabajos y comisiones ' + monedaActual().simbolo + gs(l.total_extra):''}${l.total_bonos?' · Bonos ' + monedaActual().simbolo + gs(l.total_bonos):''}${l.total_descuentos?' · Desc ' + monedaActual().simbolo + gs(l.total_descuentos):''}</div>
           </div>
           <div style="text-align:right">
-            <div style="font-family:var(--font-head);font-size:1rem;color:${l.estado==='pagado'?'var(--success)':'var(--accent)'}">₲${gs(l.total_liquidado)}</div>
+            <div style="font-family:var(--font-head);font-size:1rem;color:${l.estado==='pagado'?'var(--success)':'var(--accent)'}">${fm(l.total_liquidado)}</div>
             ${l.estado!=='pagado'&&periodo.estado==='abierto'?`<button onclick="registrarPagoSueldoConSafeCall('${l.id}')" style="font-size:.65rem;background:var(--success);color:#000;border:none;border-radius:6px;padding:2px 8px;cursor:pointer;margin-top:4px">Pagar</button>`:`<span style="font-size:.65rem;color:var(--success)">✓ Pagado</span>`}
           </div>
         </div>
@@ -466,7 +466,7 @@ function renderColumnaPeriodoSolapado(p, liqs, idA, idB) {
     <details style="margin-bottom:.5rem;font-size:.72rem;color:var(--text2)">
       <summary style="cursor:pointer">Ver liquidaciones (${liqs.length})</summary>
       <ul style="margin:.25rem 0 0 .9rem;padding:0">
-        ${liqs.map(l => `<li>${h(l.empleados?.nombre||'?')} · ₲${gs(l.total_liquidado)} ${l.estado==='pagado'?'<span style="color:var(--success)">✓ pagada</span>':'<span style="color:var(--accent)">⏳ pendiente</span>'}</li>`).join('')}
+        ${liqs.map(l => `<li>${h(l.empleados?.nombre||'?')} · ${fm(l.total_liquidado)} ${l.estado==='pagado'?'<span style="color:var(--success)">✓ pagada</span>':'<span style="color:var(--accent)">⏳ pendiente</span>'}</li>`).join('')}
       </ul>
     </details>` : '<div style="font-size:.72rem;color:var(--text2);margin-bottom:.5rem">Sin liquidaciones</div>';
   const btnsBloqueados = `
@@ -479,8 +479,8 @@ function renderColumnaPeriodoSolapado(p, liqs, idA, idB) {
     <div style="font-family:var(--font-head);font-size:.9rem;margin-bottom:.25rem">${formatFecha(p.fecha_inicio)} — ${formatFecha(p.fecha_fin)}</div>
     <div style="font-size:.72rem;color:var(--text2);margin-bottom:.5rem">${p.estado==='cerrado'?'✓ Cerrado':'⏳ Abierto'}</div>
     <div style="font-size:.75rem;margin-bottom:.5rem;line-height:1.4">
-      <div>Pagadas: <strong>${pagadas.length}</strong>${pagadas.length?` · ₲${gs(totalPag)}`:''}</div>
-      <div>Pendientes: <strong>${pendientes.length}</strong>${pendientes.length?` · ₲${gs(totalPen)}`:''}</div>
+      <div>Pagadas: <strong>${pagadas.length}</strong>${pagadas.length?` · ${fm(totalPag)}`:''}</div>
+      <div>Pendientes: <strong>${pendientes.length}</strong>${pendientes.length?` · ${fm(totalPen)}`:''}</div>
     </div>
     ${detalle}
     ${puedeTocar ? btnsActivos : btnsBloqueados}

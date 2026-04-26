@@ -73,7 +73,7 @@ async function barcode_accionProducto(code) {
       <div class="modal-title">📦 ${h(data.nombre)}</div>
       <div class="info-grid" style="margin-bottom:1rem">
         <div class="info-item"><div class="label">Stock</div><div class="value" style="color:${bajo?'var(--danger)':'var(--success)'}">${data.cantidad} ${h(data.unidad||'')}</div></div>
-        <div class="info-item"><div class="label">Precio</div><div class="value">₲${gs(data.precio_unitario)}</div></div>
+        <div class="info-item"><div class="label">Precio</div><div class="value">${fm(data.precio_unitario)}</div></div>
         ${data.zona?`<div class="info-item"><div class="label">Zona</div><div class="value">📍 ${h(data.zona)}</div></div>`:''}
         ${data.categoria?`<div class="info-item"><div class="label">Categoría</div><div class="value">${h(data.categoria)}</div></div>`:''}
       </div>

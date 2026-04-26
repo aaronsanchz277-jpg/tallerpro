@@ -78,27 +78,27 @@ async function detalleReparacion(id) {
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
         <span style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px">COBRADO AL CLIENTE</span>
-        <span style="font-family:var(--font-head);font-size:1.4rem;color:var(--success)">₲${gs(r.costo)}</span>
+        <span style="font-family:var(--font-head);font-size:1.4rem;color:var(--success)">${fm(r.costo)}</span>
       </div>
       ${costoRep > 0 && puedeVerCostos ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border)">
         <span style="font-size:.78rem;color:var(--text2)">Repuestos gastados</span>
-        <span style="font-size:.85rem;color:var(--danger)">-₲${gs(costoRep)}</span>
+        <span style="font-size:.85rem;color:var(--danger)">-${fm(costoRep)}</span>
       </div>` : ''}
       ${totalPagoMecanicos > 0 && puedeVerCostos ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border)">
         <span style="font-size:.78rem;color:var(--text2)">Mano de obra (mecánicos)</span>
-        <span style="font-size:.85rem;color:var(--danger)">-₲${gs(totalPagoMecanicos)}</span>
+        <span style="font-size:.85rem;color:var(--danger)">-${fm(totalPagoMecanicos)}</span>
       </div>` : ''}
       ${puedeVerGanancia && cobrado > 0 ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border)">
         <span style="font-size:.78rem;font-weight:600">Ganancia real</span>
-        <span style="font-family:var(--font-head);font-size:1.1rem;color:${gananciaReal > 0 ? 'var(--accent)' : 'var(--danger)'}">₲${gs(gananciaReal)} <span style="font-size:.7rem;color:var(--text2)">(${pctGanancia}%)</span></span>
+        <span style="font-family:var(--font-head);font-size:1.1rem;color:${gananciaReal > 0 ? 'var(--accent)' : 'var(--danger)'}">${fm(gananciaReal)} <span style="font-size:.7rem;color:var(--text2)">(${pctGanancia}%)</span></span>
       </div>` : ''}
       ${saldo > 0 ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border);margin-top:.4rem">
         <span style="font-size:.78rem;color:var(--warning)">SALDO PENDIENTE</span>
-        <span style="font-family:var(--font-head);font-size:1rem;color:var(--warning)">₲${gs(saldo)}</span>
+        <span style="font-family:var(--font-head);font-size:1rem;color:var(--warning)">${fm(saldo)}</span>
       </div>` : totalPagado > 0 ? `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-top:1px solid var(--border);margin-top:.4rem">
         <span style="font-size:.78rem;color:var(--success)">TOTALMENTE PAGADO</span>
@@ -113,7 +113,7 @@ async function detalleReparacion(id) {
         ${canEdit ? `<button onclick="modalAgregarItemReparacion('${id}')" style="background:var(--surface2);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:.25rem .5rem;font-size:.7rem;cursor:pointer">+ Agregar</button>` : ''}
       </div>
       ${renderItemsReparacion(items)}
-      ${items.length > 0 ? `<div style="text-align:right;margin-top:.5rem;font-size:.8rem;color:var(--accent)">Total ítems: ₲${gs(items.reduce((s, i) => s + parseFloat(i.total || i.precio_unitario * i.cantidad), 0))}</div>` : ''}
+      ${items.length > 0 ? `<div style="text-align:right;margin-top:.5rem;font-size:.8rem;color:var(--accent)">Total ítems: ${fm(items.reduce((s, i) => s + parseFloat(i.total || i.precio_unitario * i.cantidad), 0))}</div>` : ''}
     </div>
 
     ${r.notas ? `<div class="info-item" style="margin-bottom:1rem"><div class="label">Notas</div><div class="value">${h(r.notas)}</div></div>` : ''}
@@ -153,7 +153,7 @@ async function detalleReparacion(id) {
     ${isCliente && aprobacion === 'pendiente' && r.costo > 0 ? `
     <div style="background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.2);border-radius:12px;padding:1rem;margin-bottom:1rem;text-align:center">
       <div style="font-family:var(--font-head);font-size:.9rem;color:var(--text);margin-bottom:.5rem">¿Aprobás este presupuesto?</div>
-      <div style="font-size:.85rem;color:var(--text2);margin-bottom:.75rem">${h(r.descripcion)} — ₲${gs(r.costo)}</div>
+      <div style="font-size:.85rem;color:var(--text2);margin-bottom:.75rem">${h(r.descripcion)} — ${fm(r.costo)}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
         <button onclick="aprobarPresupuestoCliente('${id}','aprobado')" style="background:rgba(0,255,136,.15);color:var(--success);border:1px solid rgba(0,255,136,.3);border-radius:10px;padding:.6rem;font-family:var(--font-head);font-size:.9rem;cursor:pointer">✓ APROBAR</button>
         <button onclick="aprobarPresupuestoCliente('${id}','rechazado')" style="background:rgba(255,68,68,.1);color:var(--danger);border:1px solid rgba(255,68,68,.3);border-radius:10px;padding:.6rem;font-family:var(--font-head);font-size:.9rem;cursor:pointer">✕ RECHAZAR</button>
@@ -198,7 +198,7 @@ async function detalleReparacion(id) {
     const linkEl = document.getElementById('rep-presupuesto-link');
     if (linkEl && ppto) {
       linkEl.innerHTML = `<div style="background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.2);border-radius:10px;padding:.6rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="detallePresupuesto('${ppto.id}')">
-        <div><div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">PRESUPUESTO ORIGEN</div><div style="font-size:.82rem;color:var(--text)">${h(ppto.descripcion || 'Presupuesto')} — ₲${gs(ppto.total || 0)}</div></div>
+        <div><div style="font-size:.68rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">PRESUPUESTO ORIGEN</div><div style="font-size:.82rem;color:var(--text)">${h(ppto.descripcion || 'Presupuesto')} — ${fm(ppto.total || 0)}</div></div>
         <span style="color:var(--accent);font-size:.85rem">Ver →</span>
       </div>`;
     }
@@ -234,8 +234,8 @@ async function cambiarEstado(id, estado) {
       // Copy distinto según haya pagos parciales o ningún pago, así el
       // admin entiende exactamente qué decisión está tomando.
       const confirmMsg = totalPagado === 0
-        ? `No registraste ningún pago para este trabajo (₲${gs(saldo)}).\n\n¿Querés cobrarlo ahora?\n\n• Aceptar → registrás el pago ahora\n• Cancelar → finalizo igual y queda en 💰 Por cobrar para registrar el pago después`
-        : `Queda un saldo pendiente de ₲${gs(saldo)}.\n\n¿Querés cobrar ahora la diferencia?\n\n• Aceptar → registrás el pago ahora\n• Cancelar → finalizo igual y el saldo queda en 💰 Por cobrar`;
+        ? `No registraste ningún pago para este trabajo (${fm(saldo)}).\n\n¿Querés cobrarlo ahora?\n\n• Aceptar → registrás el pago ahora\n• Cancelar → finalizo igual y queda en 💰 Por cobrar para registrar el pago después`
+        : `Queda un saldo pendiente de ${fm(saldo)}.\n\n¿Querés cobrar ahora la diferencia?\n\n• Aceptar → registrás el pago ahora\n• Cancelar → finalizo igual y el saldo queda en 💰 Por cobrar`;
       if (confirm(confirmMsg)) {
         closeModal();
         await modalPagosReparacion(id, saldo);
@@ -247,7 +247,7 @@ async function cambiarEstado(id, estado) {
   await offlineUpdate('reparaciones', { estado }, 'id', id);
   clearCache('reparaciones');
   if (estado === 'finalizado' && saldoFinal > 0) {
-    toast(`Trabajo finalizado. Quedó en 💰 Por cobrar (₲${gs(saldoFinal)})`, 'info');
+    toast(`Trabajo finalizado. Quedó en 💰 Por cobrar (${fm(saldoFinal)})`, 'info');
   } else {
     toast('Estado actualizado', 'success');
   }
@@ -271,7 +271,7 @@ function enviarAprobacionWhatsApp(repId) {
     if (!r?.clientes?.telefono) return;
     const tel = r.clientes.telefono.replace(/\D/g, '');
     const tallerNombre = currentPerfil?.talleres?.nombre || 'TallerPro';
-    const msg = `Hola ${r.clientes.nombre}! Soy del taller ${tallerNombre}. Te paso el presupuesto para tu vehículo ${r.vehiculos?.patente || ''}:\n\n🔧 ${r.descripcion}\n💰 Costo: ₲${gs(r.costo)}\n\n¿Aprobás este trabajo? Respondé con SI o NO.`;
+    const msg = `Hola ${r.clientes.nombre}! Soy del taller ${tallerNombre}. Te paso el presupuesto para tu vehículo ${r.vehiculos?.patente || ''}:\n\n🔧 ${r.descripcion}\n💰 Costo: ${fm(r.costo)}\n\n¿Aprobás este trabajo? Respondé con SI o NO.`;
     window.open(`https://wa.me/595${tel}?text=${encodeURIComponent(msg)}`);
   });
 }
@@ -279,8 +279,8 @@ function enviarAprobacionWhatsApp(repId) {
 function modalActualizarCosto(id, costoActual, repuestosActual) {
   openModal(`
     <div class="modal-title">✏️ Actualizar costos</div>
-    <div class="form-group"><label class="form-label">Cobrado al cliente ₲</label><input class="form-input" id="f-upd-costo" type="number" min="0" value="${costoActual || 0}"></div>
-    <div class="form-group"><label class="form-label">Gastado en repuestos ₲</label><input class="form-input" id="f-upd-rep" type="number" min="0" value="${repuestosActual || 0}"></div>
+    <div class="form-group"><label class="form-label">Cobrado al cliente ${monedaActual().simbolo}</label><input class="form-input" id="f-upd-costo" type="number" min="0" value="${costoActual || 0}"></div>
+    <div class="form-group"><label class="form-label">Gastado en repuestos ${monedaActual().simbolo}</label><input class="form-input" id="f-upd-rep" type="number" min="0" value="${repuestosActual || 0}"></div>
     <div class="form-group"><label class="form-label">Notas adicionales</label><textarea class="form-input" id="f-upd-notas" rows="2" placeholder="Cambió el presupuesto porque..."></textarea></div>
     <button class="btn-primary" onclick="guardarActualizarCosto('${id}')">Actualizar</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);

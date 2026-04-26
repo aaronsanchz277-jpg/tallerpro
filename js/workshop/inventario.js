@@ -36,7 +36,7 @@ async function inventario({ search='', offset=0, zona='' }={}) {
           <div class="inv-icon">📦</div>
           <div class="inv-info">
             <div class="inv-name">${h(item.nombre)}</div>
-            <div class="inv-meta">${h(item.categoria||t('sinCategoria'))}${item.zona?' · 📍'+h(item.zona):''}${item.ubicacion_id?' · 🗂️':' '} · ₲${gs(item.precio_unitario)} c/u</div>
+            <div class="inv-meta">${h(item.categoria||t('sinCategoria'))}${item.zona?' · 📍'+h(item.zona):''}${item.ubicacion_id?' · 🗂️':' '} · ${fm(item.precio_unitario)} c/u</div>
           </div>
           <div class="inv-stock">
             <div class="inv-qty ${bajo?'stock-low':'stock-ok'}">${item.cantidad}</div>
@@ -256,7 +256,7 @@ async function modalEntradaMercaderia() {
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Cantidad *</label><input class="form-input" id="f-ent-qty" type="number" min="1" value="1"></div>
-      <div class="form-group"><label class="form-label">Costo unitario ₲</label><input class="form-input" id="f-ent-costo" type="number" min="0" placeholder="Precio de compra"></div>
+      <div class="form-group"><label class="form-label">Costo unitario ${monedaActual().simbolo}</label><input class="form-input" id="f-ent-costo" type="number" min="0" placeholder="Precio de compra"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Factura / Ref</label><input class="form-input" id="f-ent-factura" placeholder="#001-001-0001234"></div>
@@ -269,7 +269,7 @@ async function modalEntradaMercaderia() {
     <div style="background:var(--surface2);border-radius:8px;padding:.5rem;margin-bottom:1rem">
       <div style="display:flex;justify-content:space-between;font-size:.8rem">
         <span>Total compra:</span>
-        <span id="ent-total" style="font-family:var(--font-head);color:var(--danger)">₲0</span>
+        <span id="ent-total" style="font-family:var(--font-head);color:var(--danger)">${fm(0)}</span>
       </div>
     </div>
     <button class="btn-primary" onclick="guardarEntradaConSafeCall()">Registrar entrada</button>
@@ -281,7 +281,7 @@ async function modalEntradaMercaderia() {
     const updateTotal = () => {
       const qty = parseFloat(qtyInput?.value) || 0;
       const costo = parseFloat(costoInput?.value) || 0;
-      document.getElementById('ent-total').textContent = '₲' + gs(qty * costo);
+      document.getElementById('ent-total').textContent = fm(qty * costo);
     };
     qtyInput?.addEventListener('input', updateTotal);
     costoInput?.addEventListener('input', updateTotal);
@@ -378,7 +378,7 @@ async function guardarEntrada() {
       proveedor,
       monto: totalCompra,
       fecha_vencimiento: null,
-      notas: `${nombreProducto} x${qty} (Costo unit: ₲${gs(costoUnit)})${factura ? ' — Fact: '+factura : ''}`,
+      notas: `${nombreProducto} x${qty} (Costo unit: ${fm(costoUnit)})${factura ? ' — Fact: '+factura : ''}`,
       pagada: false
     }).select('id').single();
     
@@ -440,7 +440,7 @@ async function guardarEntrada() {
   clearCache('dash_gastos_mes');
   clearCache('dash_stock');
   
-  toast(`✓ Entrada registrada: ${qty} x ${nombreProducto} — Total: ₲${gs(totalCompra)}`, 'success');
+  toast(`✓ Entrada registrada: ${qty} x ${nombreProducto} — Total: ${fm(totalCompra)}`, 'success');
   closeModal();
   inventario();
 

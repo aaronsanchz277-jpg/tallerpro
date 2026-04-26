@@ -28,11 +28,11 @@ async function gastos({ filtro='todos', offset=0 }={}) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem">
       <div style="background:rgba(255,68,68,.08);border:1px solid rgba(255,68,68,.3);border-radius:12px;padding:.75rem;text-align:center">
         <div style="font-size:.6rem;color:var(--danger);letter-spacing:1px;font-family:var(--font-head)">TOTAL GASTOS</div>
-        <div style="font-family:var(--font-head);font-size:1.2rem;font-weight:700;color:var(--danger)">₲${gs(totalGastos)}</div>
+        <div style="font-family:var(--font-head);font-size:1.2rem;font-weight:700;color:var(--danger)">${fm(totalGastos)}</div>
       </div>
       <div style="background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.3);border-radius:12px;padding:.75rem;text-align:center">
         <div style="font-size:.6rem;color:var(--warning);letter-spacing:1px;font-family:var(--font-head)">GASTOS HOY</div>
-        <div style="font-family:var(--font-head);font-size:1.2rem;font-weight:700;color:var(--warning)">₲${gs(gastosHoy)}</div>
+        <div style="font-family:var(--font-head);font-size:1.2rem;font-weight:700;color:var(--warning)">${fm(gastosHoy)}</div>
       </div>
     </div>
     
@@ -50,7 +50,7 @@ async function gastos({ filtro='todos', offset=0 }={}) {
             <div class="card-name">${h(g.descripcion||'Gasto')}</div>
             <div class="card-sub">${h(g.proveedor||'')}${g.categoria?' · '+h(g.categoria):''} · ${formatFecha(g.fecha)}</div>
           </div>
-          <div style="font-family:var(--font-head);color:var(--danger);font-size:1rem">₲${gs(g.monto||0)}</div>
+          <div style="font-family:var(--font-head);color:var(--danger);font-size:1rem">${fm(g.monto||0)}</div>
         </div>
       </div>`).join('')}
     ${renderPagination(count||0, offset, '_navGastos')}`;
@@ -62,7 +62,7 @@ function modalNuevoGasto(existing) {
     <div class="modal-title">${existing?'EDITAR':'NUEVO'} GASTO</div>
     <div class="form-group"><label class="form-label">Descripción *</label><input class="form-input" id="g-desc" value="${h(existing?.descripcion||'')}" placeholder="Electricidad, alquiler, repuestos..."></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Monto (₲) *</label><input class="form-input" id="g-monto" type="number" value="${existing?.monto||''}"></div>
+      <div class="form-group"><label class="form-label">Monto (${monedaActual().simbolo}) *</label><input class="form-input" id="g-monto" type="number" value="${existing?.monto||''}"></div>
       <div class="form-group"><label class="form-label">Fecha</label><input class="form-input" id="g-fecha" type="date" value="${existing?.fecha||fechaHoy()}"></div>
     </div>
     <div class="form-row">

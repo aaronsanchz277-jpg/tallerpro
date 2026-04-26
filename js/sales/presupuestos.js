@@ -37,7 +37,7 @@ async function presupuestos({ filtro='todos', search='', offset=0 }={}) {
           <div class="card-info">
             <div class="card-name">${h(p.descripcion||'Presupuesto')}</div>
             <div class="card-sub">${p.vehiculos?h(p.vehiculos.marca)+' '+h(p.vehiculos.patente):''} · ${p.clientes?h(p.clientes.nombre):''}</div>
-            <div class="card-sub">${formatFecha(p.created_at?.split('T')[0])} · ₲${gs(p.total||0)}</div>
+            <div class="card-sub">${formatFecha(p.created_at?.split('T')[0])} · ${fm(p.total||0)}</div>
           </div>
           <span class="card-badge ${presupuestoBadge(p.estado)}">${PRESUPUESTO_ESTADOS[p.estado]||p.estado}</span>
         </div>
@@ -88,11 +88,11 @@ async function detallePresupuesto(id) {
 
       <div style="height:1px;background:var(--border);margin:.5rem 0"></div>
       ${items.length===0 ? '<p style="color:var(--text2);font-size:.85rem">Sin ítems</p>' : items.map(i=>`
-        <div class="factura-item"><span>${h(i.descripcion)}${i.cantidad>1?' x'+i.cantidad:''}</span><span>₲${gs(parseFloat(i.precio||0)*(i.cantidad||1))}</span></div>
+        <div class="factura-item"><span>${h(i.descripcion)}${i.cantidad>1?' x'+i.cantidad:''}</span><span>${fm(parseFloat(i.precio||0)*(i.cantidad||1))}</span></div>
       `).join('')}
       
-      ${p.descuento>0?`<div class="factura-item"><span style="color:var(--danger)">Descuento</span><span style="color:var(--danger)">-₲${gs(p.descuento)}</span></div>`:''}
-      <div class="factura-total"><span>TOTAL</span><span>₲${gs(p.total||0)}</span></div>
+      ${p.descuento>0?`<div class="factura-item"><span style="color:var(--danger)">Descuento</span><span style="color:var(--danger)">-${fm(p.descuento)}</span></div>`:''}
+      <div class="factura-total"><span>TOTAL</span><span>${fm(p.total||0)}</span></div>
       <div style="text-align:right;font-size:.7rem;color:var(--text2)">I.V.A. INCLUIDO</div>
       
       ${p.observaciones?`<div style="margin-top:.5rem;font-size:.8rem;color:var(--text2);font-style:italic">${h(p.observaciones)}</div>`:''}
@@ -266,8 +266,8 @@ async function modalNuevoPresupuesto(editId, repId = null) {
       <button onclick="pptoAddItem('adicional')" style="flex:1;background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.3);border-radius:8px;padding:.4rem;font-size:.72rem;color:var(--accent2);cursor:pointer">+ Adicional</button>
     </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Descuento (₲)</label><input class="form-input" id="pp-descuento" type="number" value="${existing?.descuento||0}" oninput="pptoUpdateTotal()"></div>
-      <div class="form-group"><label class="form-label">TOTAL</label><div id="pp-total" style="font-family:var(--font-head);font-size:1.5rem;color:var(--accent);padding-top:.3rem">₲0</div></div>
+      <div class="form-group"><label class="form-label">Descuento (${monedaActual().simbolo})</label><input class="form-input" id="pp-descuento" type="number" value="${existing?.descuento||0}" oninput="pptoUpdateTotal()"></div>
+      <div class="form-group"><label class="form-label">TOTAL</label><div id="pp-total" style="font-family:var(--font-head);font-size:1.5rem;color:var(--accent);padding-top:.3rem">${fm(0)}</div></div>
     </div>
     <div class="form-group"><label class="form-label">Observaciones</label><textarea class="form-input" id="pp-obs" rows="2">${h(existing?.observaciones||'')}</textarea></div>
     <button class="btn-primary" onclick="guardarPresupuestoConSafeCall(${editId?"'"+editId+"'":'null'})">${t('guardar')}</button>
@@ -304,7 +304,7 @@ function pptoUpdateTotal() {
   const total = window._pptoItems.reduce((s,i) => s + parseFloat(i.precio||0)*(i.cantidad||1), 0);
   const desc = parseFloat(document.getElementById('pp-descuento')?.value || 0);
   const el = document.getElementById('pp-total');
-  if (el) el.textContent = '₲' + gs(Math.max(0, total - desc));
+  if (el) el.textContent = fm(Math.max(0, total - desc));
 }
 
 function pptoRenderItems() {
@@ -313,7 +313,7 @@ function pptoRenderItems() {
       <span style="font-size:.6rem;padding:2px 5px;border-radius:4px;${item.tipo==='servicio'?'background:rgba(0,229,255,.15);color:var(--accent)':item.tipo==='producto'?'background:rgba(0,255,136,.15);color:var(--success)':'background:rgba(255,107,53,.15);color:var(--accent2)'}">${item.tipo==='servicio'?'SRV':item.tipo==='producto'?'PROD':'ADIC'}</span>
       <input class="form-input" style="flex:2;padding:.3rem .5rem;font-size:.78rem" value="${h(item.descripcion)}" placeholder="Descripción" oninput="pptoUpdateItem(${i},'descripcion',this.value)">
       ${item.tipo==='producto'?`<input class="form-input" style="width:45px;padding:.3rem;font-size:.78rem;text-align:center" type="number" value="${item.cantidad||1}" min="1" oninput="pptoUpdateItem(${i},'cantidad',this.value)">`:''}
-      <input class="form-input" style="width:80px;padding:.3rem;font-size:.78rem;text-align:right" type="number" value="${item.precio||0}" placeholder="₲" oninput="pptoUpdateItem(${i},'precio',this.value)">
+      <input class="form-input" style="width:80px;padding:.3rem;font-size:.78rem;text-align:right" type="number" value="${item.precio||0}" placeholder="${monedaActual().simbolo}" oninput="pptoUpdateItem(${i},'precio',this.value)">
       <button onclick="pptoRemoveItem(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.9rem;flex-shrink:0">✕</button>
     </div>`).join('');
 }
@@ -433,14 +433,14 @@ async function compartirPresupuesto(id) {
       doc.setFontSize(9);
       const subtotal = parseFloat(item.precio||0)*(item.cantidad||1);
       doc.text(item.descripcion + (item.cantidad>1?' x'+item.cantidad:''), m+4, y+2);
-      doc.text('Gs. '+gs(subtotal), 195-4, y+2, {align:'right'});
+      doc.text(monedaActual().simbolo + ' ' + gs(subtotal), 195-4, y+2, {align:'right'});
       y += 8;
     });
 
     if (p.descuento) {
       doc.setTextColor(200,50,50);
       doc.text('Descuento', m+4, y+2);
-      doc.text('-Gs. '+gs(p.descuento), 195-4, y+2, {align:'right'});
+      doc.text('-' + monedaActual().simbolo + ' ' + gs(p.descuento), 195-4, y+2, {align:'right'});
       y += 8;
     }
 
@@ -449,7 +449,7 @@ async function compartirPresupuesto(id) {
     doc.setTextColor(10,10,20);
     doc.setFontSize(12);
     doc.text('TOTAL', m+5, y+8);
-    doc.text('Gs. '+gs(p.total), 195-5, y+8, {align:'right'});
+    doc.text(monedaActual().simbolo + ' ' + gs(p.total), 195-5, y+8, {align:'right'});
     y += 20;
 
     if (p.observaciones) {
@@ -477,6 +477,6 @@ async function enviarPresupuestoWhatsApp(id) {
   if (!p?.clientes?.telefono) { toast('El cliente no tiene teléfono', 'error'); return; }
   const tel = p.clientes.telefono.replace(/\D/g,'');
   const tallerNombre = currentPerfil?.talleres?.nombre || 'TallerPro';
-  const msg = `Hola! Te envío el presupuesto de ${tallerNombre}:\n\n📋 ${p.descripcion}\n💰 Total: ₲${gs(p.total)}\n\n¿Aprobás el trabajo?`;
+  const msg = `Hola! Te envío el presupuesto de ${tallerNombre}:\n\n📋 ${p.descripcion}\n💰 Total: ${fm(p.total)}\n\n¿Aprobás el trabajo?`;
   window.open(`https://wa.me/595${tel}?text=${encodeURIComponent(msg)}`);
 }  

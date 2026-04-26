@@ -138,7 +138,7 @@ async function generarCartaConformidad(repId) {
         <strong>${h(rep.vehiculos?.marca||'')} ${h(rep.vehiculos?.modelo||'')}</strong>, chapa <strong>${h(rep.vehiculos?.patente||'')}</strong>, 
         de las instalaciones de <strong>${h(tallerNombre)}</strong>, habiendo verificado los trabajos realizados y encontrándome conforme con los mismos.</p>
         <p style="margin-top:.75rem">Trabajo realizado: <strong>${h(rep.descripcion||'')}</strong></p>
-        <p>Monto: <strong>₲${gs(rep.costo||0)}</strong></p>
+        <p>Monto: <strong>${fm(rep.costo||0)}</strong></p>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:2.5rem;padding-top:1rem">
         <div style="text-align:center;width:45%"><div style="border-top:1px solid var(--text2);padding-top:.3rem;font-size:.78rem;color:var(--text2)">${h(tallerNombre)}</div></div>

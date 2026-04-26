@@ -97,11 +97,23 @@ function mostrarFormCambiarPass() {
 async function loadPerfil(user) {
   currentUser = user;
   try {
-    // Intentamos traer los campos nuevos (empleado_id, permisos). Si la
-    // columna `permisos` todavía no fue creada en la BD, hacemos fallback al
-    // select sin ella para no romper el login.
+    // Intentamos traer los campos nuevos (empleado_id, permisos, moneda_*).
+    // Si alguna columna nueva (permisos, moneda_simbolo, etc.) todavía no
+    // fue creada en la BD, hacemos fallback en cascada para no romper el
+    // login en despliegues donde el SQL aún no se aplicó.
     let perfil = null, error = null;
     {
+      const res = await sb.from('perfiles')
+        .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais)')
+        .eq('id', user.id)
+        .maybeSingle();
+      perfil = res.data;
+      error = res.error;
+    }
+    // Fallback 1: faltan moneda_simbolo / moneda_locale / pais (Tarea #61
+    // sin migrar). Reintenta sin esos campos; monedaActual() usará los
+    // defaults Paraguay automáticamente.
+    if (error && /moneda_simbolo|moneda_locale|\bpais\b/i.test(error.message || '')) {
       const res = await sb.from('perfiles')
         .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion)')
         .eq('id', user.id)
@@ -109,6 +121,9 @@ async function loadPerfil(user) {
       perfil = res.data;
       error = res.error;
     }
+    // Fallback 2: faltan permisos / empleado_id / cliente_id (migración
+    // anterior sin aplicar). También intenta sin las columnas de moneda
+    // por si tampoco están.
     if (error && /permisos|empleado_id|cliente_id/i.test(error.message || '')) {
       const res = await sb.from('perfiles')
         .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion)')
@@ -176,10 +191,28 @@ async function aplicarCodigo() {
     if (error) throw new Error('Error: ' + error.message);
     if (!result?.ok) throw new Error(result?.error || 'Código inválido o ya utilizado');
     
-    const { data: perfil } = await sb.from('perfiles')
-      .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion)')
+    // Fallback en cascada (igual al de loadPerfil) por si la migración de
+    // moneda (Tarea #61) o la de permisos no se aplicó todavía.
+    let perfil = null;
+    let res = await sb.from('perfiles')
+      .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais)')
       .eq('id', currentUser.id).maybeSingle();
-    if (perfil && (!perfil.permisos || typeof perfil.permisos !== 'object')) perfil.permisos = {};
+    perfil = res.data;
+    if (res.error && /moneda_simbolo|moneda_locale|\bpais\b/i.test(res.error.message || '')) {
+      res = await sb.from('perfiles')
+        .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion)')
+        .eq('id', currentUser.id).maybeSingle();
+      perfil = res.data;
+    }
+    if (res.error && /permisos|empleado_id|cliente_id/i.test(res.error.message || '')) {
+      res = await sb.from('perfiles')
+        .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion)')
+        .eq('id', currentUser.id).maybeSingle();
+      perfil = res.data;
+    }
+    if (res.error) throw new Error('Error al cargar el perfil: ' + res.error.message);
+    if (!perfil) throw new Error('No se pudo cargar el perfil tras aplicar el código.');
+    if (!perfil.permisos || typeof perfil.permisos !== 'object') perfil.permisos = {};
     currentPerfil = perfil;
     toast(result.rol === 'empleado' ? 'Registrado como empleado' : 'Registrado como cliente', 'success');
     showApp();
@@ -210,7 +243,18 @@ async function crearTallerDesdePrompt() {
     const trialEnd = new Date(); trialEnd.setDate(trialEnd.getDate() + 14);
     await sb.from('suscripciones').insert({ taller_id: taller.id, plan_id: 'premium', estado: 'trial', fecha_vencimiento: trialEnd.toISOString().split('T')[0] });
 
-    const { data: perfil } = await sb.from('perfiles').select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion)').eq('id', currentUser.id).maybeSingle();
+    // Fallback por si la migración de moneda (Tarea #61) no se aplicó.
+    let perfil = null;
+    let resPerfil = await sb.from('perfiles')
+      .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais)')
+      .eq('id', currentUser.id).maybeSingle();
+    perfil = resPerfil.data;
+    if (resPerfil.error && /moneda_simbolo|moneda_locale|\bpais\b/i.test(resPerfil.error.message || '')) {
+      resPerfil = await sb.from('perfiles')
+        .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion)')
+        .eq('id', currentUser.id).maybeSingle();
+      perfil = resPerfil.data;
+    }
     currentPerfil = perfil;
     toast(`¡Bienvenido ${nombre}! Tu taller fue creado.`, 'success');
     showApp();
@@ -698,7 +742,7 @@ async function modalGestionarTaller(tallerId, tallerNombre) {
     <div class="modal-title">Gestionar: ${tallerNombre}</div>
     <div class="form-group"><label class="form-label">Plan</label>
       <select class="form-input" id="f-sa-plan">
-        ${(planes||[]).map(p => `<option value="${p.id}" ${sub?.plan_id===p.id?'selected':''}>${h(p.nombre)} — ₲${gs(p.precio)}/mes</option>`).join('')}
+        ${(planes||[]).map(p => `<option value="${p.id}" ${sub?.plan_id===p.id?'selected':''}>${h(p.nombre)} — ₲${(p.precio||0).toLocaleString('es-PY')}/mes</option>`).join('')}
       </select>
     </div>
     <div class="form-group"><label class="form-label">Estado</label>

@@ -24,7 +24,7 @@ async function ventas({ filtro='todos', offset=0 }={}) {
     ${totalHoy > 0 ? `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
       <div><div style="font-size:.7rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px">VENTAS HOY</div>
-        <div style="font-family:var(--font-head);font-size:1.4rem;color:var(--success)">₲${gs(totalHoy)}</div></div>
+        <div style="font-family:var(--font-head);font-size:1.4rem;color:var(--success)">${fm(totalHoy)}</div></div>
       <div style="font-size:1.5rem">🛒</div>
     </div>` : ''}
     <div class="tabs">
@@ -43,7 +43,7 @@ async function ventas({ filtro='todos', offset=0 }={}) {
           </div>
           <div style="text-align:right">
             <span class="card-badge ${v.estado==='facturado'?'badge-green':'badge-yellow'}">${v.estado.toUpperCase()}</span>
-            <div style="font-family:var(--font-head);font-size:.9rem;color:var(--accent);margin-top:4px">₲${gs(v.total||0)}</div>
+            <div style="font-family:var(--font-head);font-size:.9rem;color:var(--accent);margin-top:4px">${fm(v.total||0)}</div>
           </div>
         </div>
       </div>`).join('')}
@@ -69,13 +69,13 @@ async function detalleVenta(id) {
     <div class="info-grid">
       ${v.clientes ? `<div class="info-item"><div class="label">Cliente</div><div class="value">${h(v.clientes.nombre)}</div></div>` : ''}
       ${v.vehiculos ? `<div class="info-item"><div class="label">Vehículo</div><div class="value">${h(v.vehiculos.patente)} · ${h(v.vehiculos.marca)}</div></div>` : ''}
-      <div class="info-item"><div class="label">Total</div><div class="value" style="color:var(--accent)">₲${gs(v.total||0)}</div></div>
+      <div class="info-item"><div class="label">Total</div><div class="value" style="color:var(--accent)">${fm(v.total||0)}</div></div>
       <div class="info-item"><div class="label">Método</div><div class="value">${h(v.metodo_pago||'efectivo')}</div></div>
     </div>
     <div class="sub-section"><div class="sub-section-title">ÍTEMS</div>
-      ${items.map(i => `<div class="factura-item"><span>${h(i.descripcion||i.nombre)} x${i.cantidad}</span><span style="color:var(--accent)">₲${gs(parseFloat(i.precio||0)*i.cantidad)}</span></div>`).join('')}
-      ${v.descuento > 0 ? `<div class="factura-item"><span style="color:var(--danger)">Descuento</span><span style="color:var(--danger)">-₲${gs(v.descuento)}</span></div>` : ''}
-      <div class="factura-total"><span>TOTAL</span><span>₲${gs(v.total||0)}</span></div>
+      ${items.map(i => `<div class="factura-item"><span>${h(i.descripcion||i.nombre)} x${i.cantidad}</span><span style="color:var(--accent)">${fm(parseFloat(i.precio||0)*i.cantidad)}</span></div>`).join('')}
+      ${v.descuento > 0 ? `<div class="factura-item"><span style="color:var(--danger)">Descuento</span><span style="color:var(--danger)">-${fm(v.descuento)}</span></div>` : ''}
+      <div class="factura-total"><span>TOTAL</span><span>${fm(v.total||0)}</span></div>
     </div>
     ${v.notas ? `<div class="info-item"><div class="label">Notas</div><div class="value">${h(v.notas)}</div></div>` : ''}
     <div style="display:flex;gap:.5rem;margin-top:1rem">
@@ -107,13 +107,13 @@ async function modalNuevaVenta() {
     <div class="form-group"><label class="form-label">Agregar producto</label>
       <select class="form-input" id="venta-prod-sel" onchange="ventaAgregarProducto()">
         <option value="">Seleccionar producto...</option>
-        ${(inv||[]).map(p=>`<option value="${p.id}" data-precio="${p.precio_unitario||0}" data-stock="${p.cantidad||0}" data-nombre="${h(p.nombre)}">${h(p.nombre)} — ₲${gs(p.precio_unitario||0)} (stock: ${p.cantidad||0})</option>`).join('')}
+        ${(inv||[]).map(p=>`<option value="${p.id}" data-precio="${p.precio_unitario||0}" data-stock="${p.cantidad||0}" data-nombre="${h(p.nombre)}">${h(p.nombre)} — ${fm(p.precio_unitario||0)} (stock: ${p.cantidad||0})</option>`).join('')}
       </select>
     </div>
     <div id="venta-items-list"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Descuento (₲)</label><input class="form-input" id="venta-descuento" type="number" value="0" oninput="ventaUpdateTotal()"></div>
-      <div class="form-group"><label class="form-label">TOTAL</label><div id="venta-total" style="font-family:var(--font-head);font-size:1.5rem;color:var(--accent);padding-top:.3rem">₲0</div></div>
+      <div class="form-group"><label class="form-label">Descuento (${monedaActual().simbolo})</label><input class="form-input" id="venta-descuento" type="number" value="0" oninput="ventaUpdateTotal()"></div>
+      <div class="form-group"><label class="form-label">TOTAL</label><div id="venta-total" style="font-family:var(--font-head);font-size:1.5rem;color:var(--accent);padding-top:.3rem">${fm(0)}</div></div>
     </div>
     <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="venta-notas" placeholder="Opcional"></div>
     <button class="btn-primary" style="background:var(--success)" onclick="guardarVentaConSafeCall()">✓ CONFIRMAR VENTA</button>
@@ -141,14 +141,14 @@ async function modalNuevoServicioRapido() {
     <div class="form-group"><label class="form-label">Agregar ítem</label>
       <select class="form-input" id="venta-prod-sel" onchange="ventaAgregarProducto()">
         <option value="">Seleccionar producto/servicio...</option>
-        ${(inv||[]).map(p=>`<option value="${p.id}" data-precio="${p.precio_unitario||0}" data-stock="${p.cantidad||0}" data-nombre="${h(p.nombre)}">${h(p.nombre)} — ₲${gs(p.precio_unitario||0)}</option>`).join('')}
+        ${(inv||[]).map(p=>`<option value="${p.id}" data-precio="${p.precio_unitario||0}" data-stock="${p.cantidad||0}" data-nombre="${h(p.nombre)}">${h(p.nombre)} — ${fm(p.precio_unitario||0)}</option>`).join('')}
         <option value="__servicio__" data-precio="0" data-stock="999" data-nombre="Mano de obra">🔧 Mano de obra (personalizado)</option>
       </select>
     </div>
     <div id="venta-items-list"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Descuento</label><input class="form-input" id="venta-descuento" type="number" value="0" oninput="ventaUpdateTotal()"></div>
-      <div class="form-group"><label class="form-label">TOTAL</label><div id="venta-total" style="font-family:var(--font-head);font-size:1.5rem;color:var(--accent);padding-top:.3rem">₲0</div></div>
+      <div class="form-group"><label class="form-label">TOTAL</label><div id="venta-total" style="font-family:var(--font-head);font-size:1.5rem;color:var(--accent);padding-top:.3rem">${fm(0)}</div></div>
     </div>
     <button class="btn-primary" style="background:var(--success)" onclick="guardarVentaConSafeCall(true)">✓ CONFIRMAR SERVICIO</button>
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
@@ -167,7 +167,7 @@ function ventaAgregarProducto() {
   
   let item;
   if (opt.value === '__servicio__') {
-    const precio = prompt('Precio de la mano de obra (₲):', '0');
+    const precio = prompt('Precio de la mano de obra (' + monedaActual().simbolo + '):', '0');
     if (precio === null) return;
     item = {
       id: null,
@@ -211,15 +211,15 @@ function ventaRemoveItem(i) {
 
 function ventaRenderItems() {
   const total = window._ventaItems.reduce((s, i) => s + i.precio * i.cantidad, 0);
-  document.getElementById('venta-total').textContent = '₲' + gs(total);
+  document.getElementById('venta-total').textContent = fm(total);
   document.getElementById('venta-items-list').innerHTML = window._ventaItems.map((item, i) => `
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.5rem;margin-bottom:.4rem;display:flex;justify-content:space-between;align-items:center">
       <div style="flex:1;min-width:0">
         <div style="font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(item.nombre)}</div>
-        <div style="font-size:.72rem;color:var(--text2)">₲${gs(item.precio)} c/u</div>
+        <div style="font-size:.72rem;color:var(--text2)">${fm(item.precio)} c/u</div>
       </div>
       <input class="form-input" style="width:50px;padding:.3rem;text-align:center;font-size:.82rem" type="number" value="${item.cantidad}" min="1" max="${item.maxStock}" oninput="ventaUpdateCant(${i},this.value)">
-      <span style="font-family:var(--font-head);color:var(--accent);width:80px;text-align:right;font-size:.85rem">₲${gs(item.precio*item.cantidad)}</span>
+      <span style="font-family:var(--font-head);color:var(--accent);width:80px;text-align:right;font-size:.85rem">${fm(item.precio*item.cantidad)}</span>
       <button onclick="ventaRemoveItem(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;margin-left:.3rem">✕</button>
     </div>`).join('');
 }
@@ -227,7 +227,7 @@ function ventaRenderItems() {
 function ventaUpdateTotal() {
   const total = window._ventaItems.reduce((s, i) => s + i.precio * i.cantidad, 0);
   const desc = parseFloat(document.getElementById('venta-descuento')?.value || 0);
-  document.getElementById('venta-total').textContent = '₲' + gs(Math.max(0, total - desc));
+  document.getElementById('venta-total').textContent = fm(Math.max(0, total - desc));
 }
 
 async function guardarVentaConSafeCall(esServicioRapido = false) {

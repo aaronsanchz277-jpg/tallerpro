@@ -759,3 +759,47 @@ No requiere correr SQL ni cambios al schema: usa las tablas y políticas
 RLS existentes (`clientes_modify_staff`, `vehiculos_modify_staff`) y
 los helpers de `js/core/components.js` (`normalizarTelefono`,
 `normalizarPatente`).
+
+## Moneda configurable por taller (Tarea #61)
+
+Antes el guaraní (`₲`) y el locale `es-PY` estaban hardcodeados en ~195
+lugares de `js/`, así que un taller argentino o boliviano veía todo con
+el símbolo equivocado. Ahora cada taller guarda en `talleres` su
+`moneda_simbolo`, `moneda_locale` y `pais` (defaults `₲ / es-PY / PY`,
+así los talleres viejos no notan ningún cambio). La migración está al
+final de `supabase/rls_policies.sql` con `ADD COLUMN IF NOT EXISTS` —
+es idempotente y debe correrse antes de desplegar el front nuevo,
+porque el `select` de perfil ya pide los tres campos.
+
+Helper central en `js/core/ui.js`:
+
+- `monedaActual()` lee `currentPerfil.talleres` con fallback Paraguay.
+- `gs(n)` ahora usa el locale del taller (no más `'es-PY'` fijo).
+- `fm(n)` (format moneda) devuelve `símbolo + gs(n)` pegado, igual al
+  patrón histórico `` ₲${gs(n)} ``. Es el helper que se usa en toda la
+  app para listados, dashboards, modales y mensajes WhatsApp.
+- `formatMoneda` y `formatNumero` en `js/core/core.js` también
+  consultan `monedaActual()`.
+
+Reemplazo masivo aplicado por un script con parser de paréntesis
+balanceado (188 reemplazos en 32 archivos): los `` ₲${gs(...)} `` se
+convirtieron a `${fm(...)}`, las concatenaciones JS (`'₲'+gs(...)`,
+`'Saldo ₲'+gs(...)`, `'Gs. '+gs(...)` en PDFs, etc.) a `fm(...)` o
+`monedaActual().simbolo + ' ' + gs(...)` según el caso, y los labels
+literales (`Monto ₲`, `Sueldo mensual ₲`, `(₲)`, `placeholder="₲"`,
+`₲0`) usan `${monedaActual().simbolo}` o `${fm(0)}`.
+
+Selector de país en **Configuración → Mi Taller**
+(`modalConfigDatos`/`guardarConfigDatos` en `js/auth/admin-v2.js`):
+combo con presets para PY (₲, es-PY), AR ($, es-AR), UY ($U, es-UY),
+BO (Bs, es-BO), CL ($, es-CL), PE (S/, es-PE), CO ($, es-CO) y
+MX ($, es-MX). Al guardar, además de actualizar `talleres`, refresca
+`currentPerfil.talleres` en memoria — la moneda nueva se ve en toda la
+app sin necesidad de cerrar sesión.
+
+**Fuera de scope**: conversión automática de precios viejos, multi-moneda
+dentro de un taller, fechas/separadores de miles distintos al locale
+elegido, y los precios de **suscripción** de TallerPro (landing,
+`index.html`, `404.html`, `js/auth/plan.js`) — esos son precios de la
+empresa TallerPro y siguen en ₲ porque la empresa es paraguaya.
+

@@ -54,8 +54,8 @@ function escapeLikePattern(str) {
   return String(str).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
-function formatMoneda(valor) { return '₲ ' + gs(valor); }
-function formatNumero(valor) { return new Intl.NumberFormat('es-PY').format(valor || 0); }
+function formatMoneda(valor) { return monedaActual().simbolo + ' ' + gs(valor); }
+function formatNumero(valor) { return new Intl.NumberFormat(monedaActual().locale).format(valor || 0); }
 function capitalize(str) { return str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : ''; }
 
 const originalToast = toast;

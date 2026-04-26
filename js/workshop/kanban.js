@@ -27,7 +27,7 @@ async function panelTrabajo() {
             ${repuestoListo}
           </div>
           <div style="text-align:right;flex-shrink:0;margin-left:.5rem">
-            <div style="font-family:var(--font-head);font-size:.85rem;color:var(--accent)">₲${gs(r.costo || 0)}</div>
+            <div style="font-family:var(--font-head);font-size:.85rem;color:var(--accent)">${fm(r.costo || 0)}</div>
             <div style="font-size:.65rem;color:var(--text2)">${formatFecha(r.fecha)}</div>
           </div>
         </div>
