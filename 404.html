@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0f">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%230a0a0f'/><text x='32' y='44' font-size='32' text-anchor='middle' fill='%2300e5ff' font-family='sans-serif' font-weight='bold'>T</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%230a0a0f'/><text x='96' y='125' font-size='90' text-anchor='middle' fill='%2300e5ff' font-family='sans-serif' font-weight='bold'>T</text></svg>">
+<title>TallerPro</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+<div id="offline-bar">⚡ SIN CONEXIÓN — Los cambios se guardarán cuando vuelva el internet</div>
+
+<div id="splash">
+  <div class="logo-big">TALLERPRO</div>
+  <div class="sub">GESTIÓN INTELIGENTE</div>
+  <div class="loader"><div class="loader-bar"></div></div>
+</div>
+
+<div id="toast"></div>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div style="text-align:center;padding:2rem 1.5rem 1rem;max-width:500px;margin:0 auto">
+    <div style="font-family:var(--font-head);font-size:2rem;color:var(--accent);letter-spacing:4px;margin-bottom:.3rem">TALLERPRO</div>
+    <div style="font-size:1.1rem;color:var(--text);font-weight:500;margin-bottom:.5rem">Gestión Inteligente para Talleres</div>
+    <div style="font-size:.82rem;color:var(--text2);line-height:1.5;margin-bottom:1.5rem">Todo lo que necesitás para organizar tu taller, cobrar más y perder menos. Desde tu celular.</div>
+  </div>
+
+  <div style="max-width:500px;margin:0 auto;padding:0 1.5rem 1.5rem">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1.25rem">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.6rem;text-align:center">
+        <div style="font-size:1.3rem">🤖</div>
+        <div style="font-size:.7rem;color:var(--accent);font-family:var(--font-head);margin-top:.2rem">IA CON VOZ</div>
+        <div style="font-size:.65rem;color:var(--text2);margin-top:.15rem">Hablale al celular y carga todo</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.6rem;text-align:center">
+        <div style="font-size:1.3rem">📱</div>
+        <div style="font-size:.7rem;color:var(--accent);font-family:var(--font-head);margin-top:.2rem">PORTAL CLIENTE</div>
+        <div style="font-size:.65rem;color:var(--text2);margin-top:.15rem">Tu cliente ve su auto desde su cel</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.6rem;text-align:center">
+        <div style="font-size:1.3rem">💰</div>
+        <div style="font-size:.7rem;color:var(--accent);font-family:var(--font-head);margin-top:.2rem">FINANZAS</div>
+        <div style="font-size:.65rem;color:var(--text2);margin-top:.15rem">Sabé cuánto ganás de verdad</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.6rem;text-align:center">
+        <div style="font-size:1.3rem">📸</div>
+        <div style="font-size:.7rem;color:var(--accent);font-family:var(--font-head);margin-top:.2rem">FOTOS</div>
+        <div style="font-size:.65rem;color:var(--text2);margin-top:.15rem">Antes, durante y después</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:.3rem;justify-content:center;margin-bottom:1.5rem">
+      <span class="chip-success-sm">✓ Trabajos</span>
+      <span class="chip-success-sm">✓ Inventario</span>
+      <span class="chip-success-sm">✓ Turnos</span>
+      <span class="chip-success-sm">✓ Créditos</span>
+      <span class="chip-success-sm">✓ WhatsApp</span>
+      <span class="chip-success-sm">✓ PDF</span>
+      <span class="chip-success-sm">✓ Offline</span>
+      <span class="chip-success-sm">✓ Reportes</span>
+      <span class="chip-success-sm">✓ 4 idiomas</span>
+    </div>
+
+    <div style="background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.15);border-radius:10px;padding:.7rem;text-align:center;margin-bottom:1.5rem">
+      <div style="font-size:.65rem;color:var(--accent);font-family:var(--font-head);letter-spacing:1px">14 DÍAS GRATIS · DESPUÉS</div>
+      <div style="font-family:var(--font-head);font-size:1.4rem;color:var(--accent)">₲250.000<span style="font-size:.7rem;color:var(--text2)">/mes</span></div>
+      <div style="font-size:.6rem;color:var(--text2)">Todo incluido, sin límites, sin sorpresas</div>
+    </div>
+  </div>
+
+  <!-- LOGIN BOX -->
+  <div class="login-box">
+    <div id="login-form">
+      <div id="login-normal">
+        <div class="login-tabs">
+          <button class="login-tab active" onclick="switchLoginTab('login')" id="lt-ingresar">Ingresar</button>
+          <button class="login-tab" id="tab-nuevo-taller" onclick="switchLoginTab('nuevo-taller')">Nuevo Taller</button>
+        </div>
+        <div id="nuevo-taller-fields" style="display:none">
+          <div style="background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.2);border-radius:8px;padding:.75rem;margin-bottom:1rem;font-size:.8rem;color:var(--text2)" id="lt-registro-msg">
+            Registrá tu taller y creá tu cuenta de administrador.
+          </div>
+          <div class="form-group"><label class="form-label">Tu nombre *</label><input class="form-input" id="reg-nombre-admin" placeholder="Tu nombre completo"></div>
+          <div class="form-group"><label class="form-label">Nombre del taller *</label><input class="form-input" id="reg-taller" placeholder="Taller San José"></div>
+          <div class="form-group"><label class="form-label">Teléfono del taller</label><input class="form-input" id="reg-tel" placeholder="+595 21 000 000"></div>
+        </div>
+        <form id="login-normal-form" onsubmit="event.preventDefault();const b=document.getElementById('auth-btn');if(!b||b.disabled)return false;b.click();return false">
+          <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="auth-email" type="email" autocomplete="email" placeholder="tu@email.com"></div>
+          <div class="form-group"><label class="form-label">Contraseña *</label><input class="form-input" id="auth-pass" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+          <button type="button" class="btn-primary" id="auth-btn" onclick="handleAuth()">INGRESAR</button>
+          <p id="auth-error" class="error-msg"></p>
+        </form>
+        <div id="forgot-link" style="text-align:center;margin-top:.75rem">
+          <button onclick="switchLoginTab('forgot')" style="background:none;border:none;color:var(--text2);font-size:.8rem;cursor:pointer;text-decoration:underline">¿Olvidaste tu contraseña?</button>
+        </div>
+      </div>
+
+      <div id="login-invitacion" style="display:none">
+        <div style="background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.2);border-radius:10px;padding:.75rem;margin-bottom:1.25rem;text-align:center;font-size:.82rem;color:var(--text2)">
+          Fuiste invitado a un taller. Completá tus datos para registrarte.
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Nombre *</label><input class="form-input" id="inv-nombre" placeholder="Juan"></div>
+          <div class="form-group"><label class="form-label">Apellido *</label><input class="form-input" id="inv-apellido" placeholder="Pérez"></div>
+        </div>
+        <div class="form-group" id="inv-tel-group">
+          <label class="form-label">Teléfono *</label>
+          <div class="phone-wrap"><select class="phone-prefix" id="inv-telefono-prefix"><option value="+595" selected>🇵🇾 +595</option><option value="+54">🇦🇷 +54</option><option value="+55">🇧🇷 +55</option><option value="+56">🇨🇱 +56</option><option value="+57">🇨🇴 +57</option><option value="+598">🇺🇾 +598</option><option value="+1">🇺🇸 +1</option></select><input class="form-input" id="inv-telefono" type="tel" placeholder="0981 123 456" oninput="formatPhone(this)"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo de persona</label>
+          <select class="form-input" id="inv-tipo-persona" onchange="toggleRazonSocialInv()">
+            <option value="fisica">Persona física (CI)</option>
+            <option value="juridica">Persona jurídica (RUC)</option>
+          </select>
+        </div>
+        <div id="inv-campo-identificacion">
+          <div class="form-group"><label class="form-label" id="inv-label-identificacion">CI / RUC</label><input class="form-input" id="inv-ruc-ci" placeholder="80012345-6"></div>
+        </div>
+        <div id="inv-campo-razon-social" style="display:none">
+          <div class="form-group"><label class="form-label">Razón social</label><input class="form-input" id="inv-razon-social" placeholder="Empresa S.A."></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Código *</label>
+          <input class="form-input" id="inv-codigo" placeholder="Código del taller" style="text-transform:uppercase;letter-spacing:3px" oninput="onCodigoInput(this.value)">
+          <div style="font-size:.72rem;color:var(--text2);margin-top:.3rem" id="inv-codigo-hint">El admin te da el código. Define si sos cliente o empleado.</div>
+        </div>
+        <form id="login-invitacion-form" onsubmit="event.preventDefault();handleRegistroInvitacion();return false">
+          <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="inv-email" type="email" autocomplete="email" placeholder="tu@email.com"></div>
+          <div class="form-group"><label class="form-label">Contraseña *</label><input class="form-input" id="inv-pass" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div>
+          <button type="button" class="btn-primary" onclick="handleRegistroInvitacion()">REGISTRARME</button>
+          <p id="inv-error" class="error-msg"></p>
+        </form>
+        <div style="text-align:center;margin-top:.75rem">
+          <button onclick="showLoginNormal(true)" style="background:none;border:none;color:var(--text2);font-size:.8rem;cursor:pointer;text-decoration:underline">Ya tengo cuenta → Ingresar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;margin-top:1rem">
+    <select onchange="cambiarIdiomaLogin(this.value)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:4px 8px;font-size:.75rem;cursor:pointer;outline:none">
+      <option value="es">🇵🇾 Español</option>
+      <option value="gn">🇵🇾 Guaraní</option>
+      <option value="pt">🇧🇷 Português</option>
+      <option value="en">🇺🇸 English</option>
+    </select>
+  </div>
+
+  <div style="text-align:center;margin-top:1rem">
+    <a href="https://wa.me/595982333971?text=Hola!%20Quiero%20saber%20más%20sobre%20TallerPro" style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.25);border-radius:8px;padding:.5rem 1rem;font-size:.8rem;font-family:var(--font-head)">💬 ¿Dudas? Hablanos por WhatsApp</a>
+  </div>
+
+  <div style="text-align:center;margin-top:1rem;padding-bottom:2rem;font-size:.72rem;color:var(--text2)">
+    <a href="./terminos.html" style="color:var(--text2);text-decoration:underline">Términos</a> · 
+    <a href="./privacidad.html" style="color:var(--text2);text-decoration:underline">Privacidad</a>
+  </div>
+</div>
+
+<div id="app">
+  <div id="sidebar-overlay" onclick="closeSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:150;backdrop-filter:blur(4px);opacity:0;transition:opacity .3s"></div>
+  <div id="sidebar" style="position:fixed;top:0;left:-280px;width:280px;height:100%;background:linear-gradient(180deg,var(--surface2) 0%,var(--surface) 100%);border-right:1px solid var(--border);z-index:160;transition:left .3s cubic-bezier(.4,0,.2,1);overflow-y:auto;display:flex;flex-direction:column">
+    <div id="sidebar-header" style="padding:1.25rem;border-bottom:1px solid var(--border)">
+      <div style="font-family:var(--font-head);font-size:1.4rem;color:var(--accent);letter-spacing:3px">TALLERPRO</div>
+      <div id="sidebar-user" style="font-size:.8rem;color:var(--text2);margin-top:.3rem"></div>
+      <div id="sidebar-role" style="margin-top:.4rem"></div>
+    </div>
+    <div id="sidebar-items" style="flex:1;padding:.5rem"></div>
+    <div style="padding:1rem;border-top:1px solid var(--border)">
+      <button onclick="closeSidebar();logout()" style="width:100%;display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;background:rgba(255,68,68,.06);border:1px solid rgba(255,68,68,.15);border-radius:10px;cursor:pointer;color:var(--danger);font-size:.82rem;font-family:var(--font-head);letter-spacing:.5px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Cerrar sesión
+      </button>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:.6rem">
+      <button onclick="openSidebar()" style="background:none;border:none;color:var(--text);cursor:pointer;padding:4px;display:flex">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="topbar-logo">TALLERPRO</div>
+    </div>
+    <div class="topbar-right">
+      <select id="lang-selector" onchange="cambiarIdioma(this.value)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:2px 4px;font-size:.7rem;cursor:pointer;outline:none">
+        <option value="es">🇵🇾 ES</option>
+        <option value="gn">🇵🇾 GN</option>
+        <option value="pt">🇧🇷 PT</option>
+        <option value="en">🇺🇸 EN</option>
+      </select>
+      <button id="btn-install" onclick="installApp()" style="display:none;background:var(--accent);color:#000;border:none;border-radius:6px;padding:3px 8px;font-size:.7rem;font-weight:700;cursor:pointer;font-family:var(--font-head);letter-spacing:.5px;animation:pulse 2s infinite">📲</button>
+      <span id="sync-badge">⏳</span>
+    </div>
+  </div>
+
+  <div class="content"><div id="main-content"></div></div>
+  <nav class="bottom-nav" id="bottom-nav"></nav>
+</div>
+
+<!-- ==================== SCRIPTS ==================== -->
+<!-- Núcleo -->
+<script src="./js/core/config.js"></script>
+<script src="./js/core/pwa.js"></script>
+<script src="./js/core/i18n.js"></script>
+<script src="./js/core/ui.js"></script>
+<script src="./js/core/offline.js"></script>
+<script src="./js/core/core.js"></script>
+<script src="./js/core/components.js"></script>
+<script src="./js/core/validators.js"></script>
+<script src="./js/core/backup.js"></script>
+<script src="./js/core/debug.js"></script>
+
+<!-- Autenticación -->
+<script src="./js/auth/auth.js"></script>
+<script src="./js/auth/plan.js"></script>
+<script src="./js/auth/admin-v2.js"></script>
+<script>
+  if (typeof window.misTrabajos !== 'function') {
+    console.warn('admin-v2.js no definió misTrabajos - usando fallback');
+    window.misTrabajos = function() {
+      if (currentPerfil?.rol !== 'empleado') { dashboard(); return; }
+      document.getElementById('main-content').innerHTML = `
+        <div class="empty">
+          <p>Error temporal. <button onclick="location.reload()">Reintentar</button></p>
+        </div>`;
+    };
+  }
+</script>
+
+<!-- Dashboard -->
+<script src="./js/dashboard/dashboard.js"></script>
+<script src="./js/dashboard/simple-mode.js?v=2"></script>
+<script src="./js/dashboard/modo-taller.js"></script>
+
+<!-- CRM -->
+<script src="./js/crm/clientes.js"></script>
+<script src="./js/crm/vehiculos.js"></script>
+<script src="./js/crm/cliente-view.js"></script>
+
+<!-- Taller (Reparaciones modularizado) -->
+<script src="./js/workshop/reparaciones-core.js"></script>
+<script src="./js/workshop/reparaciones-list.js?v=3"></script>
+<script src="./js/workshop/reparaciones-detalle.js"></script>
+<script src="./js/workshop/reparaciones-items.js"></script>
+<script src="./js/workshop/reparaciones-pagos.js"></script>
+<script src="./js/workshop/reparaciones-checklist.js"></script>
+<script src="./js/workshop/reparaciones-fotos.js"></script>
+<script src="./js/workshop/reparaciones-modales.js"></script>
+<script src="./js/workshop/reparaciones-wizard.js"></script>
+<script src="./js/workshop/reparaciones.js"></script>
+
+<!-- Otros módulos de taller -->
+<script src="./js/workshop/inventario.js"></script>
+<script src="./js/workshop/barcode.js"></script>
+<script src="./js/workshop/agenda.js"></script>
+<script src="./js/workshop/mantenimientos.js"></script>
+<script src="./js/workshop/kanban.js"></script>
+<script src="./js/workshop/checklist-templates.js"></script>
+
+<!-- Finanzas -->
+<script src="./js/finances/finanzas.js"></script>
+<script src="./js/finances/creditos.js"></script>
+<script src="./js/finances/cuentas.js"></script>
+<script src="./js/finances/gastos.js"></script>
+<script src="./js/finances/caja.js"></script>
+<script src="./js/finances/sueldos.js"></script>
+<script src="./js/finances/categorias.js"></script>
+<script src="./js/finances/conciliador.js"></script>
+
+<!-- RRHH -->
+<script src="./js/hr/empleados.js?v=3"></script>
+<script src="./js/hr/usuarios.js"></script>
+<script src="./js/hr/mecanicos.js"></script>
+<script src="./js/hr/perfil.js"></script>
+<script src="./js/config/balances.js"></script>
+
+<!-- Ventas -->
+<script src="./js/sales/ventas.js"></script>
+<script src="./js/sales/presupuestos.js"></script>
+
+<!-- Reportes -->
+<script src="./js/reports/common.js"></script>
+<script src="./js/reports/rentabilidad.js"></script>
+<script src="./js/reports/flujo-caja.js"></script>
+<script src="./js/reports/comparativas.js"></script>
+<script src="./js/reports/tendencias.js"></script>
+<script src="./js/reports/export-excel.js"></script>
+
+<!-- Integraciones -->
+<script src="./js/integrations/ia.js"></script>
+<script src="./js/integrations/push.js"></script>
+<script src="./js/integrations/ocr.js"></script>
+<script src="./js/integrations/google-calendar.js"></script>
+<script src="./js/integrations/recordatorios.js"></script>
+<script src="./js/integrations/realtime.js"></script>
+<script src="./js/integrations/integrations-wizard.js"></script>
+
+<!-- Stock en tiempo real -->
+<script src="./js/workshop/stock-realtime.js"></script>
+
+<!-- Navegación -->
+<script src="./js/navigation/navigation.js?v=3"></script>
+
+<!-- UX -->
+<script src="./js/ux/theme.js"></script>
+<script src="./js/ux/optimize-images.js"></script>
+<script src="./js/ux/ubicaciones.js"></script>
+<script src="./js/ux/form-guard.js"></script>
+
+<!-- Dev -->
+<script src="./js/dev/tests.js"></script>
+
+<!-- Función auxiliar para el formulario de invitación -->
+<script>
+  function toggleRazonSocialInv() {
+    const tipo = document.getElementById('inv-tipo-persona')?.value;
+    const razonDiv = document.getElementById('inv-campo-razon-social');
+    const labelId = document.getElementById('inv-label-identificacion');
+    if (!razonDiv || !labelId) return;
+    if (tipo === 'juridica') {
+      razonDiv.style.display = 'block';
+      labelId.textContent = 'RUC';
+    } else {
+      razonDiv.style.display = 'none';
+      labelId.textContent = 'CI / RUC';
+    }
+  }
+</script>
+
+<!-- Service Worker Update Handler -->
+<script>
+if ('serviceWorker' in navigator) {
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
+  });
+
+  async function checkForUpdates() {
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (!registration) return;
+      
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner();
+          }
+        });
+      });
+
+      setInterval(() => registration.update(), 60 * 60 * 1000);
+      window.addEventListener('online', () => registration.update());
+    } catch (e) {
+      console.warn('Error en checkForUpdates:', e);
+    }
+  }
+
+  function showUpdateBanner() {
+    const existingBanner = document.getElementById('update-banner');
+    if (existingBanner) existingBanner.remove();
+    const banner = document.createElement('div');
+    banner.id = 'update-banner';
+    banner.style.cssText = `
+      position:fixed;bottom:20px;left:20px;right:20px;
+      background:var(--accent,#00e5ff);color:#000;
+      padding:12px 20px;border-radius:30px;z-index:9999;
+      display:flex;align-items:center;justify-content:space-between;
+      font-family:'Rajdhani',sans-serif;font-weight:bold;
+      box-shadow:0 4px 20px rgba(0,0,0,.3);
+      max-width:500px;margin:0 auto;
+    `;
+    banner.innerHTML = `
+      <span>✨ Nueva versión disponible</span>
+      <button id="update-app-btn" style="background:#000;color:#fff;border:none;border-radius:20px;padding:8px 20px;font-weight:bold;cursor:pointer;font-family:inherit">ACTUALIZAR AHORA</button>
+    `;
+    document.body.appendChild(banner);
+    document.getElementById('update-app-btn').onclick = async () => {
+      banner.remove();
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg && reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      } else {
+        window.location.reload();
+      }
+    };
+  }
+
+  window.addEventListener('load', checkForUpdates);
+}
+</script>
+</body>
+</html>
