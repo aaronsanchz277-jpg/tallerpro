@@ -54,7 +54,8 @@ function buildNav() {
       { id:'ventas', label:'Ventas', icon:'<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>' },
     ]});
     sidebarSections.push({ title: 'FINANZAS', items: [
-      { id:'finanzas', label:'Finanzas', icon:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+      { id:'finanzas', label:'💵 Caja del día', icon:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+      { id:'finanzas-movimientos', label:'Movimientos', icon:'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>' },
       { id:'creditos', label:'Créditos', icon:'<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>' },
       { id:'gastos', label:'Gastos', icon:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>' },
       { id:'cuentas-pagar', label:'Cuentas a pagar', icon:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>' },
@@ -151,7 +152,7 @@ function closeSidebar() {
 
 async function navigate(page, params = {}) {
   const rol = currentPerfil?.rol;
-  const adminOnly = ['finanzas','creditos','cuentas-pagar','reportes','empleados','usuarios','mi-plan','gastos','presupuestos','ventas','sueldos','reporte-rentabilidad','reporte-flujo-caja','reporte-comparativas','reporte-tendencias','modo-taller','balances','solicitudes'];
+  const adminOnly = ['finanzas','finanzas-movimientos','creditos','cuentas-pagar','reportes','empleados','usuarios','mi-plan','gastos','presupuestos','ventas','sueldos','reporte-rentabilidad','reporte-flujo-caja','reporte-comparativas','reporte-tendencias','modo-taller','balances','solicitudes'];
   if (adminOnly.includes(page) && rol !== 'admin') { toast('No tenés acceso a esta sección','error'); navigate('dashboard'); return; }
   
   const staffOnly = ['reparaciones','clientes','vehiculos','inventario','agenda','mantenimientos','panel-trabajo'];
@@ -179,7 +180,9 @@ async function navigate(page, params = {}) {
   document.getElementById('main-content').innerHTML = getSkeleton(page);
   const pages = { 
     dashboard, clientes, vehiculos, reparaciones, inventario, creditos, empleados, 
-    presupuestos, reportes, usuarios, mantenimientos, agenda, finanzas, 
+    presupuestos, reportes, usuarios, mantenimientos, agenda,
+    finanzas: cajaDelDia,
+    'finanzas-movimientos': finanzas,
     'cuentas-pagar': cuentasPagar, 
     'mis-vehiculos': misVehiculos, 
     'mis-reparaciones': misReparaciones, 
@@ -215,6 +218,7 @@ async function navigate(page, params = {}) {
     console.warn('Página no encontrada:', page);
     navigate('dashboard');
   }
+  if (typeof fab_actualizarVisibilidad === 'function') fab_actualizarVisibilidad();
 }
 
 // Función global para buscar actualizaciones manualmente

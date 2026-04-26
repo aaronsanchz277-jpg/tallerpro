@@ -180,3 +180,53 @@ sigue funcionando pero el código no queda preasociado (degradación
 elegante: muestra un toast amarillo y se inserta sin la columna), y
 la pantalla "Mi cobro" igual carga porque la policy vieja también
 permite lectura al empleado.
+
+## Caja del día y FAB de acciones rápidas (Tarea #18)
+
+A partir de la Tarea #18, **Finanzas** abre por defecto la pantalla
+**"Caja del día"** (`cajaDelDia` en `js/finances/caja.js`, ruta
+`finanzas`). El menú lateral expone dos entradas: **💵 Caja del día**
+(la pantalla nueva) y **Movimientos** (`finanzas-movimientos` → la
+vista anterior `finanzas`).
+
+1. **Pantalla "Caja del día"**. Muestra los KPIs del día (ingresos,
+   egresos, saldo) y un detalle por origen: cobros de reparación,
+   ventas/servicios, fiados cobrados, gastos y movimientos manuales.
+   Lista cobros por método (efectivo, transferencia, tarjeta, crédito)
+   y el efectivo en caja (cobros en efectivo − gastos del día). Abajo
+   se muestra un **timeline cronológico unificado** con todos los
+   movimientos del día y un badge de origen
+   (COBRO / VENTA / SERVICIO / FIADO / GASTO / MANUAL); cada item lleva
+   al detalle correspondiente. Hay un selector de fecha para revisar
+   días anteriores.
+
+2. **Botón "Cerrar caja"** siempre visible en la cabecera. Al cerrar
+   se persiste el estado en `localStorage`
+   (`tp_cierre_caja_<taller_id>_<fecha>`) con `ingresos`, `egresos`,
+   `saldo`, `cerrado_por` y `cerrado_at`. No se crea ninguna tabla
+   nueva (la `cierres_caja` que figuraba en `rls_policies.sql` nunca
+   se materializó). Si el día está cerrado se muestra un banner con
+   botón "Reabrir". El modal viejo `modalCierreCaja` se mantiene por
+   compatibilidad con el dashboard y el tutorial, y ahora incluye un
+   botón "Ir a Caja del día".
+
+3. **FAB global "+"** (`js/core/fab.js`). Botón flotante fijo abajo a
+   la derecha, visible en toda la app excepto el login y el rol
+   `cliente`. Abre una hoja con accesos directos según el rol:
+   - **Admin**: cobrar reparación, nueva venta, servicio rápido,
+     nuevo gasto, ingreso/egreso manual y cobrar fiado.
+   - **Empleado con `registrar_cobros`**: cobrar reparación y
+     nueva venta.
+   Cada acción reutiliza los modales existentes (`modalNuevaVenta`,
+   `modalNuevoServicioRapido`, `modalNuevoGasto`, `finanzas_modalNuevo`,
+   `modalPagosReparacion`, `navigate('creditos')`). "Cobrar reparación"
+   abre primero un buscador propio (`fab_cobrarReparacion`) que lista
+   reparaciones con saldo pendiente del taller y filtra por patente,
+   cliente o descripción antes de abrir `modalPagosReparacion`. La
+   visibilidad del FAB se actualiza automáticamente desde
+   `navigate(...)` (llama a `fab_actualizarVisibilidad`).
+
+No requiere correr SQL nuevo. La pantalla respeta RLS porque consulta
+las tablas existentes (`pagos_reparacion`, `ventas`, `gastos_taller`,
+`movimientos_financieros`, `fiados`) con el `taller_id` del usuario
+actual.

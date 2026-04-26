@@ -224,6 +224,7 @@ async function crearTallerDesdePrompt() {
 function showLogin() {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
+  if (typeof fab_actualizarVisibilidad === 'function') fab_actualizarVisibilidad();
   if (tallerIdFromUrl) {
     showLoginInvitacion();
   } else {
@@ -313,6 +314,7 @@ function showApp() {
     if (typeof pushInit === 'function') pushInit();
     if (typeof realtime_init === 'function') realtime_init();
     if (typeof stockRealtime_init === 'function') stockRealtime_init();
+    if (typeof fab_actualizarVisibilidad === 'function') fab_actualizarVisibilidad();
     navigate('dashboard');
   });
 }
@@ -610,6 +612,7 @@ async function logout() {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-normal').style.display = 'block';
   document.getElementById('login-invitacion').style.display = 'none';
+  if (typeof fab_actualizarVisibilidad === 'function') fab_actualizarVisibilidad();
   switchLoginTab('login');
   const tabNuevo = document.getElementById('tab-nuevo-taller');
   if (tabNuevo) tabNuevo.style.display = 'none';

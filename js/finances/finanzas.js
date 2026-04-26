@@ -56,8 +56,11 @@ async function finanzas() {
   const contenido = document.getElementById('main-content');
   contenido.innerHTML = `
     <div style="padding:.25rem 0">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
-        <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text)">Finanzas</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;flex-wrap:wrap;gap:.4rem">
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <button onclick="navigate('finanzas')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.35rem .6rem;font-size:.72rem;cursor:pointer;font-family:var(--font-head)">← Caja del día</button>
+          <div style="font-family:var(--font-head);font-size:1.2rem;color:var(--text)">Movimientos</div>
+        </div>
         <div style="display:flex;gap:.3rem">
           <button class="btn-add" onclick="finanzas_modalNuevo('ingreso')">+ Ingreso</button>
           <button class="btn-add" style="background:var(--danger)" onclick="finanzas_modalNuevo('egreso')">+ Egreso</button>
