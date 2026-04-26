@@ -320,3 +320,48 @@ sin tener que recorrer pantallas:
 
 No requiere correr SQL nuevo. Todas las consultas usan tablas
 existentes y respetan RLS.
+
+## Centro de cobros unificado (Tarea #34)
+
+El taller real reportó que tenía "demasiados lugares para registrar pagos
+y se le perdían". Ahora hay dos vistas únicas que centralizan todo:
+
+1. **"💰 Por cobrar"** (`porCobrar` en `js/finances/por-cobrar.js`).
+   Lista en una sola pantalla todo lo que le deben al taller:
+   - **Reparaciones con saldo pendiente** (calculado en vivo desde
+     `pagos_reparacion`), ordenadas por fecha ascendente y con badge
+     "⏱ Xd" coloreado (gris <7d, amarillo ≥7d, rojo ≥30d).
+   - **Fiados pendientes** de la tabla `fiados`.
+   - Encabezado con dos cifras grandes: "TE DEBEN ₲X" y "HOY COBRASTE
+     ₲Y" (suma de ingresos del día desde `movimientos_financieros`).
+   - Cada fila tiene botón **"Cobrar"** que dispara el flujo existente
+     (`modalPagosReparacion` para reparaciones, marcado directo para
+     fiados) y refresca la lista en lugar de saltar al detalle, así el
+     usuario va tachando pendientes sin perderse.
+   - Visible para **admin** y para **empleados con permiso
+     `registrar_cobros`**.
+
+2. **"📤 Por pagar"** (`porPagar`). Vista análoga para egresos, solo
+   admin. Lista cuentas a proveedores (`cuentas_pagar.pagada=false`) y
+   liquidaciones de sueldo no pagadas (`liquidaciones.estado!='pagado'`),
+   con botón "Pagar" en cada fila que reusa la lógica de
+   `marcarCuentaPagada` y `registrarPagoSueldo` (los mismos triggers de
+   Supabase insertan el egreso en `movimientos_financieros`).
+
+3. **Cambio mínimo en `reparaciones-pagos.js`**. `modalPagosReparacion`
+   acepta un 3er parámetro opcional `onSuccess(repId)`. Si se pasa, se
+   llama después del cobro exitoso en lugar de navegar al detalle. Lo
+   usa "Por cobrar" para refrescarse a sí misma. Si nadie lo pasa, el
+   comportamiento es idéntico al anterior (navega al detalle).
+
+4. **Badges en sidebar**. `cargarBadgesNav` carga en background el
+   conteo de pendientes via `porCobrar_contar()` y `porPagar_contar()`
+   y los pinta junto a los items "💰 Por cobrar" (rojo) y
+   "📤 Por pagar" (amarillo).
+
+5. **Permisos en `navigate()`**. `por-pagar` está en `adminOnly`.
+   `por-cobrar` se valida explícitamente: admin O empleado con
+   `tienePerm('registrar_cobros')`.
+
+No requiere correr SQL nuevo. Reusa todas las tablas, triggers y
+permisos existentes.

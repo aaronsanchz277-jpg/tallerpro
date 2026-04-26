@@ -46,6 +46,12 @@ function buildNav() {
       { id:'mi-cobro', label:'Mi Cobro', icon:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
       { id:'mi-perfil', label:'Mi Perfil', icon:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' },
     ]});
+    // Empleados con permiso "registrar_cobros" ven el centro de cobros pendientes.
+    if (typeof tienePerm === 'function' && tienePerm('registrar_cobros')) {
+      sidebarSections.push({ title: 'COBROS', items: [
+        { id:'por-cobrar', label:'💰 Por cobrar', icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+      ]});
+    }
   }
 
   if (rol === 'admin') {
@@ -54,6 +60,8 @@ function buildNav() {
       { id:'ventas', label:'Ventas', icon:'<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>' },
     ]});
     sidebarSections.push({ title: 'FINANZAS', items: [
+      { id:'por-cobrar', label:'💰 Por cobrar', icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+      { id:'por-pagar', label:'📤 Por pagar', icon:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>' },
       { id:'finanzas', label:'💵 Caja del día', icon:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
       { id:'finanzas-movimientos', label:'Movimientos', icon:'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>' },
       { id:'creditos', label:'Créditos', icon:'<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>' },
@@ -161,6 +169,20 @@ async function cargarBadgesNav() {
       const total = (pendientes.count || 0) + (turnos.count || 0);
       pintarBadgeNav('side-solicitudes', total, 'var(--warning)');
     } catch (_) { /* silencioso */ }
+
+    // Centro de cobros: cuántas cosas están pendientes de cobrar y de pagar.
+    if (typeof porCobrar_contar === 'function') {
+      porCobrar_contar().then(n => pintarBadgeNav('side-por-cobrar', n, 'var(--danger)')).catch(()=>{});
+    }
+    if (typeof porPagar_contar === 'function') {
+      porPagar_contar().then(n => pintarBadgeNav('side-por-pagar', n, 'var(--warning)')).catch(()=>{});
+    }
+  }
+
+  if (rol === 'empleado' && typeof tienePerm === 'function' && tienePerm('registrar_cobros')) {
+    if (typeof porCobrar_contar === 'function') {
+      porCobrar_contar().then(n => pintarBadgeNav('side-por-cobrar', n, 'var(--danger)')).catch(()=>{});
+    }
   }
 
   if (rol === 'cliente') {
@@ -220,9 +242,15 @@ function closeSidebar() {
 
 async function navigate(page, params = {}) {
   const rol = currentPerfil?.rol;
-  const adminOnly = ['finanzas','finanzas-movimientos','creditos','cuentas-pagar','reportes','empleados','usuarios','mi-plan','gastos','presupuestos','ventas','sueldos','reporte-rentabilidad','reporte-flujo-caja','reporte-comparativas','reporte-tendencias','modo-taller','balances','solicitudes'];
+  const adminOnly = ['finanzas','finanzas-movimientos','creditos','cuentas-pagar','reportes','empleados','usuarios','mi-plan','gastos','presupuestos','ventas','sueldos','reporte-rentabilidad','reporte-flujo-caja','reporte-comparativas','reporte-tendencias','modo-taller','balances','solicitudes','por-pagar'];
   if (adminOnly.includes(page) && rol !== 'admin') { toast('No tenés acceso a esta sección','error'); navigate('dashboard'); return; }
-  
+
+  // "Por cobrar": admin O empleado con permiso "registrar_cobros".
+  if (page === 'por-cobrar') {
+    const okEmp = rol === 'empleado' && typeof tienePerm === 'function' && tienePerm('registrar_cobros');
+    if (rol !== 'admin' && !okEmp) { toast('No tenés acceso a esta sección','error'); navigate('dashboard'); return; }
+  }
+
   const staffOnly = ['reparaciones','clientes','vehiculos','inventario','agenda','mantenimientos','panel-trabajo'];
   if (staffOnly.includes(page) && rol === 'cliente') { navigate('mis-reparaciones'); return; }
   
@@ -272,7 +300,9 @@ async function navigate(page, params = {}) {
     'reporte-comparativas': reporteComparativas,
     'reporte-tendencias': reporteTendencias,
     'modo-taller': modoTaller,
-    'balances': balances  // 👈 NUEVA RUTA
+    'balances': balances,  // 👈 NUEVA RUTA
+    'por-cobrar': porCobrar,
+    'por-pagar': porPagar
   };
   const pageFn = pages[page];
   if (pageFn) {

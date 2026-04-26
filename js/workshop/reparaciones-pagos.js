@@ -1,7 +1,12 @@
 // ─── PAGOS DE REPARACIÓN ────────────────────────────────────────────────────
 let _registrandoPago = false;
+// Callback opcional. Si se setea, se llama tras un cobro exitoso EN VEZ
+// de navegar al detalle de la reparación. Lo usa el "Centro de cobros"
+// (porCobrar) para no perder el contexto de la lista de pendientes.
+let _onPagoSuccess = null;
 
-async function modalPagosReparacion(repId, montoSugerido = null) {
+async function modalPagosReparacion(repId, montoSugerido = null, onSuccess = null) {
+  _onPagoSuccess = typeof onSuccess === 'function' ? onSuccess : null;
   // Solo admin o empleado con permiso explícito de "registrar_cobros"
   if (typeof esAdmin === 'function' && !esAdmin()
       && !(typeof tienePerm === 'function' && tienePerm('registrar_cobros'))) {
@@ -145,7 +150,12 @@ async function guardarPagoReparacion(repId) {
       _registrandoPago = false;
       toast('Pago registrado', 'success');
       closeModal();
-      detalleReparacion(repId);
+      // Si quien abrió el modal pasó un callback (ej: el Centro de cobros),
+      // lo usamos en lugar de saltar al detalle de la reparación.
+      const cb = _onPagoSuccess;
+      _onPagoSuccess = null;
+      if (cb) { try { cb(repId); } catch (_) { detalleReparacion(repId); } }
+      else { detalleReparacion(repId); }
     }, null, 'No se pudo registrar el pago');
   } catch (e) {
     restaurarBtn();
