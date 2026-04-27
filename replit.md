@@ -1027,9 +1027,12 @@ una pantalla mezcla. Esta tarea cambia el flujo para que el usuario
   toast desaparece. Vuelve a aparecer si pasan 5+ minutos y el
   usuario navega a otra pantalla, o inmediatamente si llega una
   versión todavía más nueva (en ese caso el dismiss se resetea).
-- `setInterval(registration.update(), 1h)` y un `update()` extra al
-  evento `online` para que la app detecte updates sin requerir
-  recarga manual.
+- **Polling activo de updates**: al cargar dispara
+  `registration.update()` inmediato y luego cada 60s. También
+  re-chequea en `online`, `visibilitychange` (cuando la pestaña
+  vuelve al foreground) y `focus`. Así un usuario con la app abierta
+  ve el toast a los pocos segundos del deploy en lugar de esperar el
+  ciclo natural del browser (que puede ser horas).
 
 **Re-mostrar al navegar** (`js/navigation/navigation.js`): al inicio
 de `navigate(page)`, si existe `window._tpMaybeShowUpdateBanner` se

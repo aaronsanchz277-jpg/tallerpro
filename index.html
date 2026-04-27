@@ -416,8 +416,18 @@ if ('serviceWorker' in navigator) {
         });
       });
 
-      setInterval(() => registration.update().catch(() => {}), 60 * 60 * 1000);
-      window.addEventListener('online', () => registration.update().catch(() => {}));
+      // Polling activo: chequear cada 60s mientras la app está abierta para
+      // que el toast aparezca a los pocos segundos del deploy. El cost es
+      // bajo (un GET condicional al sw.js), y se respeta también cuando el
+      // usuario vuelve a la pestaña tras tenerla en background.
+      const tick = () => registration.update().catch(() => {});
+      tick(); // primer chequeo inmediato al cargar
+      setInterval(tick, 60 * 1000);
+      window.addEventListener('online', tick);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') tick();
+      });
+      window.addEventListener('focus', tick);
     } catch (e) {
       console.warn('Error en checkForUpdates:', e);
     }
