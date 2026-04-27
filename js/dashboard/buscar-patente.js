@@ -55,7 +55,7 @@ async function buscarPatente(valor) {
               <button onclick="detalleVehiculo('${v.id}')" style="font-size:.72rem;background:none;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 8px;cursor:pointer">${t('dashVer')}</button>
             </div>
             <div style="font-size:.72rem;color:var(--text2);font-family:var(--font-head);letter-spacing:1px;margin-bottom:.4rem">${t('dashHistorial')} (${reps.length})</div>
-            ${reps.length === 0 ? '<div style="font-size:.8rem;color:var(--text2)">${t("vehSinReps")}</div>' :
+            ${reps.length === 0 ? `<div style="font-size:.8rem;color:var(--text2)">${t("vehSinReps")}</div>` :
               reps.map(r => `
               <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.82rem">
                 <span>${h(r.descripcion)}</span>
