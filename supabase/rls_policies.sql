@@ -1713,19 +1713,27 @@ UPDATE talleres
 -- ============================================================================
 ALTER TABLE talleres ADD COLUMN IF NOT EXISTS logo_url TEXT;
 
--- Crear el bucket `logos` si no existe. Marcado público para que las
--- URL de lectura no requieran token (más simple para usar en <img> y PDFs).
+-- Crear el bucket `logos` si no existe. PRIVADO: la lectura va siempre
+-- vía RLS para garantizar aislamiento por taller (cada taller solo ve
+-- sus propios archivos). Los PDFs embeben el logo como base64, así que
+-- no necesitan URL pública; la app descarga el archivo con el SDK
+-- autenticado y lo pinta como data URL.
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('logos', 'logos', true)
+VALUES ('logos', 'logos', false)
 ON CONFLICT (id) DO UPDATE SET public = EXCLUDED.public;
 
 -- Políticas de storage.objects para el bucket `logos`.
--- Lectura pública (anon + authenticated): el bucket es público y los logos
--- aparecen en PDFs y en la app sin login.
+-- Lectura: solo usuarios autenticados del MISMO taller dueño del path
+-- (admin / empleado / cliente). Esto cubre tanto el render del logo en
+-- sidebar/topbar como la generación de PDFs por parte del staff.
 DROP POLICY IF EXISTS "logos_read_public" ON storage.objects;
-CREATE POLICY "logos_read_public" ON storage.objects
-  FOR SELECT TO public
-  USING (bucket_id = 'logos');
+DROP POLICY IF EXISTS "logos_read_taller" ON storage.objects;
+CREATE POLICY "logos_read_taller" ON storage.objects
+  FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'logos'
+    AND (storage.foldername(name))[1] = public.taller_id_actual()::text
+  );
 
 -- Escritura: solo admin del taller cuyo id coincide con el primer segmento
 -- del path. Path esperado: `{taller_id}/logo-{ts}.{ext}`.

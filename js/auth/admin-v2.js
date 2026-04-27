@@ -199,7 +199,11 @@ async function modalConfigDatos() {
   if (!taller) return;
   const paisActual = taller.pais || 'PY';
   // Tarea #63: el campo logo_url puede no existir todavía si la migración
-  // SQL no fue aplicada. En ese caso ocultamos la sección.
+  // SQL no fue aplicada. En ese caso ocultamos la sección. Reseteamos los
+  // flags pendientes de selecciones anteriores (que pudieron quedar si el
+  // usuario abandonó el modal sin guardar).
+  _logoTallerPendingFile = null;
+  _logoTallerQuitar = false;
   const tieneLogoCol = ('logo_url' in taller);
   const logoActual = taller.logo_url || '';
   const logoSection = tieneLogoCol ? `
@@ -207,9 +211,7 @@ async function modalConfigDatos() {
       <label class="form-label">Logo del taller</label>
       <div id="logo-preview-wrap" style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem">
         <div id="logo-preview" style="width:64px;height:64px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
-          ${logoActual
-            ? `<img src="${h(logoActual)}" alt="logo" style="max-width:100%;max-height:100%;object-fit:contain">`
-            : `<span style="font-size:.7rem;color:var(--text2)">sin logo</span>`}
+          <span style="font-size:.7rem;color:var(--text2)">${logoActual ? '...' : 'sin logo'}</span>
         </div>
         <div style="flex:1;min-width:0">
           <input type="file" id="f-taller-logo" accept="image/png,image/jpeg,image/webp" class="form-input" style="padding:.4rem;font-size:.8rem" onchange="logoTallerPreview(this)">
@@ -239,6 +241,21 @@ async function modalConfigDatos() {
     </div>
     <button class="btn-primary" onclick="guardarConfigDatos()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+
+  // Tarea #63: si ya hay un logo guardado, descargarlo (vía SDK con sesión
+  // autenticada porque el bucket es privado) y pintarlo en el preview. Si
+  // falla, dejamos el placeholder "..." → "sin logo".
+  if (tieneLogoCol && logoActual && typeof obtenerLogoTallerBase64 === 'function') {
+    obtenerLogoTallerBase64().then(data => {
+      const prev = document.getElementById('logo-preview');
+      if (!prev) return;
+      if (data) {
+        prev.innerHTML = `<img src="${data.dataUrl}" alt="logo" style="max-width:100%;max-height:100%;object-fit:contain">`;
+      } else {
+        prev.innerHTML = `<span style="font-size:.7rem;color:var(--text2)">sin logo</span>`;
+      }
+    });
+  }
 }
 
 // Tarea #63: vista previa del logo elegido y validación de tamaño/tipo.
@@ -557,67 +574,98 @@ window.miCobro = miCobro;
 
 
 // ─── TAREA #63 · LOGO DEL TALLER (helpers globales) ─────────────────────────
-// Render del logo en el sidebar y el topbar de la app: si hay logo_url,
-// reemplaza el texto "TALLERPRO" por la imagen; si no, deja el texto.
-// Idempotente — se llama desde buildNav y desde guardarConfigDatos.
-function aplicarLogoTallerEnUI() {
-  const logoUrl = currentPerfil?.talleres?.logo_url || '';
-  // Sidebar header (index.html L184)
-  const sideHead = document.querySelector('#sidebar-header > div:first-child');
-  if (sideHead) {
-    if (logoUrl) {
-      sideHead.outerHTML = `<div data-logo-slot="sidebar" style="display:flex;align-items:center;justify-content:flex-start"><img src="${h(logoUrl)}" alt="logo" style="max-height:40px;max-width:100%;object-fit:contain"></div>`;
-    } else {
-      sideHead.outerHTML = `<div data-logo-slot="sidebar" style="font-family:var(--font-head);font-size:1.4rem;color:var(--accent);letter-spacing:3px">TALLERPRO</div>`;
-    }
-  }
-  // Topbar (index.html L202)
-  const top = document.querySelector('.topbar-logo');
-  if (top) {
-    if (logoUrl) {
-      top.innerHTML = `<img src="${h(logoUrl)}" alt="logo" style="max-height:28px;max-width:120px;object-fit:contain;display:block">`;
-      top.style.padding = '0';
-    } else {
-      top.innerHTML = 'TALLERPRO';
-      top.style.padding = '';
-    }
-  }
+// Cache en memoria del logo en formato Base64 (data URL). El bucket `logos`
+// es PRIVADO (RLS gateado por taller_id), así que la lectura va siempre vía
+// `sb.storage.from('logos').download(path)` con la sesión autenticada del
+// usuario. Memoizado por sesión y por logo_url; si el admin sube otro logo
+// `invalidarLogoTallerCache()` lo limpia.
+let _logoTallerCache = null;        // { url, dataUrl, fmt }
+let _logoTallerInflight = null;     // Promise en vuelo para deduplicar
+
+function invalidarLogoTallerCache() {
+  _logoTallerCache = null;
+  _logoTallerInflight = null;
 }
 
-// Cache en memoria del logo en formato Base64 (data URL) para usar en PDFs
-// con jsPDF.addImage. Memoizado por sesión y por URL — si el admin cambia
-// el logo, `invalidarLogoTallerCache()` lo limpia.
-let _logoTallerCache = null; // { url, dataUrl, fmt }
+// Extrae el path dentro del bucket `logos` desde la URL canónica que
+// devuelve `getPublicUrl` (es la que guardamos en talleres.logo_url).
+// Ejemplo: ".../storage/v1/object/public/logos/<taller>/logo-<ts>.png"
+//          → "<taller>/logo-<ts>.png"
+function _logoTallerExtraerPath(url) {
+  if (!url) return null;
+  const m = url.match(/\/logos\/(.+)$/);
+  return (m && m[1]) ? m[1] : null;
+}
 
-function invalidarLogoTallerCache() { _logoTallerCache = null; }
-
-// Devuelve { dataUrl, fmt } o null si el taller no tiene logo o falla la
-// descarga (no se considera error fatal — el PDF se genera sin logo).
+// Devuelve { dataUrl, fmt } o null si el taller no tiene logo, no se puede
+// extraer el path o falla la descarga (no fatal — el PDF / sidebar siguen
+// funcionando sin logo).
 async function obtenerLogoTallerBase64() {
   const url = currentPerfil?.talleres?.logo_url || '';
   if (!url) return null;
   if (_logoTallerCache && _logoTallerCache.url === url) {
     return { dataUrl: _logoTallerCache.dataUrl, fmt: _logoTallerCache.fmt };
   }
-  try {
-    const resp = await fetch(url, { mode: 'cors', cache: 'force-cache' });
-    if (!resp.ok) return null;
-    const blob = await resp.blob();
-    // Detectar formato para jsPDF: PNG | JPEG | WEBP. Default PNG.
-    let fmt = 'PNG';
-    if (blob.type === 'image/jpeg') fmt = 'JPEG';
-    else if (blob.type === 'image/webp') fmt = 'WEBP';
-    const dataUrl = await new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.onerror = reject;
-      r.readAsDataURL(blob);
-    });
-    _logoTallerCache = { url, dataUrl, fmt };
-    return { dataUrl, fmt };
-  } catch (_) {
-    return null;
-  }
+  if (_logoTallerInflight) return _logoTallerInflight;
+  const path = _logoTallerExtraerPath(url);
+  if (!path) return null;
+  _logoTallerInflight = (async () => {
+    try {
+      const { data: blob, error } = await sb.storage.from('logos').download(path);
+      if (error || !blob) return null;
+      let fmt = 'PNG';
+      if (blob.type === 'image/jpeg') fmt = 'JPEG';
+      else if (blob.type === 'image/webp') fmt = 'WEBP';
+      const dataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(blob);
+      });
+      _logoTallerCache = { url, dataUrl, fmt };
+      return { dataUrl, fmt };
+    } catch (_) {
+      return null;
+    } finally {
+      _logoTallerInflight = null;
+    }
+  })();
+  return _logoTallerInflight;
+}
+
+// Render del logo en el sidebar y el topbar de la app: descarga el archivo
+// privado, lo memoiza y lo pinta como data URL. Mientras se baja muestra el
+// texto "TALLERPRO" para evitar flash en blanco. Idempotente — se llama
+// desde buildNav y desde guardarConfigDatos.
+async function aplicarLogoTallerEnUI() {
+  const tieneLogo = !!(currentPerfil?.talleres?.logo_url);
+
+  // Helper para reemplazar el slot del sidebar y del topbar con un
+  // contenido dado (HTML interno o texto).
+  const pintar = (dataUrl) => {
+    const sideHead = document.querySelector('#sidebar-header > div:first-child');
+    if (sideHead) {
+      if (dataUrl) {
+        sideHead.outerHTML = `<div data-logo-slot="sidebar" style="display:flex;align-items:center;justify-content:flex-start"><img src="${dataUrl}" alt="logo" style="max-height:40px;max-width:100%;object-fit:contain"></div>`;
+      } else {
+        sideHead.outerHTML = `<div data-logo-slot="sidebar" style="font-family:var(--font-head);font-size:1.4rem;color:var(--accent);letter-spacing:3px">TALLERPRO</div>`;
+      }
+    }
+    const top = document.querySelector('.topbar-logo');
+    if (top) {
+      if (dataUrl) {
+        top.innerHTML = `<img src="${dataUrl}" alt="logo" style="max-height:28px;max-width:120px;object-fit:contain;display:block">`;
+        top.style.padding = '0';
+      } else {
+        top.innerHTML = 'TALLERPRO';
+        top.style.padding = '';
+      }
+    }
+  };
+
+  if (!tieneLogo) { pintar(null); return; }
+  const data = await obtenerLogoTallerBase64();
+  pintar(data ? data.dataUrl : null);
 }
 
 window.aplicarLogoTallerEnUI = aplicarLogoTallerEnUI;

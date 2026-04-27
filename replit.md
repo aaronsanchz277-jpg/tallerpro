@@ -894,15 +894,19 @@ la columna `logo_url`).
 
 - `talleres.logo_url TEXT` (nullable) — URL pública del archivo en
   el bucket de Supabase Storage `logos`.
-- Bucket `logos` creado con `INSERT … ON CONFLICT` (público para
-  lectura, escritura por RLS).
+- Bucket `logos` creado con `INSERT … ON CONFLICT` (PRIVADO, sin
+  acceso anónimo). Se decidió privado para garantizar aislamiento por
+  taller incluso en lectura — cada taller solo puede descargar sus
+  propios archivos.
 - 4 políticas en `storage.objects` para `bucket_id='logos'`:
-  - `logos_read_public` → SELECT abierto (anon + auth).
+  - `logos_read_taller` → SELECT solo para usuarios autenticados del
+    mismo taller dueño del path (`(storage.foldername(name))[1] =
+    public.taller_id_actual()::text`). Cubre admin, empleado y
+    cliente.
   - `logos_insert_admin` / `logos_update_admin` / `logos_delete_admin`
     → solo admin del taller dueño del path. La validación usa
-    `(storage.foldername(name))[1] = public.taller_id_actual()::text`,
-    así que la convención obligatoria de path es
-    `{taller_id}/logo-{timestamp}.{ext}`.
+    el mismo predicado de folder. La convención obligatoria de path
+    es `{taller_id}/logo-{timestamp}.{ext}`.
 - Idempotente (DROP POLICY IF EXISTS + ON CONFLICT), seguro de
   re-ejecutar.
 
@@ -945,12 +949,25 @@ en la esquina superior izquierda y el texto del nombre + RUC + dirección
 preserva.
 
 **Cache Base64 en memoria** (`obtenerLogoTallerBase64()`): memoiza
-`{url, dataUrl, fmt}` por sesión. `fetch(url, {cache:'force-cache'})`
-+ `FileReader.readAsDataURL`. Detecta el formato por `blob.type` y
-mapea a las claves de jsPDF (`PNG | JPEG | WEBP`). Si el fetch falla,
-devuelve `null` y el PDF se genera sin logo (no error fatal).
-`invalidarLogoTallerCache()` limpia el cache; se llama desde
-`guardarConfigDatos()` cuando el admin cambia o quita el logo.
+`{url, dataUrl, fmt}` por sesión. Como el bucket es privado, la lectura
+va por `sb.storage.from('logos').download(path)` con la sesión
+autenticada del usuario; el path se extrae con regex de la URL guardada
+en `talleres.logo_url`. Detecta el formato por `blob.type` y mapea a
+las claves de jsPDF (`PNG | JPEG | WEBP`). Si la descarga falla,
+devuelve `null` y el PDF/sidebar se renderizan sin logo (no fatal).
+También deduplica llamadas concurrentes con `_logoTallerInflight` para
+no descargar dos veces el mismo archivo si buildNav y compartirPresupuesto
+disparan en paralelo. `invalidarLogoTallerCache()` limpia el cache; se
+llama desde `guardarConfigDatos()` cuando el admin cambia o quita el
+logo.
+
+**Por qué bucket privado en lugar de público:** primera versión usaba
+`public: true` + SELECT abierto. Code review marcó que eso permitía a
+cualquier autenticado (o anon) leer el logo de cualquier taller, lo
+cual viola el principio de aislamiento por taller que rige el resto
+de TallerPro. Como los logos van embebidos como base64 en los PDFs y
+como data URL en el sidebar/topbar, no se necesita URL pública —
+todo el consumo pasa por la sesión autenticada.
 
 **Wizard de setup** (`js/auth/setup-wizard.js`): `_setupTieneLogo()`
 sigue devolviendo `false` aunque la columna ya exista, porque
