@@ -158,12 +158,12 @@ async function guardarGasto(id) {
 async function eliminarGasto(id) {
   if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede eliminar gastos')) return;
   confirmar('¿Eliminar este gasto? También se eliminará el registro financiero asociado.', async () => {
-    // El trigger de BD podría encargarse, pero por seguridad borramos manualmente
-    await sb.from('movimientos_financieros')
-      .delete()
-      .eq('referencia_id', id)
-      .eq('referencia_tabla', 'gastos_taller');
-    
+    // Tarea #82: la baja en `movimientos_financieros` la hace ahora un
+    // TRIGGER AFTER DELETE en Supabase (`trigger_gasto_movimiento_delete`),
+    // así queda consistente incluso si el gasto se borra desde otra interfaz
+    // (editor de Supabase, futuros endpoints, etc.). Cuando el usuario está
+    // offline, `offlineDelete` encola la operación y el trigger se dispara
+    // al sincronizar.
     await offlineDelete('gastos_taller', 'id', id);
     clearCache('gastos');
     clearCache('finanzas');

@@ -1788,6 +1788,41 @@ BEGIN
   END IF;
 END $$;
 
+-- TAREA #82 — Borrar la copia de movimientos_financieros cuando se elimina un
+-- gasto, también desde el lado del servidor.
+-- ----------------------------------------------------------------------------
+-- Hasta ahora `eliminarGasto` (js/finances/gastos.js) borraba manualmente la
+-- fila correspondiente en `movimientos_financieros`. Si el gasto se borra
+-- desde otra interfaz (editor de Supabase, futuros endpoints, jobs, etc.) el
+-- movimiento financiero queda huérfano y los KPIs / reportes mensuales
+-- muestran un egreso que ya no existe. Es el mismo patrón que arreglamos en
+-- la tarea #81 para UPDATE, pero del lado de DELETE.
+--
+-- Idempotente: CREATE OR REPLACE + DROP TRIGGER IF EXISTS.
+CREATE OR REPLACE FUNCTION public.sync_movimiento_gasto_delete()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  DELETE FROM movimientos_financieros
+   WHERE referencia_id = OLD.id
+     AND referencia_tabla = 'gastos_taller';
+  RETURN OLD;
+END;
+$function$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='gastos_taller') THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trigger_gasto_movimiento_delete ON gastos_taller';
+    EXECUTE 'CREATE TRIGGER trigger_gasto_movimiento_delete
+               AFTER DELETE ON gastos_taller
+               FOR EACH ROW
+               EXECUTE FUNCTION public.sync_movimiento_gasto_delete()';
+  END IF;
+END $$;
+
 
 -- ============================================================================
 -- TAREA #63 — LOGO DEL TALLER EN ENCABEZADO Y PDFs
