@@ -331,23 +331,13 @@ async function eliminarVale(valeId, empleadoId) {
   if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   confirmar('¿Eliminar este vale? También se borrará el egreso en Finanzas.', async () => {
     await safeCall(async () => {
-      // Borramos primero el egreso atado en Finanzas (referencia_id/_tabla
-      // los setea el insert al crear el vale — ver Tarea #49). Si no existe
-      // movimiento ligado, el delete simplemente no afecta filas.
-      // Si esto falla abortamos: borrar sólo el vale dejaría un huérfano
-      // inverso (egreso sin vale), justo el problema que esta tarea soluciona.
-      const { error: movErr } = await sb.from('movimientos_financieros')
-        .delete()
-        .eq('taller_id', tid())
-        .eq('referencia_tabla', 'vales_empleado')
-        .eq('referencia_id', valeId);
-      if (movErr) {
-        throw new Error('No se pudo borrar el egreso en Finanzas: ' + movErr.message);
-      }
-      const { error: valeErr } = await sb.from('vales_empleado').delete().eq('id', valeId);
-      if (valeErr) {
-        throw new Error('No se pudo eliminar el vale: ' + valeErr.message);
-      }
+      // Tarea #83: el egreso espejo en `movimientos_financieros` lo borra
+      // ahora un TRIGGER AFTER DELETE en Supabase
+      // (`trigger_vales_empleado_movimiento_delete`), en la misma
+      // transacción que el delete del vale. Eso garantiza que cualquier
+      // baja del vale (esta UI, el editor de Supabase, jobs futuros) deje
+      // las dos tablas consistentes sin pasos extra desde JS.
+      await offlineDelete('vales_empleado', 'id', valeId);
       clearCache('empleados');
       clearCache('finanzas');
       toast('Vale eliminado');

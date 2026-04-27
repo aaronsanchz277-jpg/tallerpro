@@ -311,12 +311,10 @@ async function eliminarVenta(id) {
   }
   confirmar('¿Eliminar esta venta? También se eliminará el registro financiero asociado.', async () => {
     await safeCall(async () => {
-      // El trigger en BD podría manejar la eliminación, pero por seguridad borramos manualmente el movimiento
-      await sb.from('movimientos_financieros')
-        .delete()
-        .eq('referencia_id', id)
-        .eq('referencia_tabla', 'ventas');
-      
+      // Tarea #83: la baja en `movimientos_financieros` la hace ahora un
+      // TRIGGER AFTER DELETE en Supabase (`trigger_ventas_movimiento_delete`),
+      // así que cualquier baja de la venta — esta UI, el editor de Supabase,
+      // un job futuro — limpia el ingreso espejo en la misma transacción.
       await offlineDelete('ventas', 'id', id);
       clearCache('ventas');
       clearCache('finanzas');

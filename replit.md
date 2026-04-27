@@ -608,6 +608,16 @@ Reglas de oro:
    con `DROP TRIGGER IF EXISTS` y `DROP FUNCTION IF EXISTS` antes de
    crear el bloque nuevo, así una base que llegó a aplicar el SQL de #35
    queda limpia.
+6. **DELETE simétricos (Tareas #82 y #83)**: para cada tabla origen que
+   inserta a `movimientos_financieros` existe un trigger `AFTER DELETE`
+   espejo (`trigger_<tabla>_movimiento_delete`) que borra la fila
+   espejo con `referencia_id = OLD.id` y `referencia_tabla = '<tabla>'`.
+   Cubre `gastos_taller`, `cuentas_pagar`, `liquidaciones`,
+   `pagos_reparacion`, `ventas`, `fiados` y `vales_empleado`. Así la
+   baja desde el editor de Supabase, un job o un endpoint nuevo no deja
+   movimientos huérfanos. El JS de `eliminarVenta` y `eliminarVale` ya
+   no necesita borrar el movimiento a mano: alcanza con `offlineDelete`
+   sobre la fila origen.
 
 ### Finalizar una reparación NO crea ingreso automático (Tarea #47)
 

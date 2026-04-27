@@ -1825,6 +1825,74 @@ END $$;
 
 
 -- ============================================================================
+-- TAREA #83 — Borrar la copia en `movimientos_financieros` cuando se elimina
+-- la fila origen, también desde el lado del servidor.
+-- ----------------------------------------------------------------------------
+-- La Tarea #82 cubrió el caso de `gastos_taller`. El mismo patrón aplica al
+-- resto de las tablas que replican a `movimientos_financieros` vía los
+-- triggers de la sección 3.F (cuentas_pagar, liquidaciones, pagos_reparacion,
+-- ventas, fiados) y a `vales_empleado` (cuyo egreso espejo lo inserta el JS
+-- en `js/hr/empleados.js`, pero el problema es el mismo: si la fila origen
+-- se borra desde el editor de Supabase / un endpoint nuevo / un job, el
+-- movimiento queda fantasma en finanzas y los KPIs / reportes mensuales
+-- mienten).
+--
+-- Cada trigger usa la misma firma simétrica: AFTER DELETE en la tabla
+-- origen, borra de `movimientos_financieros` toda fila con
+-- `referencia_id = OLD.id` y `referencia_tabla = '<tabla>'`. Si no hay
+-- movimiento espejo (caso típico: cuenta no pagada, liquidación pendiente,
+-- venta sin trigger viejo), el DELETE simplemente no afecta filas.
+--
+-- En el caso de `fiados`, una sola fila origen puede tener hasta dos
+-- movimientos (crédito otorgado por 3.F.6 y, cuando se cobre, el ingreso
+-- de cobro por 3.F.7). El DELETE no filtra por tipo, así que se llevan
+-- ambos en una pasada.
+--
+-- Idempotente: CREATE OR REPLACE + DROP TRIGGER IF EXISTS.
+-- ============================================================================
+
+-- 3.F.D · Función genérica reutilizable: borra los movimientos espejo de la
+-- fila que se está eliminando. La función infiere la tabla origen leyendo
+-- TG_TABLE_NAME, así que un mismo CREATE FUNCTION sirve para los seis
+-- triggers.
+CREATE OR REPLACE FUNCTION public.sync_movimiento_origen_delete()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  DELETE FROM movimientos_financieros
+   WHERE referencia_id = OLD.id
+     AND referencia_tabla = TG_TABLE_NAME;
+  RETURN OLD;
+END;
+$function$;
+
+DO $$
+DECLARE
+  tabla text;
+  origen_tablas text[] := ARRAY[
+    'cuentas_pagar',
+    'liquidaciones',
+    'pagos_reparacion',
+    'ventas',
+    'fiados',
+    'vales_empleado'
+  ];
+BEGIN
+  FOREACH tabla IN ARRAY origen_tablas LOOP
+    IF EXISTS (SELECT 1 FROM information_schema.tables
+               WHERE table_schema='public' AND table_name=tabla) THEN
+      EXECUTE format('DROP TRIGGER IF EXISTS trigger_%s_movimiento_delete ON %I', tabla, tabla);
+      EXECUTE format('CREATE TRIGGER trigger_%s_movimiento_delete
+                        AFTER DELETE ON %I
+                        FOR EACH ROW
+                        EXECUTE FUNCTION public.sync_movimiento_origen_delete()', tabla, tabla);
+    END IF;
+  END LOOP;
+END $$;
+
+
+-- ============================================================================
 -- TAREA #63 — LOGO DEL TALLER EN ENCABEZADO Y PDFs
 -- ----------------------------------------------------------------------------
 -- Cada taller puede subir su propio logo (PNG/JPG/WEBP, <2MB). Se muestra
