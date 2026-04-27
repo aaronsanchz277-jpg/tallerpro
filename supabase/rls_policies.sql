@@ -1749,6 +1749,45 @@ BEGIN
 END;
 $function$;
 
+-- TAREA #81 — Sincronizar la marca al editar gastos también desde el lado del
+-- servidor.
+-- ----------------------------------------------------------------------------
+-- El trigger 3.F.4 solo dispara en AFTER INSERT, así que cuando un usuario
+-- edita un gasto y cambia "Afecta al balance" (o el monto / la fecha), la
+-- copia en `movimientos_financieros` queda desincronizada respecto al gasto
+-- original. Antes lo arreglábamos con un UPDATE manual desde JS, pero eso se
+-- rompe si alguien edita el gasto desde otra interfaz (editor de Supabase,
+-- futuros endpoints, etc.). Movemos la sincronización al servidor para que
+-- sea siempre consistente.
+--
+-- Idempotente: CREATE OR REPLACE + DROP TRIGGER IF EXISTS.
+CREATE OR REPLACE FUNCTION public.sync_movimiento_gasto_update()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  UPDATE movimientos_financieros
+     SET afecta_balance = COALESCE(NEW.afecta_balance, true),
+         monto = NEW.monto,
+         fecha = NEW.fecha
+   WHERE referencia_id = NEW.id
+     AND referencia_tabla = 'gastos_taller';
+  RETURN NEW;
+END;
+$function$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='public' AND table_name='gastos_taller') THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trigger_gasto_movimiento_update ON gastos_taller';
+    EXECUTE 'CREATE TRIGGER trigger_gasto_movimiento_update
+               AFTER UPDATE OF afecta_balance, monto, fecha ON gastos_taller
+               FOR EACH ROW
+               EXECUTE FUNCTION public.sync_movimiento_gasto_update()';
+  END IF;
+END $$;
+
 
 -- ============================================================================
 -- TAREA #63 — LOGO DEL TALLER EN ENCABEZADO Y PDFs

@@ -132,31 +132,20 @@ async function guardarGasto(id) {
     avisarAfectaBalanceFaltante();
   }
 
-  let gastoId = id;
   if (id) {
     const { error } = await offlineUpdate('gastos_taller', data, 'id', id);
     if (error) { toast('Error: '+error.message,'error'); return; }
   } else {
-    const { data: saved, error } = await offlineInsert('gastos_taller', data);
+    const { error } = await offlineInsert('gastos_taller', data);
     if (error) { toast('Error: '+error.message,'error'); return; }
-    gastoId = saved?.[0]?.id;
   }
 
-  // Tarea #75: el trigger de Supabase solo se dispara en INSERT, así que al
-  // editar un gasto sincronizamos a mano la copia en movimientos_financieros
-  // (afecta_balance + monto + fecha) para que los KPIs queden consistentes.
-  if (id && colExiste) {
-    try {
-      await sb.from('movimientos_financieros').update({
-        afecta_balance: afectaBalUI,
-        monto,
-        fecha
-      }).eq('referencia_id', id).eq('referencia_tabla', 'gastos_taller');
-    } catch (e) { /* sin migración: ignorar */ }
-  }
-  
-  // NOTA: La inserción en movimientos_financieros ahora la hace un TRIGGER en Supabase
-  // (ver script SQL proporcionado)
+  // Tarea #81: la sincronización (afecta_balance + monto + fecha) hacia
+  // movimientos_financieros la hace ahora un TRIGGER AFTER UPDATE en Supabase
+  // (`trigger_gasto_movimiento_update`). Así queda consistente incluso si
+  // el gasto se edita desde otra interfaz (editor de Supabase, futuros
+  // endpoints, etc.). La INSERCIÓN inicial también la hace un trigger
+  // (`trigger_gasto_movimiento`).
   
   clearCache('gastos');
   clearCache('finanzas');
