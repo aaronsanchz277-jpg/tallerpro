@@ -1047,3 +1047,60 @@ bump, los browsers no detectan que el SW cambió y el toast nunca
 aparece. Los archivos JS/CSS individuales sí se revalidan
 (network-first), pero el shell de la app y el "estoy en la versión X"
 dependen del cambio del CACHE_NAME.
+
+
+## "Afecta al balance mensual" en gastos y movimientos manuales (Tarea #75)
+
+Se agregó la columna `afecta_balance BOOLEAN NOT NULL DEFAULT TRUE`
+a `gastos_taller` y `movimientos_financieros` (ver migración al final
+de `supabase/rls_policies.sql`). El default `TRUE` hace que toda la
+data vieja siga computando como hasta ahora, así que la migración
+es retro-compatible y se puede aplicar antes o después de subir el
+nuevo JS.
+
+El check **"Afecta al balance mensual"** aparece en:
+- `modalNuevoGasto` / edit (`js/finances/gastos.js`).
+- `finanzas_modalNuevo` / `finanzas_modalEditar` (movimientos manuales
+  de ingreso/egreso en `js/finances/finanzas.js`).
+
+Cuando está **destildado** el registro se guarda igual y se muestra
+en las listas con un badge gris **NO AFECTA BALANCE** y opacidad
+reducida, pero queda excluido de:
+- Los KPIs de Finanzas (totales por día y totales del rango).
+- Caja del día: tiles "Ingresos / Egresos / Saldo" y mini-KPIs
+  (Gastos, Manuales +, Manuales −). Los KPIs físicos —cobros por
+  método y "efectivo en caja"— siguen contando todo el dinero que
+  entró o salió del cajón.
+- Cierre de caja (lo que se guarda como saldo declarado).
+- Reportes de Rentabilidad, Tendencias y Comparativas.
+- KPIs del dashboard `ingresos_mes` y `ganancia_neta` (se restan
+  en cliente sobre los valores devueltos por las RPCs
+  `get_dashboard_stats` / `get_dashboard_stats_balance`).
+
+El trigger `registrar_movimiento_gasto` también se actualizó para
+propagar `NEW.afecta_balance` al insert en `movimientos_financieros`.
+Como el trigger original solo dispara en `AFTER INSERT`, al editar
+un gasto el JS de `gastos.js` también sincroniza a mano la copia
+en `movimientos_financieros` (`afecta_balance`, `monto`, `fecha`).
+
+**Compatibilidad sin migrar el SQL:** `js/finances/finanzas.js`
+tiene el helper `detectarAfectaBalance()` que prueba leer la
+columna y, si no existe, omite el campo del insert/update y avisa
+con un toast amarillo si el usuario intentó usar la opción.
+Las queries de KPIs (en Finanzas, Caja, Dashboard y los reportes
+de Rentabilidad/Tendencias/Comparativas) usan `select('*')` —en
+lugar de listas explícitas que incluyan `afecta_balance`— para
+que la columna aparezca cuando exista y sea `undefined` cuando
+no, y en JS filtramos con `item.afecta_balance !== false` (cae a
+"afecta = true" en ambos casos). Si dashboard.js detecta que la
+columna falta también dispara el toast (vía
+`avisarAfectaBalanceFaltante`, que es one-shot por sesión).
+
+**Selector de balance del dashboard:** la corrección en cliente
+de `ingresos_mes` / `ganancia_neta` respeta el balance elegido
+en el selector. Cuando hay un `_dashboardBalanceId` activo, sólo
+descontamos los movimientos que están asignados a ese balance
+(via la relación `movimiento_balance(balance_id)`); con "Todos
+los balances" se descuentan todos los del taller, igual al scope
+de la RPC `get_dashboard_stats_balance` cuando recibe
+`p_balance_id = NULL`.

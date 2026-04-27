@@ -1696,6 +1696,61 @@ UPDATE talleres
 
 
 -- ============================================================================
+-- TAREA #75 — "AFECTA AL BALANCE MENSUAL" EN GASTOS Y MOVIMIENTOS MANUALES
+-- ----------------------------------------------------------------------------
+-- Permite registrar movimientos para tener trazabilidad sin distorsionar los
+-- KPIs y reportes mensuales (préstamos personales, retiros que no son
+-- sueldo, reembolsos, compras hechas con plata propia, etc.).
+--
+-- El default es TRUE para que los datos viejos sigan computando como hasta
+-- ahora. Solo hace falta destildar el check en gastos / movimientos manuales
+-- nuevos cuando NO se quiere que sumen ni resten en el balance del mes.
+--
+-- Idempotente: ADD COLUMN IF NOT EXISTS y CREATE OR REPLACE.
+-- ============================================================================
+ALTER TABLE gastos_taller
+  ADD COLUMN IF NOT EXISTS afecta_balance BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE movimientos_financieros
+  ADD COLUMN IF NOT EXISTS afecta_balance BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- El trigger 3.F.4 que replica gastos_taller en movimientos_financieros
+-- propaga la marca para que los filtros del cliente funcionen sobre la
+-- tabla de movimientos (que es la fuente de verdad de los KPIs).
+CREATE OR REPLACE FUNCTION public.registrar_movimiento_gasto()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  cat_id UUID;
+  concepto_final TEXT;
+BEGIN
+  SELECT id INTO cat_id FROM categorias_financieras
+  WHERE taller_id = NEW.taller_id AND nombre = COALESCE(NEW.categoria, 'Otros egresos') AND tipo = 'egreso'
+  LIMIT 1;
+
+  IF cat_id IS NULL THEN
+    INSERT INTO categorias_financieras (taller_id, nombre, tipo, es_fija)
+    VALUES (NEW.taller_id, COALESCE(NEW.categoria, 'Otros egresos'), 'egreso', false)
+    RETURNING id INTO cat_id;
+  END IF;
+
+  concepto_final := COALESCE(NEW.descripcion, 'Gasto');
+  IF NEW.proveedor IS NOT NULL AND NEW.proveedor != '' THEN
+    concepto_final := concepto_final || ' - ' || NEW.proveedor;
+  END IF;
+
+  INSERT INTO movimientos_financieros (taller_id, tipo, categoria_id, monto, concepto, fecha, referencia_id, referencia_tabla, afecta_caja, afecta_balance)
+  VALUES (NEW.taller_id, 'egreso', cat_id, NEW.monto,
+          concepto_final, NEW.fecha, NEW.id, 'gastos_taller', true,
+          COALESCE(NEW.afecta_balance, true))
+  ON CONFLICT (referencia_id, referencia_tabla) DO NOTHING;
+  RETURN NEW;
+END;
+$function$;
+
+
+-- ============================================================================
 -- TAREA #63 — LOGO DEL TALLER EN ENCABEZADO Y PDFs
 -- ----------------------------------------------------------------------------
 -- Cada taller puede subir su propio logo (PNG/JPG/WEBP, <2MB). Se muestra

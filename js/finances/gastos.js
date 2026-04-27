@@ -15,9 +15,11 @@ async function gastos({ filtro='todos', offset=0 }={}) {
     return q.range(offset, offset+PAGE_SIZE-1);
   });
   
-  const totalGastos = (data||[]).reduce((s,g)=>s+parseFloat(g.monto||0),0);
+  // Tarea #75: KPIs ignoran los gastos marcados como "no afecta balance".
+  const gastosParaKPIs = (data||[]).filter(g => g.afecta_balance !== false);
+  const totalGastos = gastosParaKPIs.reduce((s,g)=>s+parseFloat(g.monto||0),0);
   const hoy = fechaHoy();
-  const gastosHoy = (data||[]).filter(g => g.fecha === hoy).reduce((s,g)=>s+parseFloat(g.monto||0),0);
+  const gastosHoy = gastosParaKPIs.filter(g => g.fecha === hoy).reduce((s,g)=>s+parseFloat(g.monto||0),0);
   
   document.getElementById('main-content').innerHTML = `
     <div class="section-header">
@@ -42,17 +44,22 @@ async function gastos({ filtro='todos', offset=0 }={}) {
     </div>
     
     ${(data||[]).length===0 ? '<div class="empty"><p>No hay gastos registrados</p></div>' :
-      (data||[]).map(g=>`
-      <div class="card" onclick="modalEditarGasto('${g.id}')">
+      (data||[]).map(g=>{
+        const afectaBal = g.afecta_balance !== false;
+        const opacityStyle = afectaBal ? '' : 'opacity:.65;';
+        const badge = (!afectaBal && typeof badgeNoAfectaBalance === 'function') ? ' ' + badgeNoAfectaBalance() : '';
+        return `
+      <div class="card" style="${opacityStyle}" onclick="modalEditarGasto('${g.id}')">
         <div class="card-header">
           <div class="card-avatar">📤</div>
           <div class="card-info">
-            <div class="card-name">${h(g.descripcion||'Gasto')}</div>
+            <div class="card-name">${h(g.descripcion||'Gasto')}${badge}</div>
             <div class="card-sub">${h(g.proveedor||'')}${g.categoria?' · '+h(g.categoria):''} · ${formatFecha(g.fecha)}</div>
           </div>
           <div style="font-family:var(--font-head);color:var(--danger);font-size:1rem">${fm(g.monto||0)}</div>
         </div>
-      </div>`).join('')}
+      </div>`;
+      }).join('')}
     ${renderPagination(count||0, offset, '_navGastos')}`;
 }
 function _navGastos(o) { gastos({offset:o}); }
@@ -75,6 +82,13 @@ function modalNuevoGasto(existing) {
       <div class="form-group"><label class="form-label">Proveedor</label><input class="form-input" id="g-prov" value="${h(existing?.proveedor||'')}"></div>
     </div>
     <div class="form-group"><label class="form-label">Nro. comprobante</label><input class="form-input" id="g-comp" value="${h(existing?.comprobante||'')}"></div>
+    <div class="form-group" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.6rem .75rem">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
+        <input type="checkbox" id="g-afecta-balance" ${existing && existing.afecta_balance === false ? '' : 'checked'} style="accent-color:var(--accent);width:18px;height:18px">
+        <span>Afecta al balance mensual</span>
+      </label>
+      <div style="font-size:.68rem;color:var(--text2);margin-top:.3rem;padding-left:1.7rem">Destildá si es un gasto con plata propia, un préstamo o un reembolso que no debe restar en los KPIs ni reportes del mes.</div>
+    </div>
     <button class="btn-primary" onclick="guardarGasto(${existing?"'"+existing.id+"'":'null'})">${t('guardar')}</button>
     ${existing?`<button class="btn-danger" onclick="eliminarGasto('${existing.id}')">Eliminar</button>`:''}
     <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
@@ -97,6 +111,9 @@ async function guardarGasto(id) {
   const proveedor = document.getElementById('g-prov').value;
   const comprobante = document.getElementById('g-comp').value;
   
+  const checkAfectaBal = document.getElementById('g-afecta-balance');
+  const afectaBalUI = checkAfectaBal ? checkAfectaBal.checked : true;
+
   const data = {
     descripcion: desc,
     monto,
@@ -106,7 +123,15 @@ async function guardarGasto(id) {
     comprobante,
     taller_id: tid()
   };
-  
+
+  // Tarea #75: incluir afecta_balance solo si la migración SQL ya se corrió.
+  const colExiste = typeof detectarAfectaBalance === 'function' ? await detectarAfectaBalance() : false;
+  if (colExiste) {
+    data.afecta_balance = afectaBalUI;
+  } else if (!afectaBalUI && typeof avisarAfectaBalanceFaltante === 'function') {
+    avisarAfectaBalanceFaltante();
+  }
+
   let gastoId = id;
   if (id) {
     const { error } = await offlineUpdate('gastos_taller', data, 'id', id);
@@ -115,6 +140,19 @@ async function guardarGasto(id) {
     const { data: saved, error } = await offlineInsert('gastos_taller', data);
     if (error) { toast('Error: '+error.message,'error'); return; }
     gastoId = saved?.[0]?.id;
+  }
+
+  // Tarea #75: el trigger de Supabase solo se dispara en INSERT, así que al
+  // editar un gasto sincronizamos a mano la copia en movimientos_financieros
+  // (afecta_balance + monto + fecha) para que los KPIs queden consistentes.
+  if (id && colExiste) {
+    try {
+      await sb.from('movimientos_financieros').update({
+        afecta_balance: afectaBalUI,
+        monto,
+        fecha
+      }).eq('referencia_id', id).eq('referencia_tabla', 'gastos_taller');
+    } catch (e) { /* sin migración: ignorar */ }
   }
   
   // NOTA: La inserción en movimientos_financieros ahora la hace un TRIGGER en Supabase

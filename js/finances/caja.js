@@ -88,7 +88,7 @@ async function cajaDelDia_cargarDatos(fecha) {
       fiadosRes
     ] = await Promise.all([
       sb.from('movimientos_financieros')
-        .select('id,tipo,monto,concepto,fecha,created_at,referencia_tabla,referencia_id,categorias_financieras(nombre)')
+        .select('*, categorias_financieras(nombre)')
         .eq('taller_id', tid()).eq('fecha', fecha)
         .order('created_at', { ascending: false }),
       sb.from('pagos_reparacion')
@@ -101,7 +101,7 @@ async function cajaDelDia_cargarDatos(fecha) {
         .gte('created_at', desde).lte('created_at', hasta)
         .order('created_at', { ascending: false }),
       sb.from('gastos_taller')
-        .select('id,descripcion,monto,categoria,proveedor,fecha,created_at')
+        .select('*')
         .eq('taller_id', tid()).eq('fecha', fecha)
         .order('created_at', { ascending: false }),
       sb.from('fiados')
@@ -119,20 +119,31 @@ async function cajaDelDia_cargarDatos(fecha) {
     // ── Totales por tipo de origen ─────────────────────────────────────────
     const totCobros   = pagos.reduce((s,p)=>s+parseFloat(p.monto||0),0);
     const totVentas   = ventas.reduce((s,v)=>s+parseFloat(v.total||0),0);
-    const totGastos   = gastos.reduce((s,g)=>s+parseFloat(g.monto||0),0);
     const totFiados   = creditosPagados.reduce((s,f)=>s+parseFloat(f.monto||0),0);
 
     // Manuales: movimientos_financieros que no son réplica de otra tabla
     const movManuales = movimientos.filter(m => !m.referencia_tabla);
-    const totManIng   = movManuales.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+parseFloat(m.monto||0),0);
-    const totManEgr   = movManuales.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+parseFloat(m.monto||0),0);
+
+    // Versiones físicas (cuentan TODO el movimiento de plata del día,
+    // afecte o no al balance mensual). Las usamos para "Efectivo en caja".
+    const totGastosFisico = gastos.reduce((s,g)=>s+parseFloat(g.monto||0),0);
+    const totManEgrFisico = movManuales.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+parseFloat(m.monto||0),0);
+
+    // Tarea #75: versiones que afectan al balance mensual. Estas alimentan
+    // los KPIs principales (Ingresos / Egresos / Saldo y mini-tiles).
+    const gastosBal       = gastos.filter(g => g.afecta_balance !== false);
+    const movManualesBal  = movManuales.filter(m => m.afecta_balance !== false);
+    const totGastos       = gastosBal.reduce((s,g)=>s+parseFloat(g.monto||0),0);
+    const totManIng       = movManualesBal.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+parseFloat(m.monto||0),0);
+    const totManEgr       = movManualesBal.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+parseFloat(m.monto||0),0);
 
     // Totales globales: usamos movimientos_financieros como fuente de
     // verdad (los triggers replican cobros, ventas y gastos ahí). Si la BD
     // del taller todavía no tiene los triggers corriendo, sumamos a mano
-    // como fallback.
-    let totalIngresos = movimientos.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+parseFloat(m.monto||0),0);
-    let totalEgresos  = movimientos.filter(m=>m.tipo==='egreso' ).reduce((s,m)=>s+parseFloat(m.monto||0),0);
+    // como fallback. Filtrados por afecta_balance.
+    const movsBal = movimientos.filter(m => m.afecta_balance !== false);
+    let totalIngresos = movsBal.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+parseFloat(m.monto||0),0);
+    let totalEgresos  = movsBal.filter(m=>m.tipo==='egreso' ).reduce((s,m)=>s+parseFloat(m.monto||0),0);
 
     const ingresosTrigger = totCobros + totVentas + totFiados + totManIng;
     const egresosTrigger  = totGastos + totManEgr;
@@ -152,7 +163,9 @@ async function cajaDelDia_cargarDatos(fecha) {
     });
     porMetodo['Efectivo'] += totFiados;
 
-    const efectivoEnCaja = (porMetodo['Efectivo']||0) - totGastos - totManEgr;
+    // Tarea #75: el efectivo físico en caja resta TODOS los egresos del día
+    // (afecten o no al balance), porque siguen siendo plata que salió del cajón.
+    const efectivoEnCaja = (porMetodo['Efectivo']||0) - totGastosFisico - totManEgrFisico;
 
     // ── Timeline cronológico unificado ─────────────────────────────────────
     const items = [];
@@ -190,6 +203,7 @@ async function cajaDelDia_cargarDatos(fecha) {
       titulo: g.descripcion || 'Gasto',
       sub: `${g.categoria || 'Sin categoría'}${g.proveedor ? ' · '+g.proveedor : ''}`,
       monto: parseFloat(g.monto||0),
+      afectaBalance: g.afecta_balance !== false,
       onclick: `modalEditarGasto('${g.id}')`
     }));
     movManuales.forEach(m => items.push({
@@ -199,6 +213,7 @@ async function cajaDelDia_cargarDatos(fecha) {
       titulo: m.concepto || 'Movimiento manual',
       sub: m.categorias_financieras?.nombre || 'Sin categoría',
       monto: parseFloat(m.monto||0),
+      afectaBalance: m.afecta_balance !== false,
       onclick: `finanzas_modalEditar('${m.id}')`
     }));
 
@@ -267,20 +282,24 @@ async function cajaDelDia_cargarDatos(fecha) {
 
       ${items.length === 0 ? '<div class="empty"><p>Aún no hay movimientos hoy</p></div>' : `
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
-          ${items.map((it,i) => `
+          ${items.map((it,i) => {
+            const noBal = it.afectaBalance === false;
+            const noBalBadge = (noBal && typeof badgeNoAfectaBalance === 'function') ? ' ' + badgeNoAfectaBalance() : '';
+            return `
             <div ${it.onclick?`onclick="${it.onclick}"`:''}
-                 style="${it.onclick?'cursor:pointer;':''}display:flex;align-items:center;padding:.6rem .75rem;${i>0?'border-top:1px solid var(--border);':''}gap:.6rem">
+                 style="${it.onclick?'cursor:pointer;':''}display:flex;align-items:center;padding:.6rem .75rem;${i>0?'border-top:1px solid var(--border);':''}gap:.6rem;${noBal?'opacity:.65;':''}">
               <div style="width:36px;height:36px;border-radius:10px;background:${it.tipo==='ingreso'?'rgba(0,255,136,.1)':'rgba(255,68,68,.1)'};display:flex;align-items:center;justify-content:center;font-family:var(--font-head);color:${it.tipo==='ingreso'?'var(--success)':'var(--danger)'};font-size:1rem;flex-shrink:0">${it.tipo==='ingreso'?'↑':'↓'}</div>
               <div style="flex:1;min-width:0">
                 <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">
                   ${badge(it.origen)}
+                  ${noBalBadge}
                   <span style="font-size:.82rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${h(it.titulo)}</span>
                 </div>
                 <div style="font-size:.68rem;color:var(--text2);margin-top:2px">${horaDe(it.ts)}${it.sub ? ' · '+h(it.sub) : ''}</div>
               </div>
               <div style="font-family:var(--font-head);font-size:.95rem;color:${it.tipo==='ingreso'?'var(--success)':'var(--danger)'};flex-shrink:0">${it.tipo==='ingreso'?'+':'-'}${fm(it.monto)}</div>
             </div>
-          `).join('')}
+          `;}).join('')}
         </div>
       `}
     `;
@@ -327,17 +346,21 @@ async function cajaDelDia_cerrarCaja(fecha) {
       const desde = fecha + 'T00:00:00';
       const hasta = fecha + 'T23:59:59';
       const [movRes, pagosRes, ventasRes, gastosRes, fiadosRes] = await Promise.all([
-        sb.from('movimientos_financieros').select('tipo,monto,referencia_tabla').eq('taller_id', tid()).eq('fecha', fecha),
+        sb.from('movimientos_financieros').select('*').eq('taller_id', tid()).eq('fecha', fecha),
         sb.from('pagos_reparacion').select('monto,metodo').eq('taller_id', tid()).eq('fecha', fecha),
         sb.from('ventas').select('total').eq('taller_id', tid()).eq('estado','completado').gte('created_at', desde).lte('created_at', hasta),
-        sb.from('gastos_taller').select('monto').eq('taller_id', tid()).eq('fecha', fecha),
+        sb.from('gastos_taller').select('*').eq('taller_id', tid()).eq('fecha', fecha),
         sb.from('fiados').select('monto').eq('taller_id', tid()).eq('pagado', true).gte('fecha_pago', desde).lte('fecha_pago', hasta)
       ]);
       const sum = (a,c='monto') => (a||[]).reduce((s,x)=>s+parseFloat(x[c]||0),0);
-      const ingMov = sum((movRes.data||[]).filter(m=>m.tipo==='ingreso'));
-      const egrMov = sum((movRes.data||[]).filter(m=>m.tipo==='egreso'));
+      // Tarea #75: el cierre guarda el balance del día, así que filtramos
+      // los movimientos / gastos que no afectan al balance.
+      const movsBal = (movRes.data||[]).filter(m => m.afecta_balance !== false);
+      const gastosBal = (gastosRes.data||[]).filter(g => g.afecta_balance !== false);
+      const ingMov = sum(movsBal.filter(m=>m.tipo==='ingreso'));
+      const egrMov = sum(movsBal.filter(m=>m.tipo==='egreso'));
       const ingFallback = sum(pagosRes.data) + sum(ventasRes.data,'total') + sum(fiadosRes.data);
-      const egrFallback = sum(gastosRes.data);
+      const egrFallback = sum(gastosBal);
       const totalIng = Math.max(ingMov, ingFallback);
       const totalEgr = Math.max(egrMov, egrFallback);
       const saldo = totalIng - totalEgr;
@@ -399,7 +422,7 @@ async function cargarDatosCierreCaja(fecha) {
       { data: ventas },
       { data: creditosPagados }
     ] = await Promise.all([
-      sb.from('movimientos_financieros').select('tipo,monto,concepto,categorias_financieras(nombre)').eq('taller_id', tid()).eq('fecha', fecha),
+      sb.from('movimientos_financieros').select('*, categorias_financieras(nombre)').eq('taller_id', tid()).eq('fecha', fecha),
       sb.from('pagos_reparacion').select('monto,metodo').eq('taller_id', tid()).eq('fecha', fecha),
       sb.from('ventas').select('total,metodo_pago').eq('taller_id', tid()).eq('estado', 'completado').gte('created_at', fecha).lte('created_at', fecha + 'T23:59:59'),
       sb.from('fiados').select('monto').eq('taller_id', tid()).eq('pagado', true).gte('fecha_pago', fecha).lte('fecha_pago', fecha + 'T23:59:59')
@@ -412,12 +435,14 @@ async function cargarDatosCierreCaja(fecha) {
     (ventas || []).forEach(v => { const metodo = v.metodo_pago || 'Efectivo'; porMetodo[metodo] = (porMetodo[metodo] || 0) + parseFloat(v.total || 0); });
     porMetodo['Efectivo'] += sumarMontos(creditosPagados, 'monto');
 
-    const ingresosHoy = (movimientos || []).filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto || 0), 0);
-    const egresosHoy = (movimientos || []).filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto || 0), 0);
+    // Tarea #75: para los KPIs del cierre filtramos movimientos que no afectan al balance.
+    const movsBal = (movimientos || []).filter(m => m.afecta_balance !== false);
+    const ingresosHoy = movsBal.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto || 0), 0);
+    const egresosHoy = movsBal.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto || 0), 0);
     const netoHoy = ingresosHoy - egresosHoy;
 
     const egresosPorCat = {};
-    (movimientos || []).filter(m => m.tipo === 'egreso').forEach(m => {
+    movsBal.filter(m => m.tipo === 'egreso').forEach(m => {
       const cat = m.categorias_financieras?.nombre || 'Otros';
       egresosPorCat[cat] = (egresosPorCat[cat] || 0) + parseFloat(m.monto || 0);
     });

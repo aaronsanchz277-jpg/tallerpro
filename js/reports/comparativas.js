@@ -1,4 +1,13 @@
 async function reporteComparativas() {
+  // Tarea #75: aviso one-shot si la columna `afecta_balance` no fue migrada.
+  try {
+    if (typeof detectarAfectaBalance === 'function' &&
+        !(await detectarAfectaBalance()) &&
+        typeof avisarAfectaBalanceFaltante === 'function') {
+      avisarAfectaBalanceFaltante();
+    }
+  } catch (e) {}
+
   const hoy = new Date();
   const inicioMesActual = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
   const finMesActual = hoy.toISOString().split('T')[0];
@@ -13,14 +22,14 @@ async function reporteComparativas() {
   const repsAnterior = await sb.from('reparaciones').select('costo, costo_repuestos').eq('taller_id', tid()).eq('estado', 'finalizado').gte('fecha', inicioMesAnterior).lte('fecha', finMesAnterior);
   const ventasActual = await sb.from('ventas').select('total').eq('taller_id', tid()).eq('estado', 'completado').gte('created_at', inicioMesActual).lte('created_at', finMesActual + 'T23:59:59');
   const ventasAnterior = await sb.from('ventas').select('total').eq('taller_id', tid()).eq('estado', 'completado').gte('created_at', inicioMesAnterior).lte('created_at', finMesAnterior + 'T23:59:59');
-  const gastosActual = await sb.from('gastos_taller').select('monto').eq('taller_id', tid()).gte('fecha', inicioMesActual).lte('fecha', finMesActual);
-  const gastosAnterior = await sb.from('gastos_taller').select('monto').eq('taller_id', tid()).gte('fecha', inicioMesAnterior).lte('fecha', finMesAnterior);
+  const gastosActual = await sb.from('gastos_taller').select('*').eq('taller_id', tid()).gte('fecha', inicioMesActual).lte('fecha', finMesActual);
+  const gastosAnterior = await sb.from('gastos_taller').select('*').eq('taller_id', tid()).gte('fecha', inicioMesAnterior).lte('fecha', finMesAnterior);
   const repsAnioActual = await sb.from('reparaciones').select('costo, costo_repuestos').eq('taller_id', tid()).eq('estado', 'finalizado').gte('fecha', inicioAnioActual).lte('fecha', finMesActual);
   const repsAnioAnterior = await sb.from('reparaciones').select('costo, costo_repuestos').eq('taller_id', tid()).eq('estado', 'finalizado').gte('fecha', inicioAnioAnterior).lte('fecha', finAnioAnterior);
   const ventasAnioActual = await sb.from('ventas').select('total').eq('taller_id', tid()).eq('estado', 'completado').gte('created_at', inicioAnioActual).lte('created_at', finMesActual + 'T23:59:59');
   const ventasAnioAnterior = await sb.from('ventas').select('total').eq('taller_id', tid()).eq('estado', 'completado').gte('created_at', inicioAnioAnterior).lte('created_at', finAnioAnterior + 'T23:59:59');
-  const gastosAnioActual = await sb.from('gastos_taller').select('monto').eq('taller_id', tid()).gte('fecha', inicioAnioActual).lte('fecha', finMesActual);
-  const gastosAnioAnterior = await sb.from('gastos_taller').select('monto').eq('taller_id', tid()).gte('fecha', inicioAnioAnterior).lte('fecha', finAnioAnterior);
+  const gastosAnioActual = await sb.from('gastos_taller').select('*').eq('taller_id', tid()).gte('fecha', inicioAnioActual).lte('fecha', finMesActual);
+  const gastosAnioAnterior = await sb.from('gastos_taller').select('*').eq('taller_id', tid()).gte('fecha', inicioAnioAnterior).lte('fecha', finAnioAnterior);
 
   function calcIngresos(reps, ventas) {
     const ingReps = (reps.data || []).reduce((s, r) => s + parseFloat(r.costo || 0), 0);
@@ -28,7 +37,8 @@ async function reporteComparativas() {
     return ingReps + ingVentas;
   }
   function calcGanancia(reps) { return (reps.data || []).reduce((s, r) => s + parseFloat(r.costo || 0) - parseFloat(r.costo_repuestos || 0), 0); }
-  function calcGastos(gastos) { return (gastos.data || []).reduce((s, g) => s + parseFloat(g.monto || 0), 0); }
+  // Tarea #75: ignoramos gastos marcados como "no afecta balance".
+  function calcGastos(gastos) { return (gastos.data || []).filter(g => g.afecta_balance !== false).reduce((s, g) => s + parseFloat(g.monto || 0), 0); }
 
   const ingresosMesActual = calcIngresos(repsActual, ventasActual);
   const ingresosMesAnterior = calcIngresos(repsAnterior, ventasAnterior);

@@ -158,8 +158,52 @@ async function dashboard() {
   }
 
   // Combinar stats: usamos los valores base, pero reemplazamos ingresos_mes con el valor filtrado
-  const ingresosMesFiltrado = statsBalance.ingresos_mes || 0;
-  const gananciaNeta = statsBalance.ganancia_neta || 0;
+  let ingresosMesFiltrado = statsBalance.ingresos_mes || 0;
+  let gananciaNeta = statsBalance.ganancia_neta || 0;
+
+  // Tarea #75: las RPCs `get_dashboard_stats[_balance]` se calculan en el
+  // servidor sumando todos los movimientos del mes. Como la columna nueva
+  // `afecta_balance` recién se está rolando, restamos en cliente los
+  // movimientos marcados como "no afecta balance" para que los KPIs
+  // ignoren préstamos personales / retiros / reembolsos. Si la columna
+  // todavía no existe en el Supabase del taller, salteamos y avisamos
+  // una sola vez al admin.
+  try {
+    const colExiste = (typeof detectarAfectaBalance === 'function')
+      ? await detectarAfectaBalance() : true;
+    if (!colExiste) {
+      if (typeof avisarAfectaBalanceFaltante === 'function') avisarAfectaBalanceFaltante();
+    } else {
+      // Si hay un balance específico seleccionado, sólo descontamos los
+      // movimientos asignados a ese balance; "Todos los balances" = todos
+      // los del taller (mismo scope que la RPC sin balance).
+      const { data: noAfectan, error: noAfectanErr } = await sb
+        .from('movimientos_financieros')
+        .select('tipo,monto,afecta_balance,movimiento_balance(balance_id)')
+        .eq('taller_id', tid())
+        .eq('afecta_balance', false)
+        .gte('fecha', primerMes)
+        .lte('fecha', hoy);
+      if (!noAfectanErr && Array.isArray(noAfectan)) {
+        let ingNo = 0, egrNo = 0;
+        noAfectan.forEach(m => {
+          if (_dashboardBalanceId) {
+            const enBal = (m.movimiento_balance || []).some(mb => mb.balance_id === _dashboardBalanceId);
+            if (!enBal) return;
+          }
+          const v = parseFloat(m.monto || 0);
+          if (m.tipo === 'ingreso') ingNo += v;
+          else if (m.tipo === 'egreso') egrNo += v;
+        });
+        ingresosMesFiltrado = Math.max(0, ingresosMesFiltrado - ingNo);
+        // ganancia_neta = ingresos - costos. Si removemos un ingreso, baja;
+        // si removemos un egreso, sube.
+        gananciaNeta = gananciaNeta - ingNo + egrNo;
+      }
+    }
+  } catch (e) {
+    // Columna `afecta_balance` aún no migrada; mantener KPIs originales.
+  }
   
   const kpiConfig = await cargarDashboardConfig();
   
@@ -250,7 +294,7 @@ async function dashboard() {
     try {
       const { data: ultimosMovs } = await safeQuery(() =>
         sb.from('movimientos_financieros')
-          .select('tipo,monto,concepto,fecha,categorias_financieras(nombre)')
+          .select('*, categorias_financieras(nombre)')
           .eq('taller_id', tid())
           .order('created_at', { ascending: false })
           .limit(3)
@@ -262,15 +306,18 @@ async function dashboard() {
               <span style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px">💵 ${t('dashUltimosMovimientos')}</span>
               <span onclick="navigate('finanzas')" style="font-size:.65rem;color:var(--accent);cursor:pointer;text-decoration:underline">${t('dashVerTodos')} →</span>
             </div>
-            ${ultimosMovs.map(m => `
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.78rem">
+            ${ultimosMovs.map(m => {
+              const noBal = m.afecta_balance === false;
+              const noBalBadge = (noBal && typeof badgeNoAfectaBalance === 'function') ? ' ' + badgeNoAfectaBalance() : '';
+              return `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.78rem;${noBal?'opacity:.7;':''}">
                 <div style="display:flex;align-items:center;gap:.4rem;max-width:70%">
                   <span style="color:${m.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'};font-weight:bold">${m.tipo === 'ingreso' ? '↑' : '↓'}</span>
-                  <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.concepto || m.categorias_financieras?.nombre || t('movimiento'))}</span>
+                  <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(m.concepto || m.categorias_financieras?.nombre || t('movimiento'))}${noBalBadge}</span>
                 </div>
                 <span style="font-family:var(--font-head);color:${m.tipo === 'ingreso' ? 'var(--success)' : 'var(--danger)'}">${m.tipo === 'ingreso' ? '+' : '-'}${fm(m.monto)}</span>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>`;
       }
     } catch (e) {

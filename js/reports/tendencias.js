@@ -1,7 +1,16 @@
 // ─── REPORTE DE TENDENCIAS (Evolución de ingresos y gastos) ──────────────────
 async function reporteTendencias() {
   const { inicio, fin } = getFechasReporte();
-  
+
+  // Tarea #75: aviso one-shot si la columna `afecta_balance` no fue migrada.
+  try {
+    if (typeof detectarAfectaBalance === 'function' &&
+        !(await detectarAfectaBalance()) &&
+        typeof avisarAfectaBalanceFaltante === 'function') {
+      avisarAfectaBalanceFaltante();
+    }
+  } catch (e) {}
+
   const [
     { data: reparaciones },
     { data: ventas },
@@ -9,7 +18,7 @@ async function reporteTendencias() {
   ] = await Promise.all([
     sb.from('reparaciones').select('fecha, costo, costo_repuestos').eq('taller_id', tid()).eq('estado', 'finalizado').gte('fecha', inicio).lte('fecha', fin).order('fecha'),
     sb.from('ventas').select('created_at, total').eq('taller_id', tid()).eq('estado', 'completado').gte('created_at', inicio).lte('created_at', fin + 'T23:59:59').order('created_at'),
-    sb.from('gastos_taller').select('fecha, monto').eq('taller_id', tid()).gte('fecha', inicio).lte('fecha', fin).order('fecha')
+    sb.from('gastos_taller').select('*').eq('taller_id', tid()).gte('fecha', inicio).lte('fecha', fin).order('fecha')
   ]);
 
   // Agrupar por día
@@ -30,7 +39,8 @@ async function reporteTendencias() {
     porDia[fecha].ganancia += parseFloat(v.total || 0) * 0.3; // Estimación de margen en ventas (30%)
   });
 
-  (gastos || []).forEach(g => {
+  // Tarea #75: descartamos gastos marcados como "no afecta balance".
+  (gastos || []).filter(g => g.afecta_balance !== false).forEach(g => {
     const fecha = g.fecha;
     if (!porDia[fecha]) porDia[fecha] = { ingresos: 0, ganancia: 0, gastos: 0 };
     porDia[fecha].gastos += parseFloat(g.monto || 0);

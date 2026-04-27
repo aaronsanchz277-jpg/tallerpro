@@ -1,12 +1,23 @@
 // ─── REPORTE DE RENTABILIDAD ─────────────────────────────────────────────────
 async function reporteRentabilidad() {
   const { inicio, fin } = getFechasReporte();
-  
+
+  // Tarea #75: si la columna `afecta_balance` aún no está migrada,
+  // avisamos al admin (one-shot por sesión) para que sepa por qué los
+  // KPIs no diferencian movimientos "fuera del balance".
+  try {
+    if (typeof detectarAfectaBalance === 'function' &&
+        !(await detectarAfectaBalance()) &&
+        typeof avisarAfectaBalanceFaltante === 'function') {
+      avisarAfectaBalanceFaltante();
+    }
+  } catch (e) {}
+
   const [{ data: reparaciones }, { data: pagos }, { data: gastos }, { data: ventas }] = await Promise.all([
     sb.from('reparaciones').select('id, descripcion, costo, costo_repuestos, clientes(nombre), reparacion_mecanicos(nombre_mecanico)')
       .eq('taller_id', tid()).eq('estado', 'finalizado').gte('fecha', inicio).lte('fecha', fin),
     sb.from('pagos_reparacion').select('monto, metodo').eq('taller_id', tid()).gte('fecha', inicio).lte('fecha', fin),
-    sb.from('gastos_taller').select('monto, categoria').eq('taller_id', tid()).gte('fecha', inicio).lte('fecha', fin),
+    sb.from('gastos_taller').select('*').eq('taller_id', tid()).gte('fecha', inicio).lte('fecha', fin),
     sb.from('ventas').select('total, items').eq('taller_id', tid()).gte('created_at', inicio).lte('created_at', fin + 'T23:59:59')
   ]);
 
@@ -14,7 +25,8 @@ async function reporteRentabilidad() {
   const ingresoReparaciones = (reparaciones || []).reduce((s, r) => s + parseFloat(r.costo || 0), 0);
   const costoRepuestos = (reparaciones || []).reduce((s, r) => s + parseFloat(r.costo_repuestos || 0), 0);
   const ingresosVentas = (ventas || []).reduce((s, v) => s + parseFloat(v.total || 0), 0);
-  const totalGastos = (gastos || []).reduce((s, g) => s + parseFloat(g.monto || 0), 0);
+  // Tarea #75: ignoramos los gastos marcados como "no afecta balance" en los KPIs.
+  const totalGastos = (gastos || []).filter(g => g.afecta_balance !== false).reduce((s, g) => s + parseFloat(g.monto || 0), 0);
   
   const ingresosTotales = ingresoReparaciones + ingresosVentas;
   const gananciaBruta = ingresosTotales - costoRepuestos;

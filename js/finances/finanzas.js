@@ -10,6 +10,53 @@ let _finanzasFechaInicio = null;
 let _finanzasFechaFin = null;
 let _balanceSeleccionado = localStorage.getItem('finanzas_balance_id') || null;
 
+// ─── Tarea #75 · soporte para columna `afecta_balance` ──────────────────────
+// Si la migración SQL todavía no fue corrida en el Supabase del taller,
+// detectamos el error 'column does not exist' y degradamos a "todo afecta
+// al balance = true" sin romper la UI.
+let _afectaBalanceCol = null;       // null=desconocido, true=existe, false=falta
+let _afectaBalanceAvisado = false;
+
+async function detectarAfectaBalance() {
+  if (_afectaBalanceCol !== null) return _afectaBalanceCol;
+  try {
+    const r = await sb.from('movimientos_financieros').select('afecta_balance').limit(1);
+    if (r.error) {
+      const msg = (r.error.message || '').toLowerCase();
+      _afectaBalanceCol = !(msg.includes('afecta_balance') || msg.includes('does not exist') || msg.includes('column'));
+    } else {
+      _afectaBalanceCol = true;
+    }
+  } catch {
+    _afectaBalanceCol = false;
+  }
+  return _afectaBalanceCol;
+}
+
+function afectaBalanceColExiste() { return _afectaBalanceCol === true; }
+
+function avisarAfectaBalanceFaltante() {
+  if (_afectaBalanceAvisado) return;
+  _afectaBalanceAvisado = true;
+  if (typeof toast === 'function') {
+    toast('Para usar la opción "Afecta al balance" hay que correr el SQL más reciente en Supabase', 'warning');
+  }
+}
+
+// Helper de filtrado que se puede usar en arrays de movimientos / gastos.
+function afectaBalanceItem(item) { return !item || item.afecta_balance !== false; }
+
+// HTML reutilizable para el badge "no afecta balance" en listas.
+function badgeNoAfectaBalance(extra = '') {
+  return `<span title="Este movimiento no suma ni resta en los KPIs del mes" style="background:rgba(160,160,160,.18);color:var(--text2);font-size:.6rem;font-family:var(--font-head);letter-spacing:1px;padding:1px 6px;border-radius:6px;${extra}">NO AFECTA BALANCE</span>`;
+}
+
+window.detectarAfectaBalance = detectarAfectaBalance;
+window.afectaBalanceColExiste = afectaBalanceColExiste;
+window.afectaBalanceItem = afectaBalanceItem;
+window.avisarAfectaBalanceFaltante = avisarAfectaBalanceFaltante;
+window.badgeNoAfectaBalance = badgeNoAfectaBalance;
+
 async function finanzas_cargarBalancesSelect() {
   const { data } = await sb.from('balances').select('id,nombre,color').eq('taller_id', tid()).order('nombre');
   return data || [];
@@ -44,6 +91,7 @@ async function finanzas() {
     return;
   }
   await finanzas_initCategorias();
+  await detectarAfectaBalance();
   finanzas_initFechas();
 
   const balances = await finanzas_cargarBalancesSelect();
@@ -129,16 +177,23 @@ async function finanzas_cargarDatos() {
       );
     }
 
-    const totalIngresos = movimientosFiltrados.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
-    const totalEgresos = movimientosFiltrados.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
+    // Tarea #75: los KPIs (ingresos / egresos / balance) ignoran los
+    // movimientos marcados como "no afecta balance". La lista detallada
+    // los sigue mostrando con un badge gris.
+    const movsParaKPIs = movimientosFiltrados.filter(afectaBalanceItem);
+    const totalIngresos = movsParaKPIs.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
+    const totalEgresos = movsParaKPIs.filter(m => m.tipo === 'egreso').reduce((s, m) => s + parseFloat(m.monto||0), 0);
     const balanceNeto = totalIngresos - totalEgresos;
 
     const movsPorFecha = {};
     movimientosFiltrados.forEach(m => {
       const fecha = m.fecha;
       if (!movsPorFecha[fecha]) movsPorFecha[fecha] = { ingresos: 0, egresos: 0, items: [] };
-      if (m.tipo === 'ingreso') movsPorFecha[fecha].ingresos += parseFloat(m.monto||0);
-      else movsPorFecha[fecha].egresos += parseFloat(m.monto||0);
+      // Tarea #75: los totales por día también ignoran "no afecta balance".
+      if (afectaBalanceItem(m)) {
+        if (m.tipo === 'ingreso') movsPorFecha[fecha].ingresos += parseFloat(m.monto||0);
+        else movsPorFecha[fecha].egresos += parseFloat(m.monto||0);
+      }
       movsPorFecha[fecha].items.push(m);
     });
 
@@ -187,14 +242,17 @@ async function finanzas_cargarDatos() {
             ${grupo.items.map((m, i) => {
               const esIngreso = m.tipo === 'ingreso';
               const afectaCaja = m.afecta_caja !== false;
+              const afectaBal = afectaBalanceItem(m);
               const balancesAsignados = (m.movimiento_balance || []).map(mb => mb.balance_id);
+              const opacityStyle = afectaBal ? '' : 'opacity:.65;';
               return `
-              <div style="display:flex;align-items:center;padding:.65rem .75rem;${i > 0 ? 'border-top:1px solid var(--border)' : ''};gap:.6rem;cursor:pointer" onclick="finanzas_modalEditar('${m.id}')">
+              <div style="display:flex;align-items:center;padding:.65rem .75rem;${i > 0 ? 'border-top:1px solid var(--border)' : ''};gap:.6rem;cursor:pointer;${opacityStyle}" onclick="finanzas_modalEditar('${m.id}')">
                 <div style="width:32px;height:32px;border-radius:8px;background:${esIngreso ? 'rgba(0,255,136,.1)' : 'rgba(255,68,68,.1)'};display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0">${esIngreso ? '↑' : '↓'}</div>
                 <div style="flex:1;min-width:0">
                   <div style="font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
                     ${h(m.concepto)} 
                     ${!afectaCaja ? '<span style="color:var(--warning);font-size:.65rem;">(contable)</span>' : ''}
+                    ${!afectaBal ? ' ' + badgeNoAfectaBalance() : ''}
                   </div>
                   <div style="font-size:.68rem;color:var(--text2)">${h(m.categorias_financieras?.nombre || 'Sin categoría')}</div>
                   ${balancesAsignados.length > 0 ? `<div style="font-size:.65rem;color:var(--accent)">💰 ${balancesAsignados.length} balance(s)</div>` : ''}
@@ -303,6 +361,13 @@ async function finanzas_modalNuevo(tipo) {
         <option value="false">No (solo registro contable)</option>
       </select>
     </div>
+    <div class="form-group" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.6rem .75rem">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
+        <input type="checkbox" id="f-fin-afecta-balance" checked style="accent-color:var(--accent);width:18px;height:18px">
+        <span>Afecta al balance mensual</span>
+      </label>
+      <div style="font-size:.68rem;color:var(--text2);margin-top:.3rem;padding-left:1.7rem">Destildá si es un préstamo, retiro personal o reembolso que querés ver pero que NO debe sumar/restar en los KPIs ni reportes del mes.</div>
+    </div>
     <div class="form-group">
       <label class="form-label">Balances (podés marcar varios)</label>
       <div style="max-height:150px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:.5rem;background:var(--surface2)">
@@ -344,6 +409,15 @@ async function finanzas_guardar(id = null, uniqueId = null) {
     afecta_caja: document.getElementById('f-fin-afecta-caja')?.value === 'true',
     taller_id: tid()
   };
+
+  // Tarea #75: incluir afecta_balance solo si el SQL ya está corrido.
+  const checkAfectaBal = document.getElementById('f-fin-afecta-balance');
+  const afectaBalUI = checkAfectaBal ? checkAfectaBal.checked : true;
+  if (await detectarAfectaBalance()) {
+    data.afecta_balance = afectaBalUI;
+  } else if (!afectaBalUI) {
+    avisarAfectaBalanceFaltante();
+  }
 
   let movimientoId = id;
   let error;
@@ -421,6 +495,13 @@ async function finanzas_modalEditar(id) {
         <option value="true" ${m.afecta_caja !== false ? 'selected' : ''}>Sí (dinero físico)</option>
         <option value="false" ${m.afecta_caja === false ? 'selected' : ''}>No (solo registro contable)</option>
       </select>
+    </div>
+    <div class="form-group" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.6rem .75rem">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
+        <input type="checkbox" id="f-fin-afecta-balance" ${m.afecta_balance !== false ? 'checked' : ''} style="accent-color:var(--accent);width:18px;height:18px">
+        <span>Afecta al balance mensual</span>
+      </label>
+      <div style="font-size:.68rem;color:var(--text2);margin-top:.3rem;padding-left:1.7rem">Destildá si es un préstamo, retiro personal o reembolso que querés ver pero que NO debe sumar/restar en los KPIs ni reportes del mes.</div>
     </div>
     <div class="form-group">
       <label class="form-label">Balances (podés marcar varios)</label>
