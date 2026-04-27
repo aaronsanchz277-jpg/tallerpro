@@ -238,10 +238,15 @@
 <script src="./js/core/palette.js"></script>
 
 <!-- Autenticación -->
-<script src="./js/auth/auth.js"></script>
+<!-- super-admin.js declara `let _isSuperAdmin` y debe ir ANTES de auth-handlers.js
+     (logout() lo asigna). auth.js queda al final del bloque para que sus
+     globals (currentUser/currentPerfil/loginTab) se inicialicen últimos —
+     todas las referencias desde los demás archivos están dentro de funciones
+     invocadas en runtime. -->
 <script src="./js/auth/super-admin.js"></script>
 <script src="./js/auth/auth-handlers.js"></script>
 <script src="./js/auth/config-taller.js"></script>
+<script src="./js/auth/auth.js"></script>
 <script src="./js/auth/plan.js"></script>
 <script src="./js/auth/admin-v2.js?v=4"></script>
 <script src="./js/auth/setup-wizard.js"></script>
@@ -269,10 +274,15 @@
 </script>
 
 <!-- Dashboard -->
+<!-- dashboard-config.js define helpers (fechaHoy, _dashboardBalanceId,
+     renderDashboardKPIs) usados por dashboard() y reportes(). Las funciones
+     auxiliares (buscar-patente, reportes) van ANTES que dashboard.js para que
+     todas las dependencias estén disponibles cuando el navegador parsea
+     dashboard.js. -->
 <script src="./js/dashboard/dashboard-config.js"></script>
-<script src="./js/dashboard/dashboard.js"></script>
 <script src="./js/dashboard/buscar-patente.js"></script>
 <script src="./js/dashboard/reportes.js"></script>
+<script src="./js/dashboard/dashboard.js"></script>
 <script src="./js/dashboard/simple-mode.js?v=2"></script>
 <script src="./js/dashboard/modo-taller.js"></script>
 
