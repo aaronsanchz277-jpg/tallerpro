@@ -369,13 +369,24 @@
   }
 </script>
 
-<!-- Service Worker Update Handler -->
+<!-- Service Worker Update Handler (Tarea #64) -->
 <script>
 if ('serviceWorker' in navigator) {
+  // Flag global: hay un SW nuevo esperando. Usado por navigation.js para
+  // re-mostrar el toast cuando el usuario cambia de pantalla.
+  window._tpUpdateWaiting = false;
+  // Si el usuario cerró el toast, no lo mostramos al navegar hasta que pasen
+  // 5 minutos o se re-instale otra versión más nueva.
+  let _tpUpdateDismissedAt = 0;
+  const TP_UPDATE_REMIND_MS = 5 * 60 * 1000;
+
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!refreshing) {
       refreshing = true;
+      // Reload una sola vez. Si la red está caída justo en este momento,
+      // el browser sirve el index.html cacheado (HTML va por network-first
+      // con fallback a cache, ver sw.js), así que no rompe.
       window.location.reload();
     }
   });
@@ -384,53 +395,85 @@ if ('serviceWorker' in navigator) {
     try {
       const registration = await navigator.serviceWorker.getRegistration();
       if (!registration) return;
-      
+
+      // Caso 1: ya hay un SW esperando desde antes de que cargáramos
+      // (ej: el usuario abre una pestaña nueva y otra pestaña ya descargó
+      // la versión nueva). Solo si HAY controller activo (no es first load).
+      if (registration.waiting && navigator.serviceWorker.controller) {
+        showUpdateBanner();
+      }
+
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         if (!newWorker) return;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            // Llegó una versión más nueva → reset del "dismiss" para que
+            // el toast vuelva a aparecer aunque lo hayan cerrado antes.
+            _tpUpdateDismissedAt = 0;
             showUpdateBanner();
           }
         });
       });
 
-      setInterval(() => registration.update(), 60 * 60 * 1000);
-      window.addEventListener('online', () => registration.update());
+      setInterval(() => registration.update().catch(() => {}), 60 * 60 * 1000);
+      window.addEventListener('online', () => registration.update().catch(() => {}));
     } catch (e) {
       console.warn('Error en checkForUpdates:', e);
     }
   }
 
   function showUpdateBanner() {
+    window._tpUpdateWaiting = true;
     const existingBanner = document.getElementById('update-banner');
-    if (existingBanner) existingBanner.remove();
+    if (existingBanner) return;
     const banner = document.createElement('div');
     banner.id = 'update-banner';
     banner.style.cssText = `
       position:fixed;bottom:20px;left:20px;right:20px;
       background:var(--accent,#00e5ff);color:#000;
-      padding:12px 20px;border-radius:30px;z-index:9999;
-      display:flex;align-items:center;justify-content:space-between;
+      padding:10px 14px 10px 20px;border-radius:30px;z-index:9999;
+      display:flex;align-items:center;justify-content:space-between;gap:8px;
       font-family:'Rajdhani',sans-serif;font-weight:bold;
       box-shadow:0 4px 20px rgba(0,0,0,.3);
-      max-width:500px;margin:0 auto;
+      max-width:520px;margin:0 auto;
     `;
     banner.innerHTML = `
-      <span>✨ Nueva versión disponible</span>
-      <button id="update-app-btn" style="background:#000;color:#fff;border:none;border-radius:20px;padding:8px 20px;font-weight:bold;cursor:pointer;font-family:inherit">ACTUALIZAR AHORA</button>
+      <span style="flex:1;min-width:0">Hay una versión nueva disponible</span>
+      <button id="update-app-btn" style="background:#000;color:#fff;border:none;border-radius:20px;padding:8px 16px;font-weight:bold;cursor:pointer;font-family:inherit;white-space:nowrap">ACTUALIZAR</button>
+      <button id="update-dismiss-btn" aria-label="Cerrar" title="Cerrar" style="background:transparent;color:#000;border:none;font-size:1.2rem;font-weight:bold;cursor:pointer;padding:4px 8px;line-height:1">×</button>
     `;
     document.body.appendChild(banner);
     document.getElementById('update-app-btn').onclick = async () => {
-      banner.remove();
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg && reg.waiting) {
-        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-      } else {
+      const btn = document.getElementById('update-app-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'ACTUALIZANDO...'; }
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg && reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          // El reload lo dispara el listener de controllerchange.
+        } else {
+          window.location.reload();
+        }
+      } catch (e) {
+        console.warn('Error al actualizar:', e);
         window.location.reload();
       }
     };
+    document.getElementById('update-dismiss-btn').onclick = () => {
+      _tpUpdateDismissedAt = Date.now();
+      banner.remove();
+    };
   }
+
+  // API para que navigation.js re-muestre el toast cuando el usuario cambia
+  // de sección (si hay update pendiente y pasaron 5+ min desde que lo cerró).
+  window._tpMaybeShowUpdateBanner = function() {
+    if (!window._tpUpdateWaiting) return;
+    if (document.getElementById('update-banner')) return;
+    if (_tpUpdateDismissedAt && (Date.now() - _tpUpdateDismissedAt) < TP_UPDATE_REMIND_MS) return;
+    showUpdateBanner();
+  };
 
   window.addEventListener('load', checkForUpdates);
 }

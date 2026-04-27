@@ -1,6 +1,9 @@
 // ─── SERVICE WORKER - TallerPro ───────────────────────────────────────────────
-// Incrementar en cada deploy para invalidar caché viejo
-const CACHE_NAME = 'tallerpro-v6';
+// Incrementar en cada deploy para invalidar caché viejo.
+// IMPORTANTE: si no se bumpea esta versión, los usuarios no ven los cambios
+// (network-first revalida JS/CSS, pero el toast "Hay una versión nueva" solo
+// se dispara cuando el SW se reinstala — y eso requiere que cambie este string).
+const CACHE_NAME = 'tallerpro-v7';
 
 // Solo el shell mínimo — JS y CSS NO van aquí (se manejan network-first)
 const SHELL_URLS = [
@@ -25,7 +28,10 @@ function shouldBypass(url) {
 
 // ─── INSTALL ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', event => {
-  self.skipWaiting();
+  // NO llamar self.skipWaiting() acá. Queremos que el SW nuevo quede en estado
+  // "waiting" hasta que el usuario toque "ACTUALIZAR" en el toast (Tarea #64).
+  // El skipWaiting se dispara desde el handler de mensaje { type: 'SKIP_WAITING' }
+  // de abajo, que el cliente envía cuando el usuario confirma.
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL_URLS))
   );

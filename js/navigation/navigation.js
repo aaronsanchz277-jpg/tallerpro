@@ -275,6 +275,11 @@ async function navigate(page, params = {}) {
   }
 
   currentPage = page;
+  // Si hay una versión nueva esperando y el usuario cerró el toast, reaparece
+  // al cambiar de pantalla (Tarea #64). El helper respeta el cooldown de 5min.
+  if (typeof window._tpMaybeShowUpdateBanner === 'function') {
+    try { window._tpMaybeShowUpdateBanner(); } catch (e) {}
+  }
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const navEl = document.getElementById('nav-' + page);
   if (navEl) navEl.classList.add('active');

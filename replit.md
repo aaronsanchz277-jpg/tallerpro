@@ -985,3 +985,62 @@ implementar el handler de render/guardar y volver el chequeo a
   timestamp.
 
 Bump de cache busting: `admin-v2.js?v=4`.
+
+## Aviso "Hay una versión nueva" (Tarea #64)
+
+TallerPro es una PWA: el service worker (`sw.js`) cachea HTML, JS y CSS
+para que la app funcione offline. Antes, cada vez que se publicaban
+cambios, la nueva versión se activaba **silenciosamente** vía
+`self.skipWaiting()` y los usuarios seguían viendo la versión vieja
+hasta cerrar y reabrir la app — reportaban bugs ya arreglados o veían
+una pantalla mezcla. Esta tarea cambia el flujo para que el usuario
+**confirme** la actualización con un toast persistente.
+
+**Cambios en `sw.js`:**
+- Quitamos `self.skipWaiting()` del handler `install`. El SW nuevo
+  queda en estado `waiting` hasta que el usuario toca "ACTUALIZAR".
+- Mantuvimos el handler `message` que procesa `{type:'SKIP_WAITING'}`
+  — el cliente lo manda cuando el usuario confirma.
+- Mantuvimos `clients.claim()` y la limpieza de caches viejos en
+  `activate` (sin cambios).
+- Bumpeamos `CACHE_NAME` de `'tallerpro-v6'` a `'tallerpro-v7'`.
+
+**Banner de update en `index.html`** (script al final del body):
+- `checkForUpdates()` se engancha al `load`, escucha `updatefound` y
+  `statechange` en el SW que se está instalando. Cuando el nuevo
+  worker llega a estado `installed` Y ya hay un `controller` activo
+  (es decir, había una versión vieja corriendo), llama a
+  `showUpdateBanner()`. El check de `controller` evita mostrar el
+  toast en el **primer load** del usuario nuevo.
+- Cubre también el caso "ya hay un SW esperando al cargar la página"
+  (otra pestaña ya descargó la versión nueva): si
+  `registration.waiting` existe en el load, dispara el banner
+  también — siempre que haya `controller`.
+- El toast es persistente (no se autocierra), tiene un botón
+  **ACTUALIZAR** y un botón **×**. Al tocar ACTUALIZAR, postea
+  `{type:'SKIP_WAITING'}` al worker waiting; cuando el SW se activa,
+  dispara `controllerchange` en el cliente, que recarga la página
+  una sola vez (flag `refreshing` evita loops). Si la red está caída
+  en ese momento, el SW viejo sigue sirviendo el shell desde cache
+  y no se rompe nada.
+- Al tocar **×**, se guarda `_tpUpdateDismissedAt = Date.now()` y el
+  toast desaparece. Vuelve a aparecer si pasan 5+ minutos y el
+  usuario navega a otra pantalla, o inmediatamente si llega una
+  versión todavía más nueva (en ese caso el dismiss se resetea).
+- `setInterval(registration.update(), 1h)` y un `update()` extra al
+  evento `online` para que la app detecte updates sin requerir
+  recarga manual.
+
+**Re-mostrar al navegar** (`js/navigation/navigation.js`): al inicio
+de `navigate(page)`, si existe `window._tpMaybeShowUpdateBanner` se
+lo llama. El helper checa el flag global `_tpUpdateWaiting`, que el
+banner no esté ya visible, y que haya pasado el cooldown de 5min
+desde el dismiss; solo entonces lo vuelve a pintar.
+
+**Procedimiento de release:** antes de hacer push de cambios a
+producción (Replit deploy o GitHub Pages), **bumpear `CACHE_NAME`
+en `sw.js`** (ej: `'tallerpro-v7'` → `'tallerpro-v8'`). Sin ese
+bump, los browsers no detectan que el SW cambió y el toast nunca
+aparece. Los archivos JS/CSS individuales sí se revalidan
+(network-first), pero el shell de la app y el "estoy en la versión X"
+dependen del cambio del CACHE_NAME.
