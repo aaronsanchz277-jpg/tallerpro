@@ -20,23 +20,41 @@ function buildNav() {
   }
 
   // === SIDEBAR (todas las secciones organizadas) ===
+  // Tarea #76: reorganización del menú admin/empleado para reflejar el flujo
+  // real de trabajo del taller (PRINCIPAL = lo del día; CLIENTES Y VEHÍCULOS
+  // = datos maestros; INVENTARIO Y VENTAS = flujo comercial).
   if (rol === 'admin' || rol === 'empleado') {
+    // PRINCIPAL — pantallas de uso diario
     sidebarSections.push({ title: 'PRINCIPAL', items: [
       { id:'dashboard', label:'Inicio', icon:'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>' },
-      { id:'para-hoy', label:'📋 Para hoy', icon:'<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/>' },
+      { id:'para-hoy', label:'Para hoy', icon:'<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/>' },
       { id:'reparaciones', label:'Trabajos', icon:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' },
       { id:'panel-trabajo', label:'Panel de Trabajo', icon:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>' },
+      { id:'agenda', label:'Turnos', icon:'<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
+    ]});
+
+    // CLIENTES Y VEHÍCULOS — datos maestros y consultas
+    const cyvItems = [
       { id:'clientes', label:'Clientes', icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>' },
       { id:'vehiculos', label:'Vehículos', icon:'<rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-3M1 16h1M6 16h12"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>' },
-    ]});
-    sidebarSections.push({ title: 'GESTIÓN', items: [
-      { id:'agenda', label:'Turnos', icon:'<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
-      { id:'mantenimientos', label:'Mantenimientos', icon:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
-      { id:'inventario', label:'Inventario', icon:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>' },
-    ]});
+    ];
     if (rol === 'admin') {
-      sidebarSections.push({ title: 'CLIENTES', items: [
-        { id:'solicitudes', label:'📥 Solicitudes de cliente', icon:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
+      cyvItems.push({ id:'solicitudes', label:'Solicitudes', icon:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' });
+    }
+    cyvItems.push({ id:'mantenimientos', label:'Mantenimientos', icon:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' });
+    // El empleado no tiene Presupuestos / Ventas, así que Inventario va aquí
+    // para no dejar una sección "INVENTARIO Y VENTAS" con un solo ítem.
+    if (rol === 'empleado') {
+      cyvItems.push({ id:'inventario', label:'Inventario', icon:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>' });
+    }
+    sidebarSections.push({ title: 'CLIENTES Y VEHÍCULOS', items: cyvItems });
+
+    // INVENTARIO Y VENTAS — flujo comercial (solo admin)
+    if (rol === 'admin') {
+      sidebarSections.push({ title: 'INVENTARIO Y VENTAS', items: [
+        { id:'inventario', label:'Inventario', icon:'<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>' },
+        { id:'presupuestos', label:'Presupuestos', icon:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>' },
+        { id:'ventas', label:'Ventas', icon:'<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>' },
       ]});
     }
   }
@@ -50,26 +68,22 @@ function buildNav() {
     // Empleados con permiso "registrar_cobros" ven el centro de cobros pendientes.
     if (typeof tienePerm === 'function' && tienePerm('registrar_cobros')) {
       sidebarSections.push({ title: 'COBROS', items: [
-        { id:'por-cobrar', label:'💰 Por cobrar', icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+        { id:'por-cobrar', label:'Por cobrar', icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
       ]});
     }
   }
 
   if (rol === 'admin') {
-    sidebarSections.push({ title: 'VENTAS', items: [
-      { id:'presupuestos', label:'Presupuestos', icon:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>' },
-      { id:'ventas', label:'Ventas', icon:'<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>' },
-    ]});
     sidebarSections.push({ title: 'FINANZAS', items: [
-      { id:'por-cobrar', label:'💰 Por cobrar', icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
-      { id:'por-pagar', label:'📤 Por pagar', icon:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>' },
-      { id:'finanzas', label:'💵 Caja del día', icon:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+      { id:'por-cobrar', label:'Por cobrar', icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+      { id:'por-pagar', label:'Por pagar', icon:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>' },
+      { id:'finanzas', label:'Caja del día', icon:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
       { id:'finanzas-movimientos', label:'Movimientos', icon:'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>' },
       { id:'creditos', label:'Créditos', icon:'<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>' },
       { id:'gastos', label:'Gastos', icon:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>' },
       { id:'cuentas-pagar', label:'Cuentas a pagar', icon:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>' },
       { id:'sueldos', label:'Sueldos', icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
-      { id:'balances', label:'💰 Balances', icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' }, // 👈 NUEVA RUTA
+      { id:'balances', label:'Balances', icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
     ]});
     sidebarSections.push({ title: 'REPORTES', items: [
       { id:'reportes', label:'Resumen Rápido', icon:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>' },
@@ -311,7 +325,7 @@ async function navigate(page, params = {}) {
     'reporte-comparativas': reporteComparativas,
     'reporte-tendencias': reporteTendencias,
     'modo-taller': modoTaller,
-    'balances': balances,  // 👈 NUEVA RUTA
+    'balances': balances,
     'por-cobrar': porCobrar,
     'por-pagar': porPagar,
     'para-hoy': paraHoy

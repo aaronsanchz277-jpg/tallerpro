@@ -1104,3 +1104,59 @@ descontamos los movimientos que están asignados a ese balance
 los balances" se descuentan todos los del taller, igual al scope
 de la RPC `get_dashboard_stats_balance` cuando recibe
 `p_balance_id = NULL`.
+
+## Tarea #76 — Reorganización del menú lateral del admin
+
+El sidebar del admin/empleado pasó de 8 secciones desbalanceadas
+a 6 secciones que reflejan el flujo de trabajo del taller:
+
+- **PRINCIPAL** (uso diario): Inicio · Para hoy · Trabajos · Panel
+  de Trabajo · Turnos. Antes "Turnos" estaba en GESTIÓN.
+- **CLIENTES Y VEHÍCULOS** (datos maestros): Clientes · Vehículos ·
+  Solicitudes (admin) · Mantenimientos. Para empleado se le suma
+  Inventario porque no tiene la sección de ventas.
+- **INVENTARIO Y VENTAS** (admin, flujo comercial): Inventario ·
+  Presupuestos · Ventas. Antes Inventario estaba en GESTIÓN y
+  Presupuestos/Ventas en una sección VENTAS aparte.
+- **FINANZAS / REPORTES / HERRAMIENTAS / CONFIGURACIÓN**: sin
+  cambios estructurales, solo se quitaron los emojis de los labels
+  que también tenían ícono SVG (📋 Para hoy → Para hoy, 💰 Por
+  cobrar → Por cobrar, etc) y el comentario de código `// 👈
+  NUEVA RUTA` que había quedado pegado al ítem Balances.
+
+Eliminada la sección "CLIENTES" que existía solo para hospedar un
+ítem único ("Solicitudes de cliente"). Las secciones HERRAMIENTAS
+conservan sus emojis porque ahí complementan al ícono y son una
+convención visual del grupo.
+
+Sólo se modificó `js/navigation/navigation.js`. El sidebar de
+cliente y las pantallas mismas no cambiaron.
+
+## Chequeo de salud del frontend (`scripts/check.js`)
+
+Script de Node sin dependencias que se corre con `node
+scripts/check.js` antes de publicar. Detecta los problemas
+silenciosos típicos de un proyecto vanilla JS sin bundler:
+
+- **Funciones globales duplicadas** (ERROR): `function X` o
+  `window.X = function` declaradas en 2+ archivos. La causa raíz
+  de los bugs "antes funcionaba y ahora no se sabe quién lo pisó".
+- **Items del sidebar sin página correspondiente** (ERROR): cruza
+  los `id:` declarados en `buildNav()` con las claves del mapa
+  `pages` dentro de `navigate()`. Skipea ítems que tienen `onclick`
+  propio (modales) porque ésos no usan `navigate()`.
+- **Archivos JS de >40 KB** (AVISO): candidatos a partir.
+- **Comentarios sospechosos** (AVISO): `// 👈`, `// FIXME`, `//
+  XXX`, `// HACK`.
+
+Exit 1 si hay errores, 0 si sólo avisos.
+
+La primera ejecución detectó dos colisiones reales que se
+arreglaron en el mismo cambio: `requireOnline()` y `esAdmin()`
+estaban definidos tanto en `js/core/ui.js` como en
+`js/core/offline.js` / `js/core/permisos.js` respectivamente.
+La copia en `permisos.js` (que cargaba después) pisaba la versión
+de `ui.js` que decía `rol === 'admin' || rol === 'superadmin'` con
+una versión más estricta que sólo aceptaba `'admin'`. Quitadas
+ambas duplicaciones de `ui.js`; las versiones canónicas viven en
+los archivos cuyo nombre indica el dominio.

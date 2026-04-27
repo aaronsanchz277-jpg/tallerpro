@@ -283,16 +283,7 @@ function safeFotoUrl(url) {
   return '';
 }
 
-function esAdmin() {
-  const rol = currentPerfil?.rol;
-  return rol === 'admin' || rol === 'superadmin';
-}
-
-// ─── VERIFICACIÓN DE CONEXIÓN PARA ACCIONES CRÍTICAS ─────────────────────────
-function requireOnline(actionName = 'realizar esta acción') {
-  if (!navigator.onLine) {
-    toast(`Necesitás conexión a internet para ${actionName}`, 'error');
-    return false;
-  }
-  return true;
-}
+// esAdmin() y requireOnline() vivían acá pero estaban duplicados con
+// js/core/permisos.js y js/core/offline.js respectivamente, donde son
+// canónicos. Quitados para que el chequeo (`node scripts/check.js`) no
+// detecte la colisión.
