@@ -310,7 +310,6 @@ async function ia_ejecutar(a) {
         const ruc = clean(a.ruc);
         const existenteCli = await buscarClienteExistente(tid(), { telefono, ruc });
         if (existenteCli) {
-          console.log('[IA] Cliente duplicado detectado, reutilizando:', existenteCli.id, existenteCli.nombre);
           ia_addMsg(`ℹ Ya existía el cliente "${h(existenteCli.nombre)}" (mismo teléfono/RUC). Reutilicé ese en lugar de crear duplicado. <button onclick="closeModal();navigate('clientes');detalleCliente('${existenteCli.id}')" style="margin-left:8px;background:var(--accent);color:#000;border:none;border-radius:12px;padding:2px 8px;font-size:.65rem;cursor:pointer;font-weight:600">Ver →</button>`, false);
           break;
         }
@@ -324,7 +323,6 @@ async function ia_ejecutar(a) {
         const patente = normalizarPatente(a.patente || '');
         const existenteVeh = patente ? await buscarVehiculoExistente(tid(), patente) : null;
         if (existenteVeh) {
-          console.log('[IA] Vehículo duplicado detectado, reutilizando:', existenteVeh.id, existenteVeh.patente);
           ia_addMsg(`ℹ Ya existía el vehículo ${h(existenteVeh.patente)}${existenteVeh.clientes?.nombre ? ' ('+h(existenteVeh.clientes.nombre)+')' : ''}. Reutilicé ese en lugar de crear duplicado. <button onclick="closeModal();navigate('vehiculos');detalleVehiculo('${existenteVeh.id}')" style="margin-left:8px;background:var(--accent);color:#000;border:none;border-radius:12px;padding:2px 8px;font-size:.65rem;cursor:pointer;font-weight:600">Ver →</button>`, false);
           break;
         }

@@ -17,7 +17,6 @@ async function backup_crearSnapshot() {
 
     localStorage.setItem(BACKUP_KEY, JSON.stringify(snapshot));
     localStorage.setItem(BACKUP_TIMESTAMP_KEY, Date.now().toString());
-    console.log('✅ Backup de cola offline creado:', queue.length, 'items');
   } catch (e) {
     console.warn('Error creando backup offline:', e);
   }
