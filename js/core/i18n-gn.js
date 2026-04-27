@@ -1,8 +1,7 @@
 // ─── IDIOMA GUARANÍ ──────────────────────────────────────────────────────────
 window.IDIOMAS = window.IDIOMAS || {};
 window.IDIOMAS.gn = {
-    // ... (todo el contenido existente se mantiene igual)
-    // NUEVAS CLAVES EN GUARANÍ
+    // CLAVES EN GUARANÍ
     integracionesTitulo: '🔌 Mbojoajuha Guasu',
     integracionesDesc: 'Embojopy umi mba\'e okáigua nde tallerre.',
     activo: 'OIKÓVA',

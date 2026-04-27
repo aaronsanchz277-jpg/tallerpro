@@ -1,8 +1,7 @@
 // ─── IDIOMA INGLÉS ───────────────────────────────────────────────────────────
 window.IDIOMAS = window.IDIOMAS || {};
 window.IDIOMAS.en = {
-    // ... (todo el contenido existente se mantiene igual)
-    // NUEVAS CLAVES EN INGLÉS
+    // CLAVES EN INGLÉS
     integracionesTitulo: '🔌 Integration Hub',
     integracionesDesc: 'Activate external services to empower your workshop.',
     activo: 'ACTIVE',

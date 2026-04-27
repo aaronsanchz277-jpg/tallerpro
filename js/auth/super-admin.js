@@ -1,8 +1,7 @@
 // ─── SUPER-ADMIN: Panel de gestión de talleres ───────────────────────────────
-// Define `_isSuperAdmin` (read/write desde auth.js, auth-handlers.js).
-// Cargado DESPUÉS de auth.js para que `currentUser` y `currentPerfil` estén
-// declarados, pero ANTES de auth-handlers.js (que asigna `_isSuperAdmin = false`
-// dentro de logout()).
+// Define `_isSuperAdmin` (read/write desde auth-handlers.js y auth.js).
+// Cargado ANTES de auth-handlers.js para que la asignación
+// `_isSuperAdmin = false` dentro de logout() apunte al binding correcto.
 let _isSuperAdmin = false;
 
 async function checkSuperAdmin() {

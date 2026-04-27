@@ -1,8 +1,7 @@
 // ─── IDIOMA PORTUGUÊS ────────────────────────────────────────────────────────
 window.IDIOMAS = window.IDIOMAS || {};
 window.IDIOMAS.pt = {
-    // ... (todo el contenido existente se mantiene igual)
-    // NUEVAS CLAVES EN PORTUGUÉS
+    // CLAVES EN PORTUGUÉS
     integracionesTitulo: '🔌 Centro de Integrações',
     integracionesDesc: 'Ative serviços externos para potencializar sua oficina.',
     activo: 'ATIVO',

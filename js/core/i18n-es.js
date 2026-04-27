@@ -4,8 +4,7 @@
 // el mismo objeto global `window.IDIOMAS`.
 window.IDIOMAS = window.IDIOMAS || {};
 window.IDIOMAS.es = {
-    // ... (todo el contenido existente se mantiene igual)
-    // NUEVAS CLAVES PARA INTEGRACIONES, KPIS, ETC.
+    // CLAVES PARA INTEGRACIONES, KPIS, ETC.
     integracionesTitulo: '🔌 Centro de Integraciones',
     integracionesDesc: 'Activá servicios externos para potenciar tu taller.',
     activo: 'ACTIVO',

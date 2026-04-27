@@ -2,7 +2,8 @@
 // Handlers de los formularios de login/registro/reset de contraseña, y logout.
 // Las variables globales (currentUser, currentPerfil, currentSuscripcion, etc.)
 // y `_isSuperAdmin` se declaran en auth.js / super-admin.js — acá sólo se
-// asignan o leen. Cargado DESPUÉS de auth.js y super-admin.js.
+// asignan o leen dentro del cuerpo de las funciones, que corren cuando ya
+// están todos los <script> evaluados.
 async function handleRegistroInvitacion() {
   const nombre = document.getElementById('inv-nombre').value.trim();
   const apellido = document.getElementById('inv-apellido').value.trim();
