@@ -3,7 +3,7 @@
 // IMPORTANTE: si no se bumpea esta versión, los usuarios no ven los cambios
 // (network-first revalida JS/CSS, pero el toast "Hay una versión nueva" solo
 // se dispara cuando el SW se reinstala — y eso requiere que cambie este string).
-const CACHE_NAME = 'tallerpro-v9';
+const CACHE_NAME = 'tallerpro-v10';
 
 // Solo el shell mínimo — JS y CSS NO van aquí (se manejan network-first)
 const SHELL_URLS = [
