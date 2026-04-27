@@ -1,4 +1,39 @@
-async function reparaciones({ filtro='todos', search='', offset=0, tipo='', mecanico='', viejos=false }={}) {
+// ── Persistencia del filtro de mecánico (clave por taller) ────────────────
+// Aaron pidió que la elección del mecánico no se pierda al entrar a un
+// detalle, cambiar de pestaña o recargar. La preferencia es por taller
+// para no mezclar entre talleres distintos del mismo dispositivo.
+function _repMecFiltroKey() {
+  const t = currentPerfil?.taller_id;
+  return t ? `rep_mec_filtro_${t}` : null;
+}
+function _repMecFiltroLeer() {
+  try {
+    const k = _repMecFiltroKey();
+    return k ? (localStorage.getItem(k) || '') : '';
+  } catch (_) { return ''; }
+}
+function _repMecFiltroGuardar(v) {
+  try {
+    const k = _repMecFiltroKey();
+    if (!k) return;
+    if (v) localStorage.setItem(k, String(v));
+    else localStorage.removeItem(k);
+  } catch (_) {}
+}
+
+async function reparaciones(opts = {}) {
+  let { filtro='todos', search='', offset=0, tipo='', viejos=false } = opts;
+
+  // Si la llamada incluye explícitamente `mecanico` (incluso vacío para
+  // limpiar), respetamos esa elección y la persistimos. Si no se pasa,
+  // recuperamos la última elección guardada para este taller.
+  let mecanico;
+  if ('mecanico' in opts) {
+    mecanico = opts.mecanico || '';
+    _repMecFiltroGuardar(mecanico);
+  } else {
+    mecanico = _repMecFiltroLeer();
+  }
 
   // ── Filtro por mecánico (siempre fresco, nunca cacheado) ──────────────────
   let repIds = null; // null = sin filtro, [] = mecánico sin reparaciones
@@ -113,7 +148,7 @@ async function reparaciones({ filtro='todos', search='', offset=0, tipo='', meca
         <option value="">Todos</option>
         ${empleados.map(e => `<option value="${h(e.id)}" ${String(e.id)===String(mecanico)?'selected':''}>${h(e.nombre)}</option>`).join('')}
       </select>
-      ${mecanicoSel ? `<button onclick="reparaciones({filtro:'${hjs(filtro)}',search:'${hjs(search)}',tipo:'${hjs(tipo)}',viejos:${seteVistaViejos}})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.85rem" title="Limpiar mecánico">✕</button>` : ''}
+      ${mecanicoSel ? `<button onclick="reparaciones({filtro:'${hjs(filtro)}',search:'${hjs(search)}',tipo:'${hjs(tipo)}',mecanico:'',viejos:${seteVistaViejos}})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.85rem" title="Limpiar mecánico">✕</button>` : ''}
     </div>` : ''}
     <div class="tabs">
       <button class="tab ${filtro==='todos' && !seteVistaViejos?'active':''}" onclick="reparaciones({filtro:'todos',tipo:'${hjs(tipo)}',mecanico:'${hjs(mecanico)}'})">Todos</button>

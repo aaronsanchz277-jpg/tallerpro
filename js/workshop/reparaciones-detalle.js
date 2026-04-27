@@ -58,7 +58,7 @@ async function detalleReparacion(id) {
     </div>
     <div class="info-grid">
       <div class="info-item"><div class="label">Estado</div><div class="value"><span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span></div></div>
-      <div class="info-item"><div class="label">Vehículo</div><div class="value">${r.vehiculos ? h(r.vehiculos.patente) + ' ' + h(r.vehiculos.marca || '') : '-'}</div></div>
+      <div class="info-item"><div class="label">Vehículo</div><div class="value">${r.vehiculos ? (h(r.vehiculos.patente) + ([r.vehiculos.marca, r.vehiculos.modelo].filter(Boolean).length ? ' · ' + [r.vehiculos.marca, r.vehiculos.modelo].filter(Boolean).map(h).join(' ') : '')) : '-'}</div></div>
       <div class="info-item"><div class="label">Cliente</div><div class="value">${r.clientes ? h(r.clientes.nombre) : '-'}</div></div>
       <div class="info-item"><div class="label">Aprobación</div><div class="value"><span class="card-badge ${aprobBadge}">${aprobLabel}</span></div></div>
       ${r.kilometraje_ingreso ? `<div class="info-item"><div class="label">Km ingreso</div><div class="value">${r.kilometraje_ingreso.toLocaleString()} km</div></div>` : ''}

@@ -44,7 +44,7 @@ async function paraHoy() {
   let misReps = [];
   if (misRepIds.length > 0) {
     const { data } = await sb.from('reparaciones')
-      .select('id,descripcion,estado,fecha,updated_at,tipo_trabajo,vehiculos(patente,marca),clientes(nombre)')
+      .select('id,descripcion,estado,fecha,updated_at,tipo_trabajo,vehiculos(patente,marca,modelo),clientes(nombre)')
       .eq('taller_id', tallerId)
       .in('id', misRepIds)
       .in('estado', ['pendiente', 'en_progreso', 'esperando_repuestos'])
@@ -52,7 +52,7 @@ async function paraHoy() {
     misReps = data || [];
   } else if (rol === 'admin') {
     const { data } = await sb.from('reparaciones')
-      .select('id,descripcion,estado,fecha,updated_at,tipo_trabajo,vehiculos(patente,marca),clientes(nombre)')
+      .select('id,descripcion,estado,fecha,updated_at,tipo_trabajo,vehiculos(patente,marca,modelo),clientes(nombre)')
       .eq('taller_id', tallerId)
       .in('estado', ['pendiente', 'en_progreso', 'esperando_repuestos'])
       .order('updated_at', { ascending: false })
@@ -81,7 +81,7 @@ async function paraHoy() {
   let turnosFiltradoOk = true;
   let migracionPendiente = false;
   let turnosError = null;
-  const baseSelect = 'id,descripcion,fecha,hora,estado,responsable_id,clientes(nombre,telefono),vehiculos(patente,marca)';
+  const baseSelect = 'id,descripcion,fecha,hora,estado,responsable_id,clientes(nombre,telefono),vehiculos(patente,marca,modelo)';
   if (rol === 'empleado') {
     if (!empId) {
       turnos = []; // sin vinculación a empleado, no hay turnos asignables
@@ -121,7 +121,7 @@ async function paraHoy() {
         migracionPendiente = true;
         turnosFiltradoOk = false;
         const { data: fb } = await sb.from('citas')
-          .select('id,descripcion,fecha,hora,estado,clientes(nombre,telefono),vehiculos(patente,marca)')
+          .select('id,descripcion,fecha,hora,estado,clientes(nombre,telefono),vehiculos(patente,marca,modelo)')
           .eq('taller_id', tallerId)
           .eq('fecha', hoy)
           .in('estado', ['pendiente', 'confirmada'])
@@ -242,13 +242,21 @@ async function paraHoy() {
     weekday: 'long', day: 'numeric', month: 'long'
   });
 
+  // Formato unificado del vehículo: "PATENTE · MARCA MODELO" (omite las
+  // partes vacías para no quedar con texto colgado en pantallas chicas).
+  const vehStr = v => {
+    if (!v) return '';
+    const mm = [v.marca, v.modelo].filter(Boolean).map(h).join(' ');
+    return h(v.patente) + (mm ? ' · ' + mm : '');
+  };
+
   const turnoCard = c => `
     <div class="card" onclick="detalleCita('${h(c.id)}')">
       <div class="card-header">
         <div class="card-avatar">📅</div>
         <div class="card-info">
           <div class="card-name">${c.hora ? h(c.hora.slice(0, 5)) + ' · ' : ''}${h(c.descripcion)}</div>
-          <div class="card-sub">${c.clientes ? h(c.clientes.nombre) : 'Sin cliente'}${c.vehiculos ? ' · ' + h(c.vehiculos.patente) : ''}</div>
+          <div class="card-sub">${c.clientes ? h(c.clientes.nombre) : 'Sin cliente'}${c.vehiculos ? ' · ' + vehStr(c.vehiculos) : ''}</div>
           ${rol === 'admin' && c.responsable_id ? `<div class="card-sub" style="color:var(--accent)">👤 ${h(respNombres[c.responsable_id] || '...')}</div>` : ''}
           ${rol === 'admin' && !c.responsable_id ? `<div class="card-sub" style="color:var(--text2)">👤 Sin responsable</div>` : ''}
         </div>
@@ -271,7 +279,7 @@ async function paraHoy() {
           <div class="card-avatar">${TIPO_ICONS[r.tipo_trabajo] || '🔧'}</div>
           <div class="card-info">
             <div class="card-name">${h(r.descripcion)}</div>
-            <div class="card-sub">${r.vehiculos ? h(r.vehiculos.patente) + ' · ' + h(r.vehiculos.marca || '') : 'Sin vehículo'}${r.clientes ? ' · ' + h(r.clientes.nombre) : ''}</div>
+            <div class="card-sub">${r.vehiculos ? vehStr(r.vehiculos) : 'Sin vehículo'}${r.clientes ? ' · ' + h(r.clientes.nombre) : ''}</div>
             ${dias}
             ${extra || ''}
           </div>
@@ -319,7 +327,7 @@ async function paraHoy() {
               <div class="card-avatar">${TIPO_ICONS[r.tipo_trabajo] || '🔧'}</div>
               <div class="card-info">
                 <div class="card-name">${h(r.descripcion)}</div>
-                <div class="card-sub">${r.vehiculos ? h(r.vehiculos.patente) + ' · ' + h(r.vehiculos.marca || '') : 'Sin vehículo'}${r.clientes ? ' · ' + h(r.clientes.nombre) : ''}</div>
+                <div class="card-sub">${r.vehiculos ? vehStr(r.vehiculos) : 'Sin vehículo'}${r.clientes ? ' · ' + h(r.clientes.nombre) : ''}</div>
                 <div class="card-sub">${formatFecha(r.fecha)}</div>
               </div>
               <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
