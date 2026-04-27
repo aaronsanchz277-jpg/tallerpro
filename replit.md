@@ -887,3 +887,84 @@ local, redes sociales, horarios, tour del dashboard (lo cubre el
 tutorial existente), y subir logo (queda para Tarea #63 cuando exista
 la columna `logo_url`).
 
+
+## Tarea #63 — Logo del taller en encabezado y PDFs
+
+**Migración SQL** (`supabase/rls_policies.sql` final del archivo):
+
+- `talleres.logo_url TEXT` (nullable) — URL pública del archivo en
+  el bucket de Supabase Storage `logos`.
+- Bucket `logos` creado con `INSERT … ON CONFLICT` (público para
+  lectura, escritura por RLS).
+- 4 políticas en `storage.objects` para `bucket_id='logos'`:
+  - `logos_read_public` → SELECT abierto (anon + auth).
+  - `logos_insert_admin` / `logos_update_admin` / `logos_delete_admin`
+    → solo admin del taller dueño del path. La validación usa
+    `(storage.foldername(name))[1] = public.taller_id_actual()::text`,
+    así que la convención obligatoria de path es
+    `{taller_id}/logo-{timestamp}.{ext}`.
+- Idempotente (DROP POLICY IF EXISTS + ON CONFLICT), seguro de
+  re-ejecutar.
+
+**Fallback en cascada de loadPerfil/aplicarCodigo/crearTallerDesdePrompt**
+(`js/auth/auth.js`): el SELECT pide `logo_url` y, si Supabase contesta
+con error mencionando esa columna (migración no aplicada), reintenta
+sin ella. Mismo patrón que `setup_completado` y `moneda_*`. Permite
+desplegar el JS antes que el SQL sin romper el login.
+
+**UI Mi Taller** (`js/auth/admin-v2.js` `modalConfigDatos`):
+
+- Sección "Logo del taller" entre "País / Moneda" y los tips. Solo
+  aparece si `'logo_url' in taller` (feature-gate por columna).
+- Vista previa 64×64, input file `accept="image/png,image/jpeg,image/webp"`,
+  límite cliente 2 MB y validación de tipo. Botón "Quitar logo"
+  visible si ya hay uno.
+- El archivo elegido se guarda en `_logoTallerPendingFile` y solo se
+  sube cuando el admin presiona "Guardar". Si elige "Quitar",
+  `_logoTallerQuitar = true` y al guardar setea `logo_url = null` y
+  borra el archivo del bucket.
+- `_logoTallerSubir(file, urlAnterior)` sube a `{taller_id}/logo-{ts}.{ext}`
+  con `upsert: true` y `cacheControl: '3600'`, después borra el archivo
+  anterior si pertenece al mismo taller. Devuelve la URL pública.
+
+**Render en sidebar/topbar** (`js/auth/admin-v2.js` helpers globales
++ `js/navigation/navigation.js`): `aplicarLogoTallerEnUI()` reemplaza
+el texto "TALLERPRO" por una `<img>` en `#sidebar-header > div:first-child`
+y en `.topbar-logo` cuando `currentPerfil.talleres.logo_url` existe.
+Idempotente: en cada llamada vuelve a renderizar desde cero (recrea
+el div con `outerHTML` para no acumular handlers). Se invoca al final
+de `buildNav()` y desde `guardarConfigDatos()` después de actualizar
+`currentPerfil`.
+
+**Logo en PDF** (`js/sales/presupuestos.js compartirPresupuesto`):
+antes de dibujar el header se llama a `obtenerLogoTallerBase64()`. Si
+hay logo, se inserta con `doc.addImage(dataUrl, fmt, m-3, 5, 22, 22)`
+en la esquina superior izquierda y el texto del nombre + RUC + dirección
++ teléfono se desplaza a `textoX = m + 26`. Si no hay logo o falla
+`addImage` (formato no soportado por jsPDF), el layout original se
+preserva.
+
+**Cache Base64 en memoria** (`obtenerLogoTallerBase64()`): memoiza
+`{url, dataUrl, fmt}` por sesión. `fetch(url, {cache:'force-cache'})`
++ `FileReader.readAsDataURL`. Detecta el formato por `blob.type` y
+mapea a las claves de jsPDF (`PNG | JPEG | WEBP`). Si el fetch falla,
+devuelve `null` y el PDF se genera sin logo (no error fatal).
+`invalidarLogoTallerCache()` limpia el cache; se llama desde
+`guardarConfigDatos()` cuando el admin cambia o quita el logo.
+
+**Wizard de setup** (`js/auth/setup-wizard.js`): `_setupTieneLogo()`
+sigue devolviendo `false` aunque la columna ya exista, porque
+`_setupRenderPaso` no tiene `case 'logo'`. La carga de logo se hace
+desde Mi Taller. Cuando se quiera incluir en el wizard, alcanza con
+implementar el handler de render/guardar y volver el chequeo a
+`'logo_url' in currentPerfil.talleres`.
+
+**Convenciones del bucket**:
+- Path: `{taller_id}/logo-{Date.now()}.{ext}`. La policy de storage
+  rechaza paths que no empiecen con el `taller_id` del admin actual.
+- `cacheControl: '3600'` (1h en CDN) para que los logos no se
+  descarguen en cada PDF/render.
+- `upsert: true` para no fallar si por alguna razón colisiona el
+  timestamp.
+
+Bump de cache busting: `admin-v2.js?v=4`.

@@ -1693,3 +1693,70 @@ UPDATE talleres
    SET setup_completado = COALESCE(created_at, '2026-04-26 12:00:00+00'::timestamptz)
  WHERE setup_completado IS NULL
    AND (created_at IS NULL OR created_at < '2026-04-26 12:00:00+00'::timestamptz);
+
+
+-- ============================================================================
+-- TAREA #63 — LOGO DEL TALLER EN ENCABEZADO Y PDFs
+-- ----------------------------------------------------------------------------
+-- Cada taller puede subir su propio logo (PNG/JPG/WEBP, <2MB). Se muestra
+-- en el sidebar/topbar de la app y en el encabezado de los presupuestos PDF.
+--
+--   talleres.logo_url  TEXT, nullable. URL pública del archivo en el bucket
+--                      `logos` de Supabase Storage.
+--
+-- Bucket: `logos` (público para LECTURA, escritura restringida por RLS al
+-- admin del taller dueño del path).
+--
+-- Convención de path: `{taller_id}/logo-{timestamp}.{ext}` para que la
+-- policy basada en `storage.foldername(name)[1]` valide tenancy.
+-- Idempotente.
+-- ============================================================================
+ALTER TABLE talleres ADD COLUMN IF NOT EXISTS logo_url TEXT;
+
+-- Crear el bucket `logos` si no existe. Marcado público para que las
+-- URL de lectura no requieran token (más simple para usar en <img> y PDFs).
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('logos', 'logos', true)
+ON CONFLICT (id) DO UPDATE SET public = EXCLUDED.public;
+
+-- Políticas de storage.objects para el bucket `logos`.
+-- Lectura pública (anon + authenticated): el bucket es público y los logos
+-- aparecen en PDFs y en la app sin login.
+DROP POLICY IF EXISTS "logos_read_public" ON storage.objects;
+CREATE POLICY "logos_read_public" ON storage.objects
+  FOR SELECT TO public
+  USING (bucket_id = 'logos');
+
+-- Escritura: solo admin del taller cuyo id coincide con el primer segmento
+-- del path. Path esperado: `{taller_id}/logo-{ts}.{ext}`.
+DROP POLICY IF EXISTS "logos_insert_admin" ON storage.objects;
+CREATE POLICY "logos_insert_admin" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'logos'
+    AND public.es_admin()
+    AND (storage.foldername(name))[1] = public.taller_id_actual()::text
+  );
+
+DROP POLICY IF EXISTS "logos_update_admin" ON storage.objects;
+CREATE POLICY "logos_update_admin" ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'logos'
+    AND public.es_admin()
+    AND (storage.foldername(name))[1] = public.taller_id_actual()::text
+  )
+  WITH CHECK (
+    bucket_id = 'logos'
+    AND public.es_admin()
+    AND (storage.foldername(name))[1] = public.taller_id_actual()::text
+  );
+
+DROP POLICY IF EXISTS "logos_delete_admin" ON storage.objects;
+CREATE POLICY "logos_delete_admin" ON storage.objects
+  FOR DELETE TO authenticated
+  USING (
+    bucket_id = 'logos'
+    AND public.es_admin()
+    AND (storage.foldername(name))[1] = public.taller_id_actual()::text
+  );

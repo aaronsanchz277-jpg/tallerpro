@@ -104,6 +104,15 @@ async function loadPerfil(user) {
     let perfil = null, error = null;
     {
       const res = await sb.from('perfiles')
+        .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais, setup_completado, setup_pasos_pendientes, logo_url)')
+        .eq('id', user.id)
+        .maybeSingle();
+      perfil = res.data;
+      error = res.error;
+    }
+    // Fallback 1.0: falta logo_url (Tarea #63 sin migrar). Reintenta sin él.
+    if (error && /\blogo_url\b/i.test(error.message || '')) {
+      const res = await sb.from('perfiles')
         .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais, setup_completado, setup_pasos_pendientes)')
         .eq('id', user.id)
         .maybeSingle();
@@ -205,9 +214,15 @@ async function aplicarCodigo() {
     // moneda (Tarea #61) o la de permisos no se aplicó todavía.
     let perfil = null;
     let res = await sb.from('perfiles')
-      .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais, setup_completado, setup_pasos_pendientes)')
+      .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais, setup_completado, setup_pasos_pendientes, logo_url)')
       .eq('id', currentUser.id).maybeSingle();
     perfil = res.data;
+    if (res.error && /\blogo_url\b/i.test(res.error.message || '')) {
+      res = await sb.from('perfiles')
+        .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais, setup_completado, setup_pasos_pendientes)')
+        .eq('id', currentUser.id).maybeSingle();
+      perfil = res.data;
+    }
     if (res.error && /setup_completado|setup_pasos_pendientes/i.test(res.error.message || '')) {
       res = await sb.from('perfiles')
         .select('id, nombre, rol, taller_id, empleado_id, cliente_id, permisos, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais)')
@@ -263,9 +278,15 @@ async function crearTallerDesdePrompt() {
     // setup) no se aplicaron.
     let perfil = null;
     let resPerfil = await sb.from('perfiles')
-      .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais, setup_completado, setup_pasos_pendientes)')
+      .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais, setup_completado, setup_pasos_pendientes, logo_url)')
       .eq('id', currentUser.id).maybeSingle();
     perfil = resPerfil.data;
+    if (resPerfil.error && /\blogo_url\b/i.test(resPerfil.error.message || '')) {
+      resPerfil = await sb.from('perfiles')
+        .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais, setup_completado, setup_pasos_pendientes)')
+        .eq('id', currentUser.id).maybeSingle();
+      perfil = resPerfil.data;
+    }
     if (resPerfil.error && /setup_completado|setup_pasos_pendientes/i.test(resPerfil.error.message || '')) {
       resPerfil = await sb.from('perfiles')
         .select('id, nombre, rol, taller_id, talleres(id, nombre, telefono, ruc, direccion, moneda_simbolo, moneda_locale, pais)')

@@ -198,6 +198,26 @@ async function modalConfigDatos() {
   const { data: taller } = await sb.from('talleres').select('*').eq('id', tid()).single();
   if (!taller) return;
   const paisActual = taller.pais || 'PY';
+  // Tarea #63: el campo logo_url puede no existir todavía si la migración
+  // SQL no fue aplicada. En ese caso ocultamos la sección.
+  const tieneLogoCol = ('logo_url' in taller);
+  const logoActual = taller.logo_url || '';
+  const logoSection = tieneLogoCol ? `
+    <div class="form-group">
+      <label class="form-label">Logo del taller</label>
+      <div id="logo-preview-wrap" style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem">
+        <div id="logo-preview" style="width:64px;height:64px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
+          ${logoActual
+            ? `<img src="${h(logoActual)}" alt="logo" style="max-width:100%;max-height:100%;object-fit:contain">`
+            : `<span style="font-size:.7rem;color:var(--text2)">sin logo</span>`}
+        </div>
+        <div style="flex:1;min-width:0">
+          <input type="file" id="f-taller-logo" accept="image/png,image/jpeg,image/webp" class="form-input" style="padding:.4rem;font-size:.8rem" onchange="logoTallerPreview(this)">
+          <div style="font-size:.7rem;color:var(--text2);margin-top:.3rem">PNG, JPG o WEBP. Máx 2MB.</div>
+        </div>
+      </div>
+      ${logoActual ? `<button type="button" class="btn-secondary" onclick="quitarLogoTaller()" style="font-size:.78rem;padding:.4rem .6rem">Quitar logo</button>` : ''}
+    </div>` : '';
   openModal(`
     <div class="modal-title">⚙️ Configurar Taller</div>
     <div class="form-group"><label class="form-label">Nombre del taller</label><input class="form-input" id="f-taller-nombre" value="${h(taller.nombre||'')}"></div>
@@ -210,13 +230,80 @@ async function modalConfigDatos() {
         ${MONEDA_PRESETS.map(p => `<option value="${p.pais}" ${p.pais===paisActual?'selected':''}>${p.label}</option>`).join('')}
       </select>
     </div>
+    ${logoSection}
     <div style="background:var(--surface2);border-radius:8px;padding:.75rem;margin-top:.5rem;margin-bottom:1rem">
       <div style="font-size:.75rem;color:var(--text2)">💡 El RUC y dirección aparecen en las facturas</div>
       <div style="font-size:.75rem;color:var(--text2)">💡 El teléfono se usa para WhatsApp</div>
       <div style="font-size:.75rem;color:var(--text2)">💡 La moneda se aplica en toda la app (montos, PDFs, dashboard)</div>
+      ${tieneLogoCol ? `<div style="font-size:.75rem;color:var(--text2)">💡 El logo se muestra en la barra lateral y en el encabezado de los presupuestos PDF</div>` : ''}
     </div>
     <button class="btn-primary" onclick="guardarConfigDatos()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+}
+
+// Tarea #63: vista previa del logo elegido y validación de tamaño/tipo.
+// El archivo se guarda en _logoTallerPendingFile y solo se sube cuando el
+// usuario apreta "Guardar". Si elige otro archivo, reemplaza el anterior.
+let _logoTallerPendingFile = null;
+let _logoTallerQuitar = false;
+
+function logoTallerPreview(input) {
+  const file = input.files && input.files[0];
+  if (!file) { _logoTallerPendingFile = null; return; }
+  const tiposOk = ['image/png', 'image/jpeg', 'image/webp'];
+  if (!tiposOk.includes(file.type)) {
+    toast('El logo debe ser PNG, JPG o WEBP', 'error');
+    input.value = '';
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    toast('El logo no puede pesar más de 2MB', 'error');
+    input.value = '';
+    return;
+  }
+  _logoTallerPendingFile = file;
+  _logoTallerQuitar = false;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const prev = document.getElementById('logo-preview');
+    if (prev) prev.innerHTML = `<img src="${ev.target.result}" alt="logo" style="max-width:100%;max-height:100%;object-fit:contain">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function quitarLogoTaller() {
+  if (!confirm('¿Quitar el logo del taller? Volverá a mostrarse el texto TALLERPRO.')) return;
+  _logoTallerPendingFile = null;
+  _logoTallerQuitar = true;
+  const prev = document.getElementById('logo-preview');
+  if (prev) prev.innerHTML = `<span style="font-size:.7rem;color:var(--text2)">sin logo</span>`;
+  const inp = document.getElementById('f-taller-logo');
+  if (inp) inp.value = '';
+  toast('Se quitará al guardar', 'info');
+}
+
+// Sube el archivo al bucket `logos` con path `{taller_id}/logo-{ts}.{ext}`,
+// borra el archivo anterior si existía dentro del mismo bucket, y devuelve
+// la URL pública. Lanza Error en caso de fallo.
+async function _logoTallerSubir(file, logoUrlAnterior) {
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+  const tallerId = tid();
+  const path = `${tallerId}/logo-${Date.now()}.${ext}`;
+  const { error: upErr } = await sb.storage.from('logos').upload(path, file, {
+    contentType: file.type,
+    upsert: true,
+    cacheControl: '3600'
+  });
+  if (upErr) throw new Error('No se pudo subir el logo: ' + upErr.message);
+  // Borrar archivo viejo si era de este taller (mismo bucket).
+  if (logoUrlAnterior) {
+    const m = logoUrlAnterior.match(/\/logos\/(.+)$/);
+    if (m && m[1] && m[1].startsWith(tallerId + '/') && m[1] !== path) {
+      try { await sb.storage.from('logos').remove([m[1]]); } catch(_) { /* no-op */ }
+    }
+  }
+  const { data: urlData } = sb.storage.from('logos').getPublicUrl(path);
+  return urlData.publicUrl;
 }
 
 async function guardarConfigDatos() {
@@ -227,12 +314,40 @@ async function guardarConfigDatos() {
   const pais = document.getElementById('f-taller-pais').value;
   if (!nombre) { toast('El nombre es obligatorio','error'); return; }
   const preset = MONEDA_PRESETS.find(p => p.pais === pais) || MONEDA_PRESETS[0];
-  const { error } = await sb.from('talleres').update({
+
+  // Tarea #63: si hay archivo pendiente, subirlo antes del UPDATE.
+  let nuevoLogoUrl;  // undefined = no tocar el campo
+  const logoActual = currentPerfil?.talleres?.logo_url || null;
+  if (_logoTallerPendingFile) {
+    try {
+      nuevoLogoUrl = await _logoTallerSubir(_logoTallerPendingFile, logoActual);
+    } catch (e) {
+      toast(e.message, 'error');
+      return;
+    }
+  } else if (_logoTallerQuitar) {
+    nuevoLogoUrl = null;
+    if (logoActual) {
+      const m = logoActual.match(/\/logos\/(.+)$/);
+      // Defense-in-depth: aunque la RLS ya bloquea borrar archivos de otros
+      // talleres, validamos que el path empiece con nuestro taller_id para
+      // no enviar al storage requests obviamente cross-tenant.
+      const tallerId = tid();
+      if (m && m[1] && m[1].startsWith(tallerId + '/')) {
+        try { await sb.storage.from('logos').remove([m[1]]); } catch(_) { /* no-op */ }
+      }
+    }
+  }
+
+  const updatePayload = {
     nombre, ruc, telefono, direccion,
     pais: preset.pais,
     moneda_simbolo: preset.simbolo,
     moneda_locale:  preset.locale
-  }).eq('id', tid());
+  };
+  if (nuevoLogoUrl !== undefined) updatePayload.logo_url = nuevoLogoUrl;
+
+  const { error } = await sb.from('talleres').update(updatePayload).eq('id', tid());
   if (error) { toast('Error: '+error.message,'error'); return; }
   // Actualizar el perfil en memoria para que la moneda nueva tenga efecto
   // sin tener que cerrar sesión y volver a entrar.
@@ -244,7 +359,15 @@ async function guardarConfigDatos() {
     currentPerfil.talleres.pais = preset.pais;
     currentPerfil.talleres.moneda_simbolo = preset.simbolo;
     currentPerfil.talleres.moneda_locale = preset.locale;
+    if (nuevoLogoUrl !== undefined) currentPerfil.talleres.logo_url = nuevoLogoUrl;
   }
+  // Invalidar caches del logo y refrescar el render del header/sidebar.
+  if (nuevoLogoUrl !== undefined) {
+    if (typeof invalidarLogoTallerCache === 'function') invalidarLogoTallerCache();
+    if (typeof aplicarLogoTallerEnUI === 'function') aplicarLogoTallerEnUI();
+  }
+  _logoTallerPendingFile = null;
+  _logoTallerQuitar = false;
   toast('Taller actualizado','success');
   closeModal();
   navigate('dashboard');
@@ -431,3 +554,74 @@ async function miCobro() {
 // ✅ EXPONER GLOBALMENTE
 window.misTrabajos = misTrabajos;
 window.miCobro = miCobro;
+
+
+// ─── TAREA #63 · LOGO DEL TALLER (helpers globales) ─────────────────────────
+// Render del logo en el sidebar y el topbar de la app: si hay logo_url,
+// reemplaza el texto "TALLERPRO" por la imagen; si no, deja el texto.
+// Idempotente — se llama desde buildNav y desde guardarConfigDatos.
+function aplicarLogoTallerEnUI() {
+  const logoUrl = currentPerfil?.talleres?.logo_url || '';
+  // Sidebar header (index.html L184)
+  const sideHead = document.querySelector('#sidebar-header > div:first-child');
+  if (sideHead) {
+    if (logoUrl) {
+      sideHead.outerHTML = `<div data-logo-slot="sidebar" style="display:flex;align-items:center;justify-content:flex-start"><img src="${h(logoUrl)}" alt="logo" style="max-height:40px;max-width:100%;object-fit:contain"></div>`;
+    } else {
+      sideHead.outerHTML = `<div data-logo-slot="sidebar" style="font-family:var(--font-head);font-size:1.4rem;color:var(--accent);letter-spacing:3px">TALLERPRO</div>`;
+    }
+  }
+  // Topbar (index.html L202)
+  const top = document.querySelector('.topbar-logo');
+  if (top) {
+    if (logoUrl) {
+      top.innerHTML = `<img src="${h(logoUrl)}" alt="logo" style="max-height:28px;max-width:120px;object-fit:contain;display:block">`;
+      top.style.padding = '0';
+    } else {
+      top.innerHTML = 'TALLERPRO';
+      top.style.padding = '';
+    }
+  }
+}
+
+// Cache en memoria del logo en formato Base64 (data URL) para usar en PDFs
+// con jsPDF.addImage. Memoizado por sesión y por URL — si el admin cambia
+// el logo, `invalidarLogoTallerCache()` lo limpia.
+let _logoTallerCache = null; // { url, dataUrl, fmt }
+
+function invalidarLogoTallerCache() { _logoTallerCache = null; }
+
+// Devuelve { dataUrl, fmt } o null si el taller no tiene logo o falla la
+// descarga (no se considera error fatal — el PDF se genera sin logo).
+async function obtenerLogoTallerBase64() {
+  const url = currentPerfil?.talleres?.logo_url || '';
+  if (!url) return null;
+  if (_logoTallerCache && _logoTallerCache.url === url) {
+    return { dataUrl: _logoTallerCache.dataUrl, fmt: _logoTallerCache.fmt };
+  }
+  try {
+    const resp = await fetch(url, { mode: 'cors', cache: 'force-cache' });
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    // Detectar formato para jsPDF: PNG | JPEG | WEBP. Default PNG.
+    let fmt = 'PNG';
+    if (blob.type === 'image/jpeg') fmt = 'JPEG';
+    else if (blob.type === 'image/webp') fmt = 'WEBP';
+    const dataUrl = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+    _logoTallerCache = { url, dataUrl, fmt };
+    return { dataUrl, fmt };
+  } catch (_) {
+    return null;
+  }
+}
+
+window.aplicarLogoTallerEnUI = aplicarLogoTallerEnUI;
+window.invalidarLogoTallerCache = invalidarLogoTallerCache;
+window.obtenerLogoTallerBase64 = obtenerLogoTallerBase64;
+window.logoTallerPreview = logoTallerPreview;
+window.quitarLogoTaller = quitarLogoTaller;

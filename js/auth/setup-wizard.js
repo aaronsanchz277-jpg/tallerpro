@@ -57,15 +57,16 @@ function _setupTienePWA() {
   return true;
 }
 
-// Feature-gate para el paso de logo. Hoy retorna false porque la columna
-// `logo_url` no existe en `talleres` y no hay bucket `logos` configurado.
-// Cuando esa infraestructura aterrice, alcanza con que el fallback de
-// loadPerfil cargue `logo_url` y este chequeo lo detecte (mismo patrón
-// que `_setupTieneMoneda`). El paso ya está reservado en `_setupListaCompleta`
-// como comentario para que el orden sea estable.
+// Feature-gate para el paso de logo. La infraestructura ya existe (Tarea
+// #63: columna `logo_url`, bucket `logos`, sección "Logo del taller" en
+// Configuración → Mi Taller), pero el wizard todavía NO renderiza un paso
+// dedicado: la subida de logo se hace desde Mi Taller. Para no agregar un
+// paso vacío al wizard hasta que se diseñe el render dedicado, este gate
+// devuelve false. Cuando se implemente `case 'logo'` en `_setupRenderPaso`
+// y `_setupGuardarLogo`, basta con cambiar este return a:
+//   return currentPerfil?.talleres && 'logo_url' in currentPerfil.talleres;
 function _setupTieneLogo() {
-  return currentPerfil?.talleres &&
-         'logo_url' in currentPerfil.talleres;
+  return false;
 }
 
 // ─── DECISIÓN: ¿corre el wizard? ────────────────────────────────────────────

@@ -149,6 +149,11 @@ function buildNav() {
 
   // Cargar contadores en background (no bloquea el render del menú)
   setTimeout(() => { try { cargarBadgesNav(); } catch(_){} }, 0);
+
+  // Tarea #63: si el taller subió un logo, mostrarlo en sidebar y topbar.
+  if (typeof aplicarLogoTallerEnUI === 'function') {
+    try { aplicarLogoTallerEnUI(); } catch(_) { /* no-op */ }
+  }
 }
 
 // ─── BADGES DE CONTADOR EN SIDEBAR/BOTTOM-NAV ───────────────────────────────

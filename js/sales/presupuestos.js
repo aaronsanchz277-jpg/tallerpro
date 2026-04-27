@@ -381,16 +381,37 @@ async function compartirPresupuesto(id) {
     const m = 15, w = 180;
     let y = 15;
 
+    // Tarea #63: si el taller tiene logo, lo dibujamos en la esquina
+    // superior izquierda y desplazamos el texto del nombre/datos a la
+    // derecha. Si no hay logo o falla la descarga, mantenemos el layout
+    // original (texto desde m=15).
+    let logoData = null;
+    if (typeof obtenerLogoTallerBase64 === 'function') {
+      try { logoData = await obtenerLogoTallerBase64(); } catch(_) { logoData = null; }
+    }
+    let logoRenderizado = false;
+
     doc.setFillColor(22,22,35);
     doc.rect(0,0,210,32,'F');
+    if (logoData) {
+      try {
+        doc.addImage(logoData.dataUrl, logoData.fmt, m - 3, 5, 22, 22);
+        logoRenderizado = true;
+      } catch (e) {
+        // Si jsPDF no soporta el formato (ej. WEBP en versiones viejas),
+        // ignoramos el logo y usamos el layout sin logo (texto desde m).
+        console.warn('No se pudo dibujar el logo en el PDF:', e?.message || e);
+      }
+    }
+    const textoX = logoRenderizado ? m + 26 : m;  // 22mm logo + 4mm padding
     doc.setTextColor(0,229,255);
     doc.setFontSize(18);
     doc.setFont('helvetica','bold');
-    doc.text(tallerNombre.toUpperCase(), m, 14);
+    doc.text(tallerNombre.toUpperCase(), textoX, 14);
     doc.setFontSize(8);
     doc.setTextColor(180,180,200);
     doc.setFont('helvetica','normal');
-    [tallerRuc?'RUC: '+tallerRuc:'', tallerDir||'', tallerTel?'Tel: '+tallerTel:''].filter(Boolean).forEach((line,i)=>doc.text(line, m, 20+i*4));
+    [tallerRuc?'RUC: '+tallerRuc:'', tallerDir||'', tallerTel?'Tel: '+tallerTel:''].filter(Boolean).forEach((line,i)=>doc.text(line, textoX, 20+i*4));
     doc.setTextColor(255,255,255);
     doc.setFontSize(11);
     doc.text('PRESUPUESTO', 195, 12, {align:'right'});
