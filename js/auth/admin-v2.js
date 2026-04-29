@@ -179,10 +179,6 @@ async function activarPlan365Dias(tallerId, subId) {
 }
 
 // ─── CONFIGURAR DATOS DEL TALLER (solo admin o superadmin) ───────────────────
-// País / Moneda: presets para los países hispanohablantes más comunes en
-// los que opera la app. La elección define el símbolo (₲, $, Bs, etc.) y
-// el locale que usa toLocaleString para los separadores de miles.
-// Default Paraguay: mantiene el comportamiento histórico de la app.
 const MONEDA_PRESETS = [
   { pais: 'PY', label: '🇵🇾 Paraguay (₲)',   simbolo: '₲',  locale: 'es-PY' },
   { pais: 'AR', label: '🇦🇷 Argentina ($)',  simbolo: '$',  locale: 'es-AR' },
@@ -198,10 +194,6 @@ async function modalConfigDatos() {
   const { data: taller } = await sb.from('talleres').select('*').eq('id', tid()).single();
   if (!taller) return;
   const paisActual = taller.pais || 'PY';
-  // Tarea #63: el campo logo_url puede no existir todavía si la migración
-  // SQL no fue aplicada. En ese caso ocultamos la sección. Reseteamos los
-  // flags pendientes de selecciones anteriores (que pudieron quedar si el
-  // usuario abandonó el modal sin guardar).
   _logoTallerPendingFile = null;
   _logoTallerQuitar = false;
   const tieneLogoCol = ('logo_url' in taller);
@@ -242,9 +234,6 @@ async function modalConfigDatos() {
     <button class="btn-primary" onclick="guardarConfigDatos()">${t('guardar')}</button>
     <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
 
-  // Tarea #63: si ya hay un logo guardado, descargarlo (vía SDK con sesión
-  // autenticada porque el bucket es privado) y pintarlo en el preview. Si
-  // falla, dejamos el placeholder "..." → "sin logo".
   if (tieneLogoCol && logoActual && typeof obtenerLogoTallerBase64 === 'function') {
     obtenerLogoTallerBase64().then(data => {
       const prev = document.getElementById('logo-preview');
@@ -258,9 +247,6 @@ async function modalConfigDatos() {
   }
 }
 
-// Tarea #63: vista previa del logo elegido y validación de tamaño/tipo.
-// El archivo se guarda en _logoTallerPendingFile y solo se sube cuando el
-// usuario apreta "Guardar". Si elige otro archivo, reemplaza el anterior.
 let _logoTallerPendingFile = null;
 let _logoTallerQuitar = false;
 
@@ -299,9 +285,6 @@ function quitarLogoTaller() {
   toast('Se quitará al guardar', 'info');
 }
 
-// Sube el archivo al bucket `logos` con path `{taller_id}/logo-{ts}.{ext}`,
-// borra el archivo anterior si existía dentro del mismo bucket, y devuelve
-// la URL pública. Lanza Error en caso de fallo.
 async function _logoTallerSubir(file, logoUrlAnterior) {
   const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
   const tallerId = tid();
@@ -312,7 +295,6 @@ async function _logoTallerSubir(file, logoUrlAnterior) {
     cacheControl: '3600'
   });
   if (upErr) throw new Error('No se pudo subir el logo: ' + upErr.message);
-  // Borrar archivo viejo si era de este taller (mismo bucket).
   if (logoUrlAnterior) {
     const m = logoUrlAnterior.match(/\/logos\/(.+)$/);
     if (m && m[1] && m[1].startsWith(tallerId + '/') && m[1] !== path) {
@@ -332,8 +314,7 @@ async function guardarConfigDatos() {
   if (!nombre) { toast('El nombre es obligatorio','error'); return; }
   const preset = MONEDA_PRESETS.find(p => p.pais === pais) || MONEDA_PRESETS[0];
 
-  // Tarea #63: si hay archivo pendiente, subirlo antes del UPDATE.
-  let nuevoLogoUrl;  // undefined = no tocar el campo
+  let nuevoLogoUrl;
   const logoActual = currentPerfil?.talleres?.logo_url || null;
   if (_logoTallerPendingFile) {
     try {
@@ -346,9 +327,6 @@ async function guardarConfigDatos() {
     nuevoLogoUrl = null;
     if (logoActual) {
       const m = logoActual.match(/\/logos\/(.+)$/);
-      // Defense-in-depth: aunque la RLS ya bloquea borrar archivos de otros
-      // talleres, validamos que el path empiece con nuestro taller_id para
-      // no enviar al storage requests obviamente cross-tenant.
       const tallerId = tid();
       if (m && m[1] && m[1].startsWith(tallerId + '/')) {
         try { await sb.storage.from('logos').remove([m[1]]); } catch(_) { /* no-op */ }
@@ -366,8 +344,6 @@ async function guardarConfigDatos() {
 
   const { error } = await sb.from('talleres').update(updatePayload).eq('id', tid());
   if (error) { toast('Error: '+error.message,'error'); return; }
-  // Actualizar el perfil en memoria para que la moneda nueva tenga efecto
-  // sin tener que cerrar sesión y volver a entrar.
   if (currentPerfil?.talleres) {
     currentPerfil.talleres.nombre = nombre;
     currentPerfil.talleres.telefono = telefono;
@@ -378,7 +354,6 @@ async function guardarConfigDatos() {
     currentPerfil.talleres.moneda_locale = preset.locale;
     if (nuevoLogoUrl !== undefined) currentPerfil.talleres.logo_url = nuevoLogoUrl;
   }
-  // Invalidar caches del logo y refrescar el render del header/sidebar.
   if (nuevoLogoUrl !== undefined) {
     if (typeof invalidarLogoTallerCache === 'function') invalidarLogoTallerCache();
     if (typeof aplicarLogoTallerEnUI === 'function') aplicarLogoTallerEnUI();
@@ -391,16 +366,39 @@ async function guardarConfigDatos() {
 }
 
 // ─── MI COBRO (Empleado) ────────────────────────────────────────────────────
-// Tarea #17: pantalla del empleado para ver su sueldo base, comisiones del
-// período (suma de `pago` en reparacion_mecanicos del taller, vinculadas a
-// reparaciones cuya fecha cae dentro del período de sueldo activo), vales
-// tomados y total a cobrar. Requiere que el perfil esté vinculado a una
-// ficha de empleado (currentPerfil.empleado_id IS NOT NULL); de lo
-// contrario muestra un mensaje pidiendo al admin que lo vincule.
-//
-// Período: usa el `periodos_sueldo` con estado='abierto' (consistente con
-// el módulo Sueldos del admin). Si no hay ninguno abierto, cae al mes
-// corriente como fallback razonable.
+// ─── Helper: semana lunes-sábado ────────────────────────────────────────────
+// Dado "YYYY-MM-DD", devuelve { inicio: "YYYY-MM-DD", fin: "YYYY-MM-DD" }
+// donde inicio es el lunes y fin el sábado de esa semana calendario.
+function _getSemanaDeFecha(fechaStr) {
+  const [y, m, d] = fechaStr.split('-').map(Number);
+  const fecha = new Date(y, m - 1, d);       // fecha local, sin desfase UTC
+  const diaSemana = fecha.getDay();           // 0=Dom, 1=Lun … 6=Sab
+  const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
+  const lunes = new Date(y, m - 1, d + diffLunes);
+  const sabado = new Date(lunes);
+  sabado.setDate(lunes.getDate() + 5);
+  const toStr = dt => dt.toISOString().split('T')[0];
+  return { inicio: toStr(lunes), fin: toStr(sabado) };
+}
+
+// Agrupa un array de items en semanas lunes-sábado.
+// getterFecha(item) => "YYYY-MM-DD"
+// getterMonto(item) => number
+// Devuelve array ordenado de más reciente a más antiguo.
+function _agruparPorSemana(items, getterFecha, getterMonto) {
+  const grupos = {};
+  for (const item of items) {
+    const fecha = getterFecha(item);
+    if (!fecha) continue;
+    const { inicio, fin } = _getSemanaDeFecha(fecha);
+    const key = inicio + '|' + fin;
+    if (!grupos[key]) grupos[key] = { inicio, fin, items: [], total: 0 };
+    grupos[key].items.push(item);
+    grupos[key].total += parseFloat(getterMonto(item) || 0);
+  }
+  return Object.values(grupos).sort((a, b) => b.inicio.localeCompare(a.inicio));
+}
+
 async function miCobro() {
   if (currentPerfil?.rol !== 'empleado') { dashboard(); return; }
 
@@ -424,8 +422,6 @@ async function miCobro() {
   }
 
   // ─── Período activo ──────────────────────────────────────────────────────
-  // Buscamos un período abierto del taller (igual que hace Sueldos). Si no
-  // hay, fallback al mes corriente.
   let inicio, fin, periodoLabel, periodoFuente;
   try {
     const { data: periodoAbierto } = await sb.from('periodos_sueldo')
@@ -452,8 +448,6 @@ async function miCobro() {
   }
 
   // ─── Datos en paralelo ───────────────────────────────────────────────────
-  // Comisiones: reparacion_mecanicos restringido por RLS a SUS filas
-  // (Tarea #17, policy `reparacion_mecanicos_empleado_select_own`).
   const [empRes, valesRes, asignRes] = await Promise.all([
     sb.from('empleados').select('nombre,sueldo,rol').eq('id', empId).maybeSingle(),
     sb.from('vales_empleado').select('monto,fecha,concepto')
@@ -467,7 +461,7 @@ async function miCobro() {
   const vales = valesRes.data || [];
   const asignaciones = asignRes.data || [];
 
-  // Resolver fechas de las reparaciones para filtrar por período.
+  // Resolver fechas de las reparaciones para filtrar por período
   const repIds = [...new Set(asignaciones.map(a => a.reparacion_id).filter(Boolean))];
   let repPorId = {};
   if (repIds.length > 0) {
@@ -500,6 +494,52 @@ async function miCobro() {
     ? `<span style="font-size:.62rem;background:rgba(0,255,136,.12);color:var(--success);border:1px solid rgba(0,255,136,.3);border-radius:6px;padding:2px 6px;font-family:var(--font-head);margin-left:.4rem">PERÍODO ABIERTO</span>`
     : `<span style="font-size:.62rem;background:rgba(255,204,0,.12);color:var(--warning);border:1px solid rgba(255,204,0,.3);border-radius:6px;padding:2px 6px;font-family:var(--font-head);margin-left:.4rem">MES CORRIENTE</span>`;
 
+  // ─── Agrupar comisiones por semana lunes-sábado ──────────────────────────
+  const semanas = _agruparPorSemana(
+    comisionesDelPeriodo,
+    c => c.rep.fecha,
+    c => c.pago
+  );
+
+  // Render de semanas agrupadas
+  const renderComisionesPorSemana = () => {
+    if (comisionesDelPeriodo.length === 0) {
+      return `<div class="empty" style="padding:.75rem"><p style="font-size:.82rem">No tenés comisiones registradas en este período</p></div>`;
+    }
+
+    return semanas.map(semana => {
+      // Ordenar trabajos de la semana: más recientes primero
+      const trabajosOrdenados = [...semana.items].sort((a, b) =>
+        b.rep.fecha.localeCompare(a.rep.fecha)
+      );
+      const totalHorasSemana = trabajosOrdenados.reduce((s, c) => s + c.horas, 0);
+
+      return `
+        <div style="margin-bottom:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:.55rem .75rem;background:rgba(0,229,255,.06);border-bottom:1px solid var(--border)">
+            <div>
+              <span style="font-family:var(--font-head);font-size:.72rem;color:var(--accent);letter-spacing:.5px">📅 Lun ${formatFecha(semana.inicio)} — Sáb ${formatFecha(semana.fin)}</span>
+              ${totalHorasSemana > 0 ? `<span style="font-size:.65rem;color:var(--text2);margin-left:.5rem">· ⏱ ${totalHorasSemana.toFixed(1)} hs</span>` : ''}
+            </div>
+            <span style="font-family:var(--font-head);font-size:.85rem;color:var(--accent)">+${fm(semana.total)}</span>
+          </div>
+          ${trabajosOrdenados.map(c => `
+            <div onclick="detalleReparacion('${c.rep.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .75rem;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;gap:.5rem">
+              <div style="min-width:0;flex:1">
+                <div style="font-size:.82rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(c.rep.descripcion || 'Trabajo')}</div>
+                <div style="font-size:.68rem;color:var(--text2)">${formatFecha(c.rep.fecha)}${c.rep.vehiculos ? ' · ' + h(c.rep.vehiculos.patente) : ''}${c.horas > 0 ? ' · ⏱ ' + c.horas + ' hs' : ''}</div>
+              </div>
+              <span style="font-family:var(--font-head);color:var(--accent);font-size:.88rem;white-space:nowrap">+${fm(c.pago)}</span>
+            </div>`).join('')}
+        </div>`;
+    }).join('') +
+    // Total general al pie
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .25rem;border-top:1px solid var(--border);margin-top:.25rem">
+      <span style="font-family:var(--font-head);font-size:.72rem;color:var(--text2);letter-spacing:1px">TOTAL COMISIONES${totalHoras > 0 ? ' · ⏱ ' + totalHoras.toFixed(1) + ' hs' : ''}</span>
+      <span style="font-family:var(--font-head);font-size:1rem;color:var(--accent)">+${fm(totalComisiones)}</span>
+    </div>`;
+  };
+
   main.innerHTML = `
     <div style="padding:.25rem 0">
       <div style="font-family:var(--font-head);font-size:1.3rem;color:var(--text);margin-bottom:.25rem">💵 Mi Cobro</div>
@@ -526,23 +566,10 @@ async function miCobro() {
         </div>
       </div>
 
-      <div style="font-family:var(--font-head);font-size:.72rem;color:var(--text2);letter-spacing:1px;margin:.5rem 0 .4rem;display:flex;justify-content:space-between;align-items:baseline">
-        <span>🔧 COMISIONES DEL PERÍODO (${comisionesDelPeriodo.length})</span>
-        ${totalHoras > 0 ? `<span style="color:var(--accent);font-size:.7rem">⏱ ${totalHoras.toFixed(1)} hs</span>` : ''}
+      <div style="font-family:var(--font-head);font-size:.72rem;color:var(--text2);letter-spacing:1px;margin:.5rem 0 .6rem">
+        🔧 COMISIONES DEL PERÍODO — POR SEMANA (${comisionesDelPeriodo.length} trabajos · ${semanas.length} semana${semanas.length !== 1 ? 's' : ''})
       </div>
-      ${comisionesDelPeriodo.length === 0
-        ? `<div class="empty" style="padding:.75rem"><p style="font-size:.82rem">No tenés comisiones registradas en este período</p></div>`
-        : comisionesDelPeriodo.map(c => `
-          <div class="card" style="cursor:pointer" onclick="detalleReparacion('${c.rep.id}')">
-            <div class="card-header">
-              <div class="card-avatar">🔧</div>
-              <div class="card-info">
-                <div class="card-name">${h(c.rep.descripcion || 'Reparación')}</div>
-                <div class="card-sub">${c.rep.vehiculos ? h(c.rep.vehiculos.patente) + ' · ' : ''}${formatFecha(c.rep.fecha)}${c.horas > 0 ? ` · ⏱ ${c.horas} hs` : ''}</div>
-              </div>
-              <div style="font-family:var(--font-head);color:var(--accent);font-size:.95rem">+${fm(c.pago)}</div>
-            </div>
-          </div>`).join('')}
+      ${renderComisionesPorSemana()}
 
       <div style="font-family:var(--font-head);font-size:.72rem;color:var(--text2);letter-spacing:1px;margin:1rem 0 .4rem">
         💸 VALES TOMADOS (${vales.length})
@@ -574,32 +601,20 @@ window.miCobro = miCobro;
 
 
 // ─── TAREA #63 · LOGO DEL TALLER (helpers globales) ─────────────────────────
-// Cache en memoria del logo en formato Base64 (data URL). El bucket `logos`
-// es PRIVADO (RLS gateado por taller_id), así que la lectura va siempre vía
-// `sb.storage.from('logos').download(path)` con la sesión autenticada del
-// usuario. Memoizado por sesión y por logo_url; si el admin sube otro logo
-// `invalidarLogoTallerCache()` lo limpia.
-let _logoTallerCache = null;        // { url, dataUrl, fmt }
-let _logoTallerInflight = null;     // Promise en vuelo para deduplicar
+let _logoTallerCache = null;
+let _logoTallerInflight = null;
 
 function invalidarLogoTallerCache() {
   _logoTallerCache = null;
   _logoTallerInflight = null;
 }
 
-// Extrae el path dentro del bucket `logos` desde la URL canónica que
-// devuelve `getPublicUrl` (es la que guardamos en talleres.logo_url).
-// Ejemplo: ".../storage/v1/object/public/logos/<taller>/logo-<ts>.png"
-//          → "<taller>/logo-<ts>.png"
 function _logoTallerExtraerPath(url) {
   if (!url) return null;
   const m = url.match(/\/logos\/(.+)$/);
   return (m && m[1]) ? m[1] : null;
 }
 
-// Devuelve { dataUrl, fmt } o null si el taller no tiene logo, no se puede
-// extraer el path o falla la descarga (no fatal — el PDF / sidebar siguen
-// funcionando sin logo).
 async function obtenerLogoTallerBase64() {
   const url = currentPerfil?.talleres?.logo_url || '';
   if (!url) return null;
@@ -633,15 +648,9 @@ async function obtenerLogoTallerBase64() {
   return _logoTallerInflight;
 }
 
-// Render del logo en el sidebar y el topbar de la app: descarga el archivo
-// privado, lo memoiza y lo pinta como data URL. Mientras se baja muestra el
-// texto "TALLERPRO" para evitar flash en blanco. Idempotente — se llama
-// desde buildNav y desde guardarConfigDatos.
 async function aplicarLogoTallerEnUI() {
   const tieneLogo = !!(currentPerfil?.talleres?.logo_url);
 
-  // Helper para reemplazar el slot del sidebar y del topbar con un
-  // contenido dado (HTML interno o texto).
   const pintar = (dataUrl) => {
     const sideHead = document.querySelector('#sidebar-header > div:first-child');
     if (sideHead) {
