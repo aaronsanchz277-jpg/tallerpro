@@ -4,9 +4,6 @@ async function empleados() {
     sb.from('empleados').select('*').eq('taller_id', tid()).order('nombre')
   );
 
-  // Tarea #17: para mostrar el estado de vinculación por empleado, traemos
-  // los perfiles de este taller que ya tienen empleado_id seteado. Solo
-  // admin necesita esto.
   let perfilPorEmp = {};
   if (typeof esAdmin === 'function' && esAdmin()) {
     const { data: perfilesEmp } = await sb.from('perfiles')
@@ -50,6 +47,40 @@ async function empleados() {
         </div>
       </div>`;
       }).join('')}`;
+}
+
+// ─── Helper: agrupar trabajos por semana lunes-sábado ───────────────────────
+// Compartido entre detalleEmpleado y cualquier otro módulo que lo necesite.
+// Definido aquí para evitar colisión con la copia de admin-v2.js (mismo
+// algoritmo, distinto nombre de función con prefijo _emp para namespace).
+function _empGetSemanaDeFecha(fechaStr) {
+  const [y, m, d] = fechaStr.split('-').map(Number);
+  const fecha = new Date(y, m - 1, d);        // local, sin desfase UTC
+  const diaSemana = fecha.getDay();            // 0=Dom … 6=Sáb
+  const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
+  const lunes = new Date(y, m - 1, d + diffLunes);
+  const sabado = new Date(lunes);
+  sabado.setDate(lunes.getDate() + 5);
+  const toStr = dt => dt.toISOString().split('T')[0];
+  return { inicio: toStr(lunes), fin: toStr(sabado) };
+}
+
+// items    : array genérico
+// getFecha : item => "YYYY-MM-DD"
+// getMonto : item => number
+// Retorna array de { inicio, fin, items, total } ordenado de más reciente a más antiguo.
+function _empAgruparPorSemana(items, getFecha, getMonto) {
+  const grupos = {};
+  for (const item of items) {
+    const fecha = getFecha(item);
+    if (!fecha) continue;
+    const { inicio, fin } = _empGetSemanaDeFecha(fecha);
+    const key = inicio + '|' + fin;
+    if (!grupos[key]) grupos[key] = { inicio, fin, items: [], total: 0 };
+    grupos[key].items.push(item);
+    grupos[key].total += parseFloat(getMonto(item) || 0);
+  }
+  return Object.values(grupos).sort((a, b) => b.inicio.localeCompare(a.inicio));
 }
 
 async function detalleEmpleado(id) {
@@ -102,10 +133,8 @@ async function detalleEmpleado(id) {
     valesPorPeriodo[pid].push(v);
   });
 
-  // Ordenar períodos del más reciente al más antiguo
   const periodosOrdenados = periodos?.sort((a,b) => b.fecha_inicio.localeCompare(a.fecha_inicio)) || [];
 
-  // Calcular total de vales del MES ACTUAL (para el resumen de arriba)
   const primerDiaMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
   const ultimoDiaMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0];
   const totalValesMes = (valesTodos || [])
@@ -113,10 +142,6 @@ async function detalleEmpleado(id) {
     .reduce((s, v) => s + parseFloat(v.monto || 0), 0);
 
   const sueldo = parseFloat(emp?.sueldo || 0);
-  // El "neto" del mes incluye sueldo base + comisiones por trabajos del mes
-  // − vales. Las comisiones se calculan más abajo (variable
-  // `totalComisionesMes`) una vez cargado `trabajosMecanico` (Tarea #55).
-  // Se asigna `neto` después de ese cálculo para que entre al render.
 
   // Construir HTML de vales agrupados
   let valesHTML = '';
@@ -152,7 +177,6 @@ async function detalleEmpleado(id) {
       `;
     });
 
-    // Mostrar vales sin período asignado
     const valesSinPeriodo = valesPorPeriodo['sin_periodo'] || [];
     if (valesSinPeriodo.length > 0) {
       const totalSinPeriodo = valesSinPeriodo.reduce((s, v) => s + parseFloat(v.monto || 0), 0);
@@ -179,34 +203,23 @@ async function detalleEmpleado(id) {
     }
   }
 
-  // Total horas (solo trabajos manuales)
   const totalHoras = (trabajosManuales || []).reduce((s, t) => s + parseFloat(t.horas || 0), 0);
 
-  // ¿Quién está mirando? Determina qué se muestra:
-  //  - admin: ve todo (sueldo, vales, resumen, botones)
-  //  - el propio empleado: ve todo lo suyo
-  //  - cualquier otro empleado: NO debería llegar acá (puedoVerEmpleado
-  //    lo bloquea arriba) y RLS también bloquea el SELECT.
   const _esAdmin   = (typeof esAdmin === 'function') && esAdmin();
   const _esPropio  = currentPerfil?.empleado_id && currentPerfil.empleado_id === id;
   const verSensible = _esAdmin || _esPropio;
 
   // ─── TRABAJOS COMO MECÁNICO (Tarea #53) ──────────────────────────────────
-  // Reparaciones del taller donde el empleado está asignado, con el monto
-  // que le toca (campo `pago` de `reparacion_mecanicos`). Solo se renderiza
-  // si verSensible. La RLS `reparacion_mecanicos_empleado_select_own` deja
-  // al propio mecánico ver lo suyo; admin ve todo via la RLS de admin.
   let trabajosMecanico = [];
   if (verSensible) {
     const { data: rmRaw } = await sb.from('reparacion_mecanicos')
       .select('id, pago, horas, reparaciones(id, descripcion, fecha, vehiculos(patente,marca,modelo), clientes(nombre))')
       .eq('empleado_id', id);
     trabajosMecanico = (rmRaw || [])
-      .filter(rm => rm.reparaciones) // descartar filas huérfanas
+      .filter(rm => rm.reparaciones)
       .sort((a, b) => (b.reparaciones.fecha || '').localeCompare(a.reparaciones.fecha || ''));
   }
 
-  // Período actual: el "abierto" del taller, o el mes en curso si no hay.
   const periodoAbierto = periodos?.find(p => p.estado === 'abierto');
   const periodoInicio = periodoAbierto ? periodoAbierto.fecha_inicio : primerDiaMes;
   const periodoFin    = periodoAbierto ? periodoAbierto.fecha_fin    : ultimoDiaMes;
@@ -218,51 +231,84 @@ async function detalleEmpleado(id) {
     .filter(rm => rm.reparaciones.fecha >= periodoInicio && rm.reparaciones.fecha <= periodoFin)
     .reduce((s, rm) => s + parseFloat(rm.pago || 0), 0);
 
-  // Tarea #55: comisiones del MES CALENDARIO actual, para sumar al neto
-  // del "Resumen del mes" de abajo (mismo rango que `totalValesMes`). Esto
-  // permite que un mecánico que cobra solo a comisión (sueldo base 0) vea
-  // su monto real a cobrar en lugar de "₲0".
   const totalComisionesMes = trabajosMecanico
     .filter(rm => rm.reparaciones.fecha >= primerDiaMes && rm.reparaciones.fecha <= ultimoDiaMes)
     .reduce((s, rm) => s + parseFloat(rm.pago || 0), 0);
   const neto = sueldo + totalComisionesMes - totalValesMes;
 
-  // Render: lista paginada (15 visibles + "Ver más").
-  const renderFilaTrab = rm => {
-    const r = rm.reparaciones;
-    const veh = r.vehiculos
-      ? `${h(r.vehiculos.patente || '')}${r.vehiculos.marca ? ' ' + h(r.vehiculos.marca) : ''}${r.vehiculos.modelo ? ' ' + h(r.vehiculos.modelo) : ''}`.trim()
-      : (r.clientes?.nombre ? h(r.clientes.nombre) : '');
-    return `
-      <div onclick="detalleReparacion('${r.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .3rem;border-top:1px solid var(--border);cursor:pointer;gap:.5rem">
-        <div style="min-width:0;flex:1">
-          <div style="font-size:.82rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.descripcion || 'Trabajo')}</div>
-          <div style="font-size:.68rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${formatFecha(r.fecha)}${veh ? ' · ' + veh : ''}</div>
+  // ─── Render sección trabajos como mecánico, agrupado por semana ──────────
+  let trabajosMecHTML = '';
+  if (verSensible) {
+    // Trabajos dentro del período activo para el total de pie
+    const trabajosPeriodo = trabajosMecanico.filter(
+      rm => rm.reparaciones.fecha >= periodoInicio && rm.reparaciones.fecha <= periodoFin
+    );
+
+    // Todos los trabajos agrupados por semana (más recientes primero)
+    const semanas = _empAgruparPorSemana(
+      trabajosMecanico,
+      rm => rm.reparaciones.fecha,
+      rm => rm.pago
+    );
+
+    const LIMITE_SEMANAS = 4; // semanas visibles antes del "Ver más"
+    const semanasVisibles = semanas.slice(0, LIMITE_SEMANAS);
+    const semanasOcultas  = semanas.slice(LIMITE_SEMANAS);
+
+    const renderFila = rm => {
+      const r = rm.reparaciones;
+      const veh = r.vehiculos
+        ? `${h(r.vehiculos.patente || '')}${r.vehiculos.marca ? ' ' + h(r.vehiculos.marca) : ''}${r.vehiculos.modelo ? ' ' + h(r.vehiculos.modelo) : ''}`.trim()
+        : (r.clientes?.nombre ? h(r.clientes.nombre) : '');
+      return `
+        <div onclick="detalleReparacion('${r.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:.45rem .6rem;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;gap:.5rem">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:.82rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.descripcion || 'Trabajo')}</div>
+            <div style="font-size:.68rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${formatFecha(r.fecha)}${veh ? ' · ' + veh : ''}</div>
+          </div>
+          <span style="font-family:var(--font-head);color:var(--success);font-size:.85rem;white-space:nowrap">${fm(rm.pago || 0)}</span>
+        </div>`;
+    };
+
+    const renderSemana = semana => {
+      const trabajosOrdenados = [...semana.items].sort((a, b) =>
+        b.reparaciones.fecha.localeCompare(a.reparaciones.fecha)
+      );
+      const horasSemana = trabajosOrdenados.reduce((s, rm) => s + parseFloat(rm.horas || 0), 0);
+      return `
+        <div style="margin-bottom:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:.45rem .6rem;background:rgba(0,255,136,.05);border-bottom:1px solid var(--border)">
+            <div>
+              <span style="font-family:var(--font-head);font-size:.68rem;color:var(--success);letter-spacing:.5px">📅 Lun ${formatFecha(semana.inicio)} — Sáb ${formatFecha(semana.fin)}</span>
+              ${horasSemana > 0 ? `<span style="font-size:.62rem;color:var(--text2);margin-left:.4rem">· ⏱ ${horasSemana.toFixed(1)} hs</span>` : ''}
+            </div>
+            <span style="font-family:var(--font-head);font-size:.82rem;color:var(--success)">${fm(semana.total)}</span>
+          </div>
+          ${trabajosOrdenados.map(renderFila).join('')}
+        </div>`;
+    };
+
+    const semanasHTMLVisible = semanasVisibles.map(renderSemana).join('');
+    const semanasHTMLOcultas = semanasOcultas.length > 0
+      ? `<div id="trab-mec-extras" style="display:none">${semanasOcultas.map(renderSemana).join('')}</div>
+         <button onclick="this.previousElementSibling.style.display='block';this.style.display='none'" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:.4rem;font-size:.72rem;margin-top:.4rem;cursor:pointer;font-family:var(--font-head)">Ver ${semanasOcultas.length} semana${semanasOcultas.length !== 1 ? 's' : ''} más (${semanasOcultas.reduce((s, sw) => s + sw.items.length, 0)} trabajos)</button>`
+      : '';
+
+    trabajosMecHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+          <span style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px">🔧 TRABAJOS COMO MECÁNICO</span>
+          ${trabajosMecanico.length > 0 ? `<span style="font-size:.65rem;color:var(--text2)">${trabajosMecanico.length} total · ${semanas.length} semana${semanas.length !== 1 ? 's' : ''}</span>` : ''}
         </div>
-        <span style="font-family:var(--font-head);color:var(--success);font-size:.85rem;white-space:nowrap">${fm(rm.pago || 0)}</span>
+        ${trabajosMecanico.length === 0
+          ? '<div style="font-size:.78rem;color:var(--text2);padding:.4rem 0">Todavía no tiene trabajos asignados.</div>'
+          : semanasHTMLVisible + semanasHTMLOcultas}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.6rem;padding-top:.5rem;border-top:1px solid var(--border)">
+          <div style="font-size:.72rem;color:var(--text2);line-height:1.2">Total comisiones del período actual<br><span style="font-size:.62rem;color:var(--text2)">(${periodoLabel})</span></div>
+          <span style="font-family:var(--font-head);color:var(--success);font-size:1rem">${fm(totalComisionesPeriodo)}</span>
+        </div>
       </div>`;
-  };
-  const LIMITE_VISIBLE = 15;
-  const visiblesHTML = trabajosMecanico.slice(0, LIMITE_VISIBLE).map(renderFilaTrab).join('');
-  const ocultos = trabajosMecanico.slice(LIMITE_VISIBLE);
-  const ocultosHTML = ocultos.length > 0
-    ? `<div id="trab-mec-extras" style="display:none">${ocultos.map(renderFilaTrab).join('')}</div>
-       <button onclick="this.previousElementSibling.style.display='block';this.style.display='none'" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:.4rem;font-size:.72rem;margin-top:.4rem;cursor:pointer;font-family:var(--font-head)">Ver ${ocultos.length} más</button>`
-    : '';
-  const trabajosMecHTML = !verSensible ? '' : `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
-        <span style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px">🔧 TRABAJOS COMO MECÁNICO</span>
-        ${trabajosMecanico.length > 0 ? `<span style="font-size:.65rem;color:var(--text2)">${trabajosMecanico.length} en total</span>` : ''}
-      </div>
-      ${trabajosMecanico.length === 0
-        ? '<div style="font-size:.78rem;color:var(--text2);padding:.4rem 0">Todavía no tiene trabajos asignados.</div>'
-        : visiblesHTML + ocultosHTML}
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.6rem;padding-top:.5rem;border-top:1px solid var(--border)">
-        <div style="font-size:.72rem;color:var(--text2);line-height:1.2">Total comisiones del período actual<br><span style="font-size:.62rem;color:var(--text2)">(${periodoLabel})</span></div>
-        <span style="font-family:var(--font-head);color:var(--success);font-size:1rem">${fm(totalComisionesPeriodo)}</span>
-      </div>
-    </div>`;
+  }
 
   document.getElementById('main-content').innerHTML = `
     <div class="detail-header">
@@ -331,12 +377,6 @@ async function eliminarVale(valeId, empleadoId) {
   if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   confirmar('¿Eliminar este vale? También se borrará el egreso en Finanzas.', async () => {
     await safeCall(async () => {
-      // Tarea #83: el egreso espejo en `movimientos_financieros` lo borra
-      // ahora un TRIGGER AFTER DELETE en Supabase
-      // (`trigger_vales_empleado_movimiento_delete`), en la misma
-      // transacción que el delete del vale. Eso garantiza que cualquier
-      // baja del vale (esta UI, el editor de Supabase, jobs futuros) deje
-      // las dos tablas consistentes sin pasos extra desde JS.
       await offlineDelete('vales_empleado', 'id', valeId);
       clearCache('empleados');
       clearCache('finanzas');
@@ -424,10 +464,9 @@ async function eliminarTrabajo(trabajoId, empleadoId) {
 // ─── Utilidades para períodos ───────────────────────────────────────────────
 function getLunesActual() {
   const hoy = new Date();
-  const dia = hoy.getDay(); // 0 = domingo
+  const dia = hoy.getDay();
   const lunes = new Date(hoy);
   lunes.setDate(hoy.getDate() - (dia === 0 ? 6 : dia - 1));
-  // Ajuste de zona horaria: usar setUTCHours para evitar desplazamientos
   lunes.setUTCHours(0,0,0,0);
   return lunes.toISOString().split('T')[0];
 }
@@ -441,7 +480,6 @@ function getDomingoActual() {
   return domingo.toISOString().split('T')[0];
 }
 
-// Mostrar formulario de creación rápida de período
 function mostrarFormNuevoPeriodo(empleadoId) {
   const form = document.getElementById('nuevo-periodo-form');
   if (form) {
@@ -451,7 +489,6 @@ function mostrarFormNuevoPeriodo(empleadoId) {
   }
 }
 
-// Crear el período desde el modal y recargar
 async function crearPeriodoDesdeModal(empleadoId) {
   const inicio = document.getElementById('np-inicio')?.value;
   const fin = document.getElementById('np-fin')?.value;
@@ -475,12 +512,10 @@ async function crearPeriodoDesdeModal(empleadoId) {
     
     toast('Período creado correctamente', 'success');
     closeModal();
-    // Reabrir el modal de vale con el nuevo período seleccionado por defecto
     await modalNuevoVale(empleadoId, nuevo.id);
   }, null, 'No se pudo crear el período');
 }
 
-// Modal principal de vale (ahora recibe opcionalmente periodoSeleccionadoId)
 async function modalNuevoVale(empleadoId, periodoSeleccionadoId = null) {
   if (typeof requireAdmin === 'function' && !requireAdmin()) return;
   const { data: periodos } = await sb.from('periodos_sueldo')
@@ -489,7 +524,6 @@ async function modalNuevoVale(empleadoId, periodoSeleccionadoId = null) {
     .order('fecha_inicio', { ascending: false })
     .limit(20);
 
-  // Determinar cuál período dejar seleccionado por defecto
   let defaultSelected = periodoSeleccionadoId;
   if (!defaultSelected) {
     const periodoAbierto = periodos?.find(p => p.estado === 'abierto');
@@ -540,14 +574,6 @@ async function guardarValeConSafeCall(empleadoId) {
   }, null, 'No se pudo registrar el vale');
 }
 
-// Helper compartido entre `empleados.js` (form de RR.HH.) e `ia.js`
-// (chatbot) para que ambas puertas de entrada inserten el vale en
-// `vales_empleado` Y el egreso espejo en `movimientos_financieros`.
-// `vales_empleado` NO tiene trigger en Postgres (a diferencia de los 7
-// triggers de la Tarea #44), así que el espejo se hace acá. Usamos el
-// id del vale recién creado como `referencia_id` del movimiento para
-// aprovechar el índice único `movimientos_financieros_referencia_unico`
-// como seguro contra duplicados.
 async function registrarValeYEgreso({ empleadoId, monto, concepto = 'Vale', fecha = null, periodoId = null, empleadoNombre = null }) {
   const fechaFinal = fecha || new Date().toISOString().split('T')[0];
   const valePayload = {
@@ -584,9 +610,6 @@ async function registrarValeYEgreso({ empleadoId, monto, concepto = 'Vale', fech
       referencia_id: valeNuevo.id,
       referencia_tabla: 'vales_empleado'
     });
-    // Si el índice único bloquea el insert (caso raro: ya existe un
-    // movimiento con esa referencia), lo ignoramos en silencio: la
-    // contabilidad ya quedó cubierta por el movimiento previo.
     if (movErr && movErr.code !== '23505') {
       console.warn('No se pudo registrar el movimiento del vale:', movErr.message);
     }
@@ -715,7 +738,6 @@ async function guardarEmpleadoConPermisosConSafeCall(empleadoId, perfilId) {
 async function guardarEmpleadoConPermisos(empleadoId, perfilId) {
   if (typeof requireAdmin === 'function' && !requireAdmin('Solo el administrador puede modificar permisos')) return;
 
-  // 1) Guardar datos básicos del empleado (igual que antes)
   const nombre = document.getElementById('f-nombre').value.trim();
   if (!validateRequired(nombre, 'Nombre')) return;
   const data = {
@@ -728,14 +750,12 @@ async function guardarEmpleadoConPermisos(empleadoId, perfilId) {
   const { error } = await offlineUpdate('empleados', data, 'id', empleadoId);
   if (error) { toast('Error: ' + error.message, 'error'); return; }
 
-  // 2) Guardar permisos del perfil vinculado, si lo hay
   if (perfilId && perfilId !== 'null') {
     const checks = document.querySelectorAll('.perm-check');
     const permisos = {};
     checks.forEach(cb => { permisos[cb.dataset.perm] = !!cb.checked; });
     const { error: pErr } = await sb.from('perfiles').update({ permisos }).eq('id', perfilId);
     if (pErr) {
-      // Si falla por columna inexistente, avisamos al admin que falta correr el SQL.
       if (/permisos/i.test(pErr.message || '')) {
         toast('Falta correr el script SQL de seguridad para guardar permisos.', 'error');
       } else {
