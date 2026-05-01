@@ -109,31 +109,12 @@ async function detalleEmpleado(id) {
     return;
   }
 
-  // ─── VALES AGRUPADOS POR PERÍODO ─────────────────────────────────────────
-  const { data: periodos } = await sb.from('periodos_sueldo')
-    .select('id, fecha_inicio, fecha_fin, estado')
-    .eq('taller_id', tid())
-    .order('fecha_inicio', { ascending: false })
-    .limit(12);
-
-  const periodosMap = {};
-  periodos?.forEach(p => { periodosMap[p.id] = p; });
-
+  // ─── DATOS FINANCIEROS ─────────────────────────────────────────────────────
   const { data: valesTodos } = await sb.from('vales_empleado')
     .select('*, periodo_id')
     .eq('empleado_id', id)
     .order('fecha', { ascending: false })
     .limit(200);
-
-  // Agrupar vales por periodo_id
-  const valesPorPeriodo = {};
-  valesTodos?.forEach(v => {
-    const pid = v.periodo_id || 'sin_periodo';
-    if (!valesPorPeriodo[pid]) valesPorPeriodo[pid] = [];
-    valesPorPeriodo[pid].push(v);
-  });
-
-  const periodosOrdenados = periodos?.sort((a,b) => b.fecha_inicio.localeCompare(a.fecha_inicio)) || [];
 
   const primerDiaMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
   const ultimoDiaMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0];
@@ -142,66 +123,6 @@ async function detalleEmpleado(id) {
     .reduce((s, v) => s + parseFloat(v.monto || 0), 0);
 
   const sueldo = parseFloat(emp?.sueldo || 0);
-
-  // Construir HTML de vales agrupados
-  let valesHTML = '';
-  if (periodosOrdenados.length === 0 && (!valesTodos || valesTodos.length === 0)) {
-    valesHTML = '<p style="color:var(--text2);font-size:.85rem">No hay vales registrados</p>';
-  } else {
-    periodosOrdenados.forEach(p => {
-      const valesDelPeriodo = valesPorPeriodo[p.id] || [];
-      if (valesDelPeriodo.length === 0) return;
-
-      const totalPeriodo = valesDelPeriodo.reduce((s, v) => s + parseFloat(v.monto || 0), 0);
-      valesHTML += `
-        <div style="margin-bottom:1rem; background:var(--surface); border-radius:10px; padding:.5rem; border:1px solid var(--border)">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem; padding:0 .3rem">
-            <span style="font-family:var(--font-head); font-size:.8rem; color:var(--accent);">
-              📅 ${formatFecha(p.fecha_inicio)} – ${formatFecha(p.fecha_fin)} ${p.estado === 'abierto' ? '(abierto)' : ''}
-            </span>
-            <span style="font-family:var(--font-head); color:var(--warning);">Total: ${fm(totalPeriodo)}</span>
-          </div>
-          ${valesDelPeriodo.map(v => `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:.4rem .3rem; border-top:1px solid var(--border);">
-              <div>
-                <div style="font-size:.82rem;">${h(v.concepto || 'Vale')}</div>
-                <div style="font-size:.68rem; color:var(--text2);">${formatFecha(v.fecha)}</div>
-              </div>
-              <div style="display:flex; align-items:center; gap:.4rem;">
-                <span style="font-family:var(--font-head); color:var(--warning); font-size:.85rem;">-${fm(v.monto)}</span>
-                <button onclick="eliminarVale('${v.id}','${id}')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.7rem;">✕</button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    });
-
-    const valesSinPeriodo = valesPorPeriodo['sin_periodo'] || [];
-    if (valesSinPeriodo.length > 0) {
-      const totalSinPeriodo = valesSinPeriodo.reduce((s, v) => s + parseFloat(v.monto || 0), 0);
-      valesHTML += `
-        <div style="margin-bottom:1rem; background:var(--surface); border-radius:10px; padding:.5rem; border:1px dashed var(--danger);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem; padding:0 .3rem">
-            <span style="font-family:var(--font-head); font-size:.8rem; color:var(--danger);">⚠️ Sin período asignado</span>
-            <span style="font-family:var(--font-head); color:var(--warning);">Total: ${fm(totalSinPeriodo)}</span>
-          </div>
-          ${valesSinPeriodo.map(v => `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:.4rem .3rem; border-top:1px solid var(--border);">
-              <div>
-                <div style="font-size:.82rem;">${h(v.concepto || 'Vale')}</div>
-                <div style="font-size:.68rem; color:var(--text2);">${formatFecha(v.fecha)}</div>
-              </div>
-              <div style="display:flex; align-items:center; gap:.4rem;">
-                <span style="font-family:var(--font-head); color:var(--warning); font-size:.85rem;">-${fm(v.monto)}</span>
-                <button onclick="eliminarVale('${v.id}','${id}')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.7rem;">✕</button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    }
-  }
 
   const totalHoras = (trabajosManuales || []).reduce((s, t) => s + parseFloat(t.horas || 0), 0);
 
@@ -236,76 +157,148 @@ async function detalleEmpleado(id) {
     .reduce((s, rm) => s + parseFloat(rm.pago || 0), 0);
   const neto = sueldo + totalComisionesMes - totalValesMes;
 
-  // ─── Render sección trabajos como mecánico, agrupado por semana ──────────
-  let trabajosMecHTML = '';
+  // ─── Render sección comisiones y vales agrupados por semana ──────────────
+  let comisionesValesHTML = '';
   if (verSensible) {
-    // Trabajos dentro del período activo para el total de pie
-    const trabajosPeriodo = trabajosMecanico.filter(
-      rm => rm.reparaciones.fecha >= periodoInicio && rm.reparaciones.fecha <= periodoFin
-    );
-
-    // Todos los trabajos agrupados por semana (más recientes primero)
-    const semanas = _empAgruparPorSemana(
+    // Agrupar trabajos por semana
+    const semanasComisiones = _empAgruparPorSemana(
       trabajosMecanico,
       rm => rm.reparaciones.fecha,
       rm => rm.pago
     );
 
-    const LIMITE_SEMANAS = 4; // semanas visibles antes del "Ver más"
-    const semanasVisibles = semanas.slice(0, LIMITE_SEMANAS);
-    const semanasOcultas  = semanas.slice(LIMITE_SEMANAS);
+    // Agrupar vales por semana
+    const semanasVales = _empAgruparPorSemana(
+      valesTodos || [],
+      v => v.fecha,
+      v => v.monto
+    );
 
-    const renderFila = rm => {
+    // Combinar ambas semanas (usar las semanas que tienen comisiones o vales)
+    const todasLasSemanas = new Set();
+    [...semanasComisiones, ...semanasVales].forEach(s => {
+      todasLasSemanas.add(s.inicio + '|' + s.fin);
+    });
+
+    const semanasCombinadas = Array.from(todasLasSemanas)
+      .map(key => {
+        const [inicio, fin] = key.split('|');
+        const semanaComisiones = semanasComisiones.find(s => s.inicio === inicio && s.fin === fin);
+        const semanaVales = semanasVales.find(s => s.inicio === inicio && s.fin === fin);
+        
+        return {
+          inicio,
+          fin,
+          comisiones: semanaComisiones?.items || [],
+          totalComisiones: semanaComisiones?.total || 0,
+          vales: semanaVales?.items || [],
+          totalVales: semanaVales?.total || 0,
+          neto: (semanaComisiones?.total || 0) - (semanaVales?.total || 0)
+        };
+      })
+      .sort((a, b) => b.inicio.localeCompare(a.inicio));
+
+    const LIMITE_SEMANAS = 4;
+    const semanasVisibles = semanasCombinadas.slice(0, LIMITE_SEMANAS);
+    const semanasOcultas = semanasCombinadas.slice(LIMITE_SEMANAS);
+
+    const renderFilaTrabajo = rm => {
       const r = rm.reparaciones;
       const veh = r.vehiculos
         ? `${h(r.vehiculos.patente || '')}${r.vehiculos.marca ? ' ' + h(r.vehiculos.marca) : ''}${r.vehiculos.modelo ? ' ' + h(r.vehiculos.modelo) : ''}`.trim()
         : (r.clientes?.nombre ? h(r.clientes.nombre) : '');
       return `
-        <div onclick="detalleReparacion('${r.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:.45rem .6rem;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;gap:.5rem">
+        <div onclick="detalleReparacion('${r.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:.4rem .6rem;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;gap:.5rem">
           <div style="min-width:0;flex:1">
-            <div style="font-size:.82rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(r.descripcion || 'Trabajo')}</div>
-            <div style="font-size:.68rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${formatFecha(r.fecha)}${veh ? ' · ' + veh : ''}</div>
+            <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🔧 ${h(r.descripcion || 'Trabajo')}</div>
+            <div style="font-size:.64rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${formatFecha(r.fecha)}${veh ? ' · ' + veh : ''}</div>
           </div>
-          <span style="font-family:var(--font-head);color:var(--success);font-size:.85rem;white-space:nowrap">${fm(rm.pago || 0)}</span>
+          <span style="font-family:var(--font-head);color:var(--accent);font-size:.8rem;white-space:nowrap">+${fm(rm.pago || 0)}</span>
         </div>`;
     };
 
-    const renderSemana = semana => {
-      const trabajosOrdenados = [...semana.items].sort((a, b) =>
+    const renderFilaVale = v => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem .6rem;border-bottom:1px solid rgba(255,255,255,.04);gap:.5rem">
+        <div style="min-width:0;flex:1">
+          <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">💸 ${h(v.concepto || 'Vale')}</div>
+          <div style="font-size:.64rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${formatFecha(v.fecha)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:.4rem">
+          <span style="font-family:var(--font-head);color:var(--warning);font-size:.8rem;white-space:nowrap">-${fm(v.monto || 0)}</span>
+          <button onclick="eliminarVale('${v.id}','${id}')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.6rem;padding:2px">✕</button>
+        </div>
+      </div>`;
+
+    const renderSemana = (semana, index) => {
+      const trabajosOrdenados = [...semana.comisiones].sort((a, b) =>
         b.reparaciones.fecha.localeCompare(a.reparaciones.fecha)
       );
+      const valesOrdenados = [...semana.vales].sort((a, b) => b.fecha.localeCompare(a.fecha));
       const horasSemana = trabajosOrdenados.reduce((s, rm) => s + parseFloat(rm.horas || 0), 0);
+      
       return `
-        <div style="margin-bottom:.5rem;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden">
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:.45rem .6rem;background:rgba(0,255,136,.05);border-bottom:1px solid var(--border)">
+        <div style="margin-bottom:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .6rem;background:rgba(0,229,255,.06);border-bottom:1px solid var(--border)">
             <div>
-              <span style="font-family:var(--font-head);font-size:.68rem;color:var(--success);letter-spacing:.5px">📅 Lun ${formatFecha(semana.inicio)} — Sáb ${formatFecha(semana.fin)}</span>
-              ${horasSemana > 0 ? `<span style="font-size:.62rem;color:var(--text2);margin-left:.4rem">· ⏱ ${horasSemana.toFixed(1)} hs</span>` : ''}
+              <span style="font-family:var(--font-head);font-size:.7rem;color:var(--accent);letter-spacing:.5px">📅 SEMANA ${index + 1}: Lun ${formatFecha(semana.inicio)} — Sáb ${formatFecha(semana.fin)}</span>
+              ${horasSemana > 0 ? `<span style="font-size:.6rem;color:var(--text2);margin-left:.4rem">· ⏱ ${horasSemana.toFixed(1)} hs</span>` : ''}
             </div>
-            <span style="font-family:var(--font-head);font-size:.82rem;color:var(--success)">${fm(semana.total)}</span>
+            <span style="font-family:var(--font-head);font-size:.85rem;color:${semana.neto >= 0 ? 'var(--success)' : 'var(--danger)'}">${semana.neto >= 0 ? '+' : ''}${fm(semana.neto)}</span>
           </div>
-          ${trabajosOrdenados.map(renderFila).join('')}
+          
+          ${trabajosOrdenados.length > 0 ? `
+            <div style="background:rgba(0,255,136,.02);padding:.3rem .6rem .1rem">
+              <div style="font-size:.65rem;color:var(--text2);font-family:var(--font-head);letter-spacing:.5px;margin-bottom:.2rem">COMISIONES DE LA SEMANA</div>
+              ${trabajosOrdenados.map(renderFilaTrabajo).join('')}
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem .6rem .4rem;border-top:1px solid rgba(0,255,136,.1)">
+                <span style="font-family:var(--font-head);font-size:.7rem;color:var(--success)">COMISIONES SEMANA ${index + 1}</span>
+                <span style="font-family:var(--font-head);font-size:.8rem;color:var(--success)">+${fm(semana.totalComisiones)}</span>
+              </div>
+            </div>` : ''}
+          
+          ${valesOrdenados.length > 0 ? `
+            <div style="background:rgba(255,204,0,.02);padding:.3rem .6rem .1rem">
+              <div style="font-size:.65rem;color:var(--text2);font-family:var(--font-head);letter-spacing:.5px;margin-bottom:.2rem">VALES DE LA SEMANA</div>
+              ${valesOrdenados.map(renderFilaVale).join('')}
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem .6rem .4rem;border-top:1px solid rgba(255,204,0,.1)">
+                <span style="font-family:var(--font-head);font-size:.7rem;color:var(--warning)">VALES SEMANA ${index + 1}</span>
+                <span style="font-family:var(--font-head);font-size:.8rem;color:var(--warning)">-${fm(semana.totalVales)}</span>
+              </div>
+            </div>` : ''}
+          
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .6rem;background:${semana.neto >= 0 ? 'rgba(0,255,136,.08)' : 'rgba(255,68,68,.08)'};border-top:1px solid var(--border)">
+            <span style="font-family:var(--font-head);font-size:.7rem;color:${semana.neto >= 0 ? 'var(--success)' : 'var(--danger)'};letter-spacing:.5px">NETO SEMANA ${index + 1}</span>
+            <span style="font-family:var(--font-head);font-size:.9rem;color:${semana.neto >= 0 ? 'var(--success)' : 'var(--danger)'};font-weight:700">${semana.neto >= 0 ? '+' : ''}${fm(semana.neto)}</span>
+          </div>
         </div>`;
     };
 
     const semanasHTMLVisible = semanasVisibles.map(renderSemana).join('');
     const semanasHTMLOcultas = semanasOcultas.length > 0
-      ? `<div id="trab-mec-extras" style="display:none">${semanasOcultas.map(renderSemana).join('')}</div>
-         <button onclick="this.previousElementSibling.style.display='block';this.style.display='none'" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:.4rem;font-size:.72rem;margin-top:.4rem;cursor:pointer;font-family:var(--font-head)">Ver ${semanasOcultas.length} semana${semanasOcultas.length !== 1 ? 's' : ''} más (${semanasOcultas.reduce((s, sw) => s + sw.items.length, 0)} trabajos)</button>`
+      ? `<div id="comisiones-vales-extras" style="display:none">${semanasOcultas.map((s, i) => renderSemana(s, i + LIMITE_SEMANAS)).join('')}</div>
+         <button onclick="this.previousElementSibling.style.display='block';this.style.display='none'" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:.4rem;font-size:.7rem;margin-top:.4rem;cursor:pointer;font-family:var(--font-head)">Ver ${semanasOcultas.length} semana${semanasOcultas.length !== 1 ? 's' : ''} más</button>`
       : '';
 
-    trabajosMecHTML = `
+    const totalGeneralComisiones = semanasCombinadas.reduce((s, sem) => s + sem.totalComisiones, 0);
+    const totalGeneralVales = semanasCombinadas.reduce((s, sem) => s + sem.totalVales, 0);
+    const totalGeneralNeto = totalGeneralComisiones - totalGeneralVales;
+
+    comisionesValesHTML = `
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
-          <span style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px">🔧 TRABAJOS COMO MECÁNICO</span>
-          ${trabajosMecanico.length > 0 ? `<span style="font-size:.65rem;color:var(--text2)">${trabajosMecanico.length} total · ${semanas.length} semana${semanas.length !== 1 ? 's' : ''}</span>` : ''}
+          <span style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px">� COMISIONES Y VALES POR SEMANA</span>
+          <span style="font-size:.65rem;color:var(--text2)">${semanasCombinadas.length} semana${semanasCombinadas.length !== 1 ? 's' : ''}</span>
         </div>
-        ${trabajosMecanico.length === 0
-          ? '<div style="font-size:.78rem;color:var(--text2);padding:.4rem 0">Todavía no tiene trabajos asignados.</div>'
+        ${semanasCombinadas.length === 0
+          ? '<div style="font-size:.78rem;color:var(--text2);padding:.4rem 0">No hay comisiones ni vales registrados.</div>'
           : semanasHTMLVisible + semanasHTMLOcultas}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.6rem;padding-top:.5rem;border-top:1px solid var(--border)">
-          <div style="font-size:.72rem;color:var(--text2);line-height:1.2">Total comisiones del período actual<br><span style="font-size:.62rem;color:var(--text2)">(${periodoLabel})</span></div>
-          <span style="font-family:var(--font-head);color:var(--success);font-size:1rem">${fm(totalComisionesPeriodo)}</span>
+          <div style="font-size:.7rem;color:var(--text2);line-height:1.2">TOTALES GENERALES<br><span style="font-size:.6rem;color:var(--text2)">(${semanasCombinadas.length} semanas)</span></div>
+          <div style="text-align:right">
+            <div style="font-family:var(--font-head);color:var(--accent);font-size:.8rem">+${fm(totalGeneralComisiones)}</div>
+            <div style="font-family:var(--font-head);color:var(--warning);font-size:.8rem">-${fm(totalGeneralVales)}</div>
+            <div style="font-family:var(--font-head);color:${totalGeneralNeto >= 0 ? 'var(--success)' : 'var(--danger)'};font-size:.9rem;font-weight:700">${totalGeneralNeto >= 0 ? '+' : ''}${fm(totalGeneralNeto)}</div>
+          </div>
         </div>
       </div>`;
   }
@@ -349,9 +342,7 @@ async function detalleEmpleado(id) {
       </div>
     </div>
 
-    ${trabajosMecHTML}
-
-    ${valesHTML}
+    ${comisionesValesHTML}
     ` : `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem;font-size:.78rem;color:var(--text2)">
       🔒 La información de sueldo y vales solo la ve el dueño del taller o el propio empleado.
