@@ -110,6 +110,12 @@ async function detalleEmpleado(id) {
   }
 
   // ─── DATOS FINANCIEROS ─────────────────────────────────────────────────────
+  const { data: periodos } = await sb.from('periodos_sueldo')
+    .select('id, fecha_inicio, fecha_fin, estado')
+    .eq('taller_id', tid())
+    .order('fecha_inicio', { ascending: false })
+    .limit(12);
+
   const { data: valesTodos } = await sb.from('vales_empleado')
     .select('*, periodo_id')
     .eq('empleado_id', id)
