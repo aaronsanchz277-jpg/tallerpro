@@ -494,50 +494,138 @@ async function miCobro() {
     ? `<span style="font-size:.62rem;background:rgba(0,255,136,.12);color:var(--success);border:1px solid rgba(0,255,136,.3);border-radius:6px;padding:2px 6px;font-family:var(--font-head);margin-left:.4rem">PERÍODO ABIERTO</span>`
     : `<span style="font-size:.62rem;background:rgba(255,204,0,.12);color:var(--warning);border:1px solid rgba(255,204,0,.3);border-radius:6px;padding:2px 6px;font-family:var(--font-head);margin-left:.4rem">MES CORRIENTE</span>`;
 
-  // ─── Agrupar comisiones por semana lunes-sábado ──────────────────────────
-  const semanas = _agruparPorSemana(
+  // ─── Agrupar comisiones y vales por semana lunes-sábado ───────────────────
+  // Agrupar comisiones por semana
+  const semanasComisiones = _agruparPorSemana(
     comisionesDelPeriodo,
     c => c.rep.fecha,
     c => c.pago
   );
 
-  // Render de semanas agrupadas
-  const renderComisionesPorSemana = () => {
-    if (comisionesDelPeriodo.length === 0) {
-      return `<div class="empty" style="padding:.75rem"><p style="font-size:.82rem">No tenés comisiones registradas en este período</p></div>`;
+  // Agrupar vales por semana
+  const semanasVales = _agruparPorSemana(
+    vales,
+    v => v.fecha,
+    v => v.monto
+  );
+
+  // Combinar ambas semanas (usar las semanas que tienen comisiones o vales)
+  const todasLasSemanas = new Set();
+  [...semanasComisiones, ...semanasVales].forEach(s => {
+    todasLasSemanas.add(s.inicio + '|' + s.fin);
+  });
+
+  const semanasCombinadas = Array.from(todasLasSemanas)
+    .map(key => {
+      const [inicio, fin] = key.split('|');
+      const semanaComisiones = semanasComisiones.find(s => s.inicio === inicio && s.fin === fin);
+      const semanaVales = semanasVales.find(s => s.inicio === inicio && s.fin === fin);
+      
+      return {
+        inicio,
+        fin,
+        comisiones: semanaComisiones?.items || [],
+        totalComisiones: semanaComisiones?.total || 0,
+        vales: semanaVales?.items || [],
+        totalVales: semanaVales?.total || 0,
+        neto: (semanaComisiones?.total || 0) - (semanaVales?.total || 0)
+      };
+    })
+    .sort((a, b) => b.inicio.localeCompare(a.inicio));
+
+  // Render de semanas combinadas
+  const renderComisionesValesPorSemana = () => {
+    if (comisionesDelPeriodo.length === 0 && vales.length === 0) {
+      return `<div class="empty" style="padding:.75rem"><p style="font-size:.82rem">No tenés comisiones ni vales registrados en este período</p></div>`;
     }
 
-    return semanas.map(semana => {
-      // Ordenar trabajos de la semana: más recientes primero
-      const trabajosOrdenados = [...semana.items].sort((a, b) =>
+    const LIMITE_SEMANAS = 4;
+    const semanasVisibles = semanasCombinadas.slice(0, LIMITE_SEMANAS);
+    const semanasOcultas = semanasCombinadas.slice(LIMITE_SEMANAS);
+
+    const renderFilaTrabajo = c => {
+      return `
+        <div onclick="detalleReparacion('${c.rep.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:.4rem .75rem;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;gap:.5rem">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🔧 ${h(c.rep.descripcion || 'Trabajo')}</div>
+            <div style="font-size:.64rem;color:var(--text2)">${formatFecha(c.rep.fecha)}${c.rep.vehiculos ? ' · ' + h(c.rep.vehiculos.patente) : ''}${c.horas > 0 ? ' · ⏱ ' + c.horas + ' hs' : ''}</div>
+          </div>
+          <span style="font-family:var(--font-head);color:var(--accent);font-size:.8rem;white-space:nowrap">+${fm(c.pago)}</span>
+        </div>`;
+    };
+
+    const renderFilaVale = v => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem .75rem;border-bottom:1px solid rgba(255,255,255,.04);gap:.5rem">
+        <div style="min-width:0;flex:1">
+          <div style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">💸 ${h(v.concepto || 'Vale')}</div>
+          <div style="font-size:.64rem;color:var(--text2)">${formatFecha(v.fecha)}</div>
+        </div>
+        <span style="font-family:var(--font-head);color:var(--warning);font-size:.8rem;white-space:nowrap">-${fm(v.monto || 0)}</span>
+      </div>`;
+
+    const renderSemana = (semana, index) => {
+      const trabajosOrdenados = [...semana.comisiones].sort((a, b) =>
         b.rep.fecha.localeCompare(a.rep.fecha)
       );
-      const totalHorasSemana = trabajosOrdenados.reduce((s, c) => s + c.horas, 0);
-
+      const valesOrdenados = [...semana.vales].sort((a, b) => b.fecha.localeCompare(a.fecha));
+      const horasSemana = trabajosOrdenados.reduce((s, c) => s + c.horas, 0);
+      
       return `
         <div style="margin-bottom:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:.55rem .75rem;background:rgba(0,229,255,.06);border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .75rem;background:rgba(0,229,255,.06);border-bottom:1px solid var(--border)">
             <div>
-              <span style="font-family:var(--font-head);font-size:.72rem;color:var(--accent);letter-spacing:.5px">📅 Lun ${formatFecha(semana.inicio)} — Sáb ${formatFecha(semana.fin)}</span>
-              ${totalHorasSemana > 0 ? `<span style="font-size:.65rem;color:var(--text2);margin-left:.5rem">· ⏱ ${totalHorasSemana.toFixed(1)} hs</span>` : ''}
+              <span style="font-family:var(--font-head);font-size:.7rem;color:var(--accent);letter-spacing:.5px">📅 SEMANA ${index + 1}: Lun ${formatFecha(semana.inicio)} — Sáb ${formatFecha(semana.fin)}</span>
+              ${horasSemana > 0 ? `<span style="font-size:.6rem;color:var(--text2);margin-left:.4rem">· ⏱ ${horasSemana.toFixed(1)} hs</span>` : ''}
             </div>
-            <span style="font-family:var(--font-head);font-size:.85rem;color:var(--accent)">+${fm(semana.total)}</span>
+            <span style="font-family:var(--font-head);font-size:.85rem;color:${semana.neto >= 0 ? 'var(--success)' : 'var(--danger)'}">${semana.neto >= 0 ? '+' : ''}${fm(semana.neto)}</span>
           </div>
-          ${trabajosOrdenados.map(c => `
-            <div onclick="detalleReparacion('${c.rep.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .75rem;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;gap:.5rem">
-              <div style="min-width:0;flex:1">
-                <div style="font-size:.82rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h(c.rep.descripcion || 'Trabajo')}</div>
-                <div style="font-size:.68rem;color:var(--text2)">${formatFecha(c.rep.fecha)}${c.rep.vehiculos ? ' · ' + h(c.rep.vehiculos.patente) : ''}${c.horas > 0 ? ' · ⏱ ' + c.horas + ' hs' : ''}</div>
+          
+          ${trabajosOrdenados.length > 0 ? `
+            <div style="background:rgba(0,255,136,.02);padding:.3rem .75rem .1rem">
+              <div style="font-size:.65rem;color:var(--text2);font-family:var(--font-head);letter-spacing:.5px;margin-bottom:.2rem">COMISIONES DE LA SEMANA</div>
+              ${trabajosOrdenados.map(renderFilaTrabajo).join('')}
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem .75rem .4rem;border-top:1px solid rgba(0,255,136,.1)">
+                <span style="font-family:var(--font-head);font-size:.7rem;color:var(--success)">COMISIONES SEMANA ${index + 1}</span>
+                <span style="font-family:var(--font-head);font-size:.8rem;color:var(--success)">+${fm(semana.totalComisiones)}</span>
               </div>
-              <span style="font-family:var(--font-head);color:var(--accent);font-size:.88rem;white-space:nowrap">+${fm(c.pago)}</span>
-            </div>`).join('')}
+            </div>` : ''}
+          
+          ${valesOrdenados.length > 0 ? `
+            <div style="background:rgba(255,204,0,.02);padding:.3rem .75rem .1rem">
+              <div style="font-size:.65rem;color:var(--text2);font-family:var(--font-head);letter-spacing:.5px;margin-bottom:.2rem">VALES DE LA SEMANA</div>
+              ${valesOrdenados.map(renderFilaVale).join('')}
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem .75rem .4rem;border-top:1px solid rgba(255,204,0,.1)">
+                <span style="font-family:var(--font-head);font-size:.7rem;color:var(--warning)">VALES SEMANA ${index + 1}</span>
+                <span style="font-family:var(--font-head);font-size:.8rem;color:var(--warning)">-${fm(semana.totalVales)}</span>
+              </div>
+            </div>` : ''}
+          
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .75rem;background:${semana.neto >= 0 ? 'rgba(0,255,136,.08)' : 'rgba(255,68,68,.08)'};border-top:1px solid var(--border)">
+            <span style="font-family:var(--font-head);font-size:.7rem;color:${semana.neto >= 0 ? 'var(--success)' : 'var(--danger)'};letter-spacing:.5px">NETO SEMANA ${index + 1}</span>
+            <span style="font-family:var(--font-head);font-size:.9rem;color:${semana.neto >= 0 ? 'var(--success)' : 'var(--danger)'};font-weight:700">${semana.neto >= 0 ? '+' : ''}${fm(semana.neto)}</span>
+          </div>
         </div>`;
-    }).join('') +
-    // Total general al pie
-    `<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .25rem;border-top:1px solid var(--border);margin-top:.25rem">
-      <span style="font-family:var(--font-head);font-size:.72rem;color:var(--text2);letter-spacing:1px">TOTAL COMISIONES${totalHoras > 0 ? ' · ⏱ ' + totalHoras.toFixed(1) + ' hs' : ''}</span>
-      <span style="font-family:var(--font-head);font-size:1rem;color:var(--accent)">+${fm(totalComisiones)}</span>
-    </div>`;
+    };
+
+    const semanasHTMLVisible = semanasVisibles.map(renderSemana).join('');
+    const semanasHTMLOcultas = semanasOcultas.length > 0
+      ? `<div id="comisiones-vales-extras" style="display:none">${semanasOcultas.map((s, i) => renderSemana(s, i + LIMITE_SEMANAS)).join('')}</div>
+         <button onclick="this.previousElementSibling.style.display='block';this.style.display='none'" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:.4rem;font-size:.7rem;margin-top:.4rem;cursor:pointer;font-family:var(--font-head)">Ver ${semanasOcultas.length} semana${semanasOcultas.length !== 1 ? 's' : ''} más</button>`
+      : '';
+
+    const totalGeneralComisiones = semanasCombinadas.reduce((s, sem) => s + sem.totalComisiones, 0);
+    const totalGeneralVales = semanasCombinadas.reduce((s, sem) => s + sem.totalVales, 0);
+    const totalGeneralNeto = totalGeneralComisiones - totalGeneralVales;
+
+    return semanasHTMLVisible + semanasHTMLOcultas +
+      `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:.6rem;padding-top:.5rem;border-top:1px solid var(--border)">
+        <div style="font-size:.7rem;color:var(--text2);line-height:1.2">TOTALES GENERALES<br><span style="font-size:.6rem;color:var(--text2)">(${semanasCombinadas.length} semanas)</span></div>
+        <div style="text-align:right">
+          <div style="font-family:var(--font-head);color:var(--accent);font-size:.8rem">+${fm(totalGeneralComisiones)}</div>
+          <div style="font-family:var(--font-head);color:var(--warning);font-size:.8rem">-${fm(totalGeneralVales)}</div>
+          <div style="font-family:var(--font-head);color:${totalGeneralNeto >= 0 ? 'var(--success)' : 'var(--danger)'};font-size:.9rem;font-weight:700">${totalGeneralNeto >= 0 ? '+' : ''}${fm(totalGeneralNeto)}</div>
+        </div>
+      </div>`;
   };
 
   main.innerHTML = `
@@ -567,26 +655,9 @@ async function miCobro() {
       </div>
 
       <div style="font-family:var(--font-head);font-size:.72rem;color:var(--text2);letter-spacing:1px;margin:.5rem 0 .6rem">
-        🔧 COMISIONES DEL PERÍODO — POR SEMANA (${comisionesDelPeriodo.length} trabajos · ${semanas.length} semana${semanas.length !== 1 ? 's' : ''})
+        � COMISIONES Y VALES POR SEMANA (${semanasCombinadas.length} semana${semanasCombinadas.length !== 1 ? 's' : ''})
       </div>
-      ${renderComisionesPorSemana()}
-
-      <div style="font-family:var(--font-head);font-size:.72rem;color:var(--text2);letter-spacing:1px;margin:1rem 0 .4rem">
-        💸 VALES TOMADOS (${vales.length})
-      </div>
-      ${vales.length === 0
-        ? `<div class="empty" style="padding:.75rem"><p style="font-size:.82rem">No tomaste vales este mes</p></div>`
-        : vales.map(v => `
-          <div class="card" style="cursor:default">
-            <div class="card-header">
-              <div class="card-avatar">💵</div>
-              <div class="card-info">
-                <div class="card-name">${h(v.concepto || 'Vale')}</div>
-                <div class="card-sub">${formatFecha(v.fecha)}</div>
-              </div>
-              <div style="font-family:var(--font-head);color:var(--warning);font-size:.95rem">-${fm(v.monto)}</div>
-            </div>
-          </div>`).join('')}
+      ${renderComisionesValesPorSemana()}
 
       <div style="font-size:.7rem;color:var(--text2);margin-top:1rem;text-align:center;line-height:1.5">
         Las comisiones surgen de las reparaciones donde el administrador te asignó un pago.<br>
