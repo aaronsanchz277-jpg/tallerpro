@@ -1,19 +1,29 @@
+// ─── MODALES DE NUEVA/EDITAR REPARACIÓN ─────────────────────────────────────
+// Con protección de formularios (form-guard)
+
 async function modalNuevaReparacion() {
   openModal(`<div class="modal-content p-6 text-center"><div class="spinner mb-2"></div><p>Cargando formulario...</p></div>`);
 
   try {
     const tallerId = tid();
-    const [clienteSelectHTML, vehiculoSelectHTML, { data: empleados }] = await Promise.all([
+
+    const [clienteSelectHTML, vehiculoSelectHTML] = await Promise.all([
       renderClienteSelect('rep-cliente', '', true),
-      renderVehiculoSelect('rep-vehiculo', '', null, true),
-      sb.from('empleados').select('id,nombre').eq('taller_id', tallerId)
+      renderVehiculoSelect('rep-vehiculo', '', null, true)
     ]);
 
     const fechaHTML = renderFechaInput('rep-fecha');
     const montoHTML = renderMontoInput('rep-costo', '', 'Monto');
 
+    const { data: empleados, error: empErr } = await sb
+      .from('empleados')
+      .select('id,nombre')
+      .eq('taller_id', tallerId);
+
+    if (empErr) throw empErr;
+
     let mecanicoOptions = '<option value="">Sin asignar</option>';
-    (empleados || []).forEach(e => {
+    empleados.forEach(e => {
       mecanicoOptions += `<option value="${e.id}">${h(e.nombre)}</option>`;
     });
 
@@ -82,65 +92,29 @@ async function modalNuevaReparacion() {
       formGuard_reset();
       closeModal();
     });
+
     document.getElementById('btn-guardar-nueva').addEventListener('click', guardarNuevaOrden);
 
-    const fotoInput = document.getElementById('rep-foto');
-    const fotoPreview = document.getElementById('rep-foto-preview');
-    fotoInput.addEventListener('change', (e) => {
+    document.getElementById('rep-foto').addEventListener('change', function (e) {
       const file = e.target.files[0];
+      const preview = document.getElementById('rep-foto-preview');
       if (file) {
         const reader = new FileReader();
         reader.onload = ev => {
-          fotoPreview.src = ev.target.result;
-          fotoPreview.style.display = 'block';
+          preview.src = ev.target.result;
+          preview.style.display = 'block';
         };
         reader.readAsDataURL(file);
       } else {
-        fotoPreview.style.display = 'none';
+        preview.style.display = 'none';
       }
     });
-
-    const attachVehiculoChange = () => {
-      const vehiculoSelect = document.getElementById('rep-vehiculo');
-      if (vehiculoSelect) {
-        vehiculoSelect.removeEventListener('change', vehiculoChangeHandler);
-        vehiculoSelect.addEventListener('change', vehiculoChangeHandler);
-      }
-    };
-
-    const vehiculoChangeHandler = async function() {
-      const vehId = this.value;
-      const clienteSelect = document.getElementById('rep-cliente');
-      if (!vehId) {
-        if (clienteSelect) clienteSelect.value = '';
-        return;
-      }
-      try {
-        const { data: veh, error } = await sb
-          .from('vehiculos')
-          .select('cliente_id')
-          .eq('id', vehId)
-          .single();
-        if (!error && veh?.cliente_id && clienteSelect) {
-          clienteSelect.value = veh.cliente_id;
-        } else if (clienteSelect) {
-          clienteSelect.value = '';
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    };
-
-    attachVehiculoChange();
 
     document.getElementById('btn-nuevo-vehiculo').addEventListener('click', () => {
       document.getElementById('nuevo-vehiculo-form').style.display = 'block';
     });
-
     document.getElementById('btn-cancelar-nuevo-vehiculo').addEventListener('click', () => {
       document.getElementById('nuevo-vehiculo-form').style.display = 'none';
-      document.getElementById('nv-patente').value = '';
-      document.getElementById('nv-marca').value = '';
     });
 
     document.getElementById('btn-guardar-nuevo-vehiculo').addEventListener('click', async () => {
@@ -156,10 +130,8 @@ async function modalNuevaReparacion() {
         });
         if (decision === 'cancelar') return;
         if (decision === 'usar') {
-          const vehiculoSelect = document.getElementById('rep-vehiculo');
-          if (vehiculoSelect) vehiculoSelect.value = existente.id;
+          document.getElementById('rep-vehiculo').value = existente.id;
           document.getElementById('nuevo-vehiculo-form').style.display = 'none';
-          attachVehiculoChange();
           return;
         }
       }
@@ -177,10 +149,32 @@ async function modalNuevaReparacion() {
 
       const nuevoSelectHTML = await renderVehiculoSelect('rep-vehiculo', nuevoVeh.id, null, true);
       document.getElementById('vehiculo-select-container').innerHTML = nuevoSelectHTML;
-      attachVehiculoChange();
       document.getElementById('nuevo-vehiculo-form').style.display = 'none';
       toast('Vehículo creado', 'success');
       invalidateComponentCache();
+    });
+
+    document.getElementById('rep-vehiculo').addEventListener('change', async function () {
+      const vehId = this.value;
+      const clienteSelect = document.getElementById('rep-cliente');
+      if (!vehId) {
+        clienteSelect.value = '';
+        return;
+      }
+      try {
+        const { data: veh, error } = await sb
+          .from('vehiculos')
+          .select('cliente_id')
+          .eq('id', vehId)
+          .single();
+        if (!error && veh && veh.cliente_id) {
+          clienteSelect.value = veh.cliente_id;
+        } else {
+          clienteSelect.value = '';
+        }
+      } catch (e) {
+        console.error('Error autocompletando cliente', e);
+      }
     });
 
   } catch (e) {
@@ -198,17 +192,20 @@ async function guardarNuevaOrden() {
   const clienteId = document.getElementById('rep-cliente').value || null;
   const mecanicoSelect = document.getElementById('rep-mecanico');
   const mecanicoId = mecanicoSelect.value || null;
-  const mecanicoNombre = mecanicoId ? mecanicoSelect.selectedOptions[0]?.text : null;
-  const fotoFile = document.getElementById('rep-foto').files[0];
-  const costo = parseFloat(document.getElementById('rep-costo')?.value) || 0;
-  const fecha = document.getElementById('rep-fecha')?.value || new Date().toISOString().split('T')[0];
+  const mecanicoNombre = mecanicoId ? mecanicoSelect.selectedOptions[0].text : null;
+  const fileInput = document.getElementById('rep-foto');
+  const fotoFile = fileInput.files[0];
+  const costoInput = document.getElementById('rep-costo');
+  const costo = costoInput ? parseFloat(costoInput.value) || 0 : 0;
+  const fechaInput = document.getElementById('rep-fecha');
+  const fecha = fechaInput ? fechaInput.value : new Date().toISOString().split('T')[0];
 
   let fotosRecepcion = [];
 
   if (fotoFile) {
     const uuid = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2);
-    const ext = fotoFile.name.split('.').pop() || 'jpg';
-    const path = `recepcion/${uuid}/${Date.now()}.${ext}`;
+    const extension = fotoFile.name.split('.').pop() || 'jpg';
+    const path = `recepcion/${uuid}/${Date.now()}.${extension}`;
 
     const { error: uploadErr } = await sb.storage
       .from('fotos')
@@ -222,35 +219,34 @@ async function guardarNuevaOrden() {
     }
   }
 
-  const { data: nuevaRep, error: insertErr } = await offlineInsert('reparaciones', {
-    taller_id: tallerId,
-    vehiculo_id: vehiculoId,
-    cliente_id: clienteId,
-    descripcion,
-    tipo_trabajo: null,
-    costo,
-    costo_repuestos: 0,
-    estado: 'pendiente',
-    fecha,
-    fotos_recepcion: fotosRecepcion,
-    notas: null,
-    kilometraje_ingreso: null,
-    combustible_ingreso: null
-  });
+  const { data: nuevaRep, error: insertErr } = await sb
+    .from('reparaciones')
+    .insert({
+      taller_id: tallerId,
+      vehiculo_id: vehiculoId,
+      cliente_id: clienteId,
+      descripcion,
+      tipo_trabajo: null,
+      costo,
+      costo_repuestos: 0,
+      estado: 'pendiente',
+      fecha,
+      fotos_recepcion: fotosRecepcion,
+      notas: null,
+      kilometraje_ingreso: null,
+      combustible_ingreso: null
+    })
+    .select('id')
+    .single();
 
-  if (insertErr) {
-    toast('Error al crear la orden: ' + insertErr.message, 'error');
-    return;
-  }
-
-  const reparacionId = nuevaRep?.id || nuevaRep?.[0]?.id;
+  const reparacionId = nuevaRep?.id;
   if (!reparacionId) {
-    toast('Error: no se pudo obtener el ID de la orden', 'error');
+    toast('Error al crear la orden', 'error');
     return;
   }
 
   if (mecanicoId) {
-    const { error: mecErr } = await offlineInsert('reparacion_mecanicos', {
+    const { error: mecErr } = await sb.from('reparacion_mecanicos').insert({
       reparacion_id: reparacionId,
       empleado_id: mecanicoId,
       nombre_mecanico: mecanicoNombre,
@@ -267,4 +263,76 @@ async function guardarNuevaOrden() {
   formGuard_reset();
   closeModal();
   reparaciones();
+}
+
+async function modalEditarReparacion(id) {
+  const [{ data: r }] = await Promise.all([sb.from('reparaciones').select('*').eq('id', id).single()]);
+  const clienteSelect = await renderClienteSelect('f-cliente', r.cliente_id, true);
+  const vehiculoSelect = await renderVehiculoSelect('f-vehiculo', r.vehiculo_id, null, true);
+  const estadoSelect = renderEstadoSelect('f-estado', r.estado);
+
+  openModal(`
+    <div class="modal-title">Editar Trabajo</div>
+    <div class="form-group"><label class="form-label">Tipo de trabajo</label>
+      <select class="form-input" id="f-tipo-trabajo">
+        ${TIPOS_TRABAJO.map(t => `<option value="${t}" ${t === (r.tipo_trabajo || 'Mecánica general') ? 'selected' : ''}>${TIPO_ICONS[t] || '📋'} ${t}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="f-desc" value="${h(r.descripcion || '')}"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${t("lblCosto")}</label>${renderMontoInput('f-costo', r.costo || 0)}</div>
+      <div class="form-group"><label class="form-label">Costo repuestos</label>${renderMontoInput('f-costo-rep', r.costo_repuestos || 0)}</div>
+    </div>
+    <div class="form-group"><label class="form-label">${t("lblFecha")}</label>${renderFechaInput('f-fecha', r.fecha)}</div>
+    <div class="form-group"><label class="form-label">${t("lblEstado")}</label>${estadoSelect}</div>
+    <div class="form-group"><label class="form-label">Vehículo</label>${vehiculoSelect}</div>
+    <div class="form-group"><label class="form-label">Cliente</label>${clienteSelect}</div>
+    <div class="form-group"><label class="form-label">${t("lblNotas")}</label>${renderNotasTextarea('f-notas', r.notas)}</div>
+    <button class="btn-primary" onclick="guardarReparacionConSafeCall('${id}')">${t('actualizar')}</button>
+    <button class="btn-secondary" onclick="closeModal()">${t('cancelar')}</button>`);
+
+  formGuard_vigilarFormulario();
+}
+
+async function guardarReparacionConSafeCall(id) {
+  await safeCall(async () => {
+    await guardarReparacion(id);
+  }, null, 'No se pudo guardar el trabajo');
+}
+
+async function guardarReparacion(id) {
+  const desc = document.getElementById('f-desc').value.trim();
+  if (!validateRequired(desc, 'Descripción')) return;
+
+  const data = {
+    descripcion: desc,
+    tipo_trabajo: document.getElementById('f-tipo-trabajo').value,
+    costo: parseFloat(document.getElementById('f-costo').value) || 0,
+    costo_repuestos: parseFloat(document.getElementById('f-costo-rep').value) || 0,
+    fecha: document.getElementById('f-fecha').value,
+    estado: document.getElementById('f-estado').value,
+    vehiculo_id: document.getElementById('f-vehiculo').value || null,
+    cliente_id: document.getElementById('f-cliente').value || null,
+    notas: document.getElementById('f-notas').value
+  };
+
+  const { error } = await sb.from('reparaciones').update(data).eq('id', id);
+  if (error) { toast('Error: ' + error.message, 'error'); return; }
+
+  clearCache('reparaciones');
+  toast('Trabajo actualizado', 'success');
+  formGuard_reset();
+  closeModal();
+  reparaciones();
+}
+
+async function eliminarReparacion(id) {
+  confirmar('Esta acción eliminará el trabajo permanentemente.', async () => {
+    await safeCall(async () => {
+      await offlineDelete('reparaciones', 'id', id);
+      clearCache('reparaciones');
+      toast('Trabajo eliminado');
+      navigate('reparaciones');
+    }, null, 'No se pudo eliminar el trabajo');
+  });
 }
