@@ -63,7 +63,7 @@ async function modalNuevaReparacion() {
         </div>
 
         <div class="form-group">
-          <label class="form-label">Foto de la orden en papel</label>
+          <label class="form-label">📄 Escanear orden en papel (opcional)</label>
           <input type="file" id="rep-foto" accept="image/*" capture="environment" class="form-input">
           <img id="rep-foto-preview" style="display:none; max-height:10rem; border-radius:4px; margin-top:0.5rem;" />
         </div>
@@ -200,12 +200,12 @@ async function guardarNuevaOrden() {
   const fechaInput = document.getElementById('rep-fecha');
   const fecha = fechaInput ? fechaInput.value : new Date().toISOString().split('T')[0];
 
-  let fotosRecepcion = [];
+  let fotoOrdenUrl = null;
 
   if (fotoFile) {
     const uuid = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2);
-    const extension = fotoFile.name.split('.').pop() || 'jpg';
-    const path = `recepcion/${uuid}/${Date.now()}.${extension}`;
+    const ext = fotoFile.name.split('.').pop() || 'jpg';
+    const path = `ordenes/${uuid}/${Date.now()}.${ext}`;
 
     const { error: uploadErr } = await sb.storage
       .from('fotos')
@@ -213,9 +213,9 @@ async function guardarNuevaOrden() {
 
     if (!uploadErr) {
       const { data: { publicUrl } } = sb.storage.from('fotos').getPublicUrl(path);
-      fotosRecepcion = [publicUrl];
+      fotoOrdenUrl = publicUrl;
     } else {
-      toast('No se pudo subir la foto, la orden se creará sin ella.', 'warning');
+      toast('No se pudo subir la foto de la orden, se creará sin ella.', 'warning');
     }
   }
 
@@ -231,7 +231,7 @@ async function guardarNuevaOrden() {
       costo_repuestos: 0,
       estado: 'pendiente',
       fecha,
-      fotos_recepcion: fotosRecepcion,
+      foto_orden_url: fotoOrdenUrl,
       notas: null,
       kilometraje_ingreso: null,
       combustible_ingreso: null
