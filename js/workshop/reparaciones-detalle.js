@@ -1,11 +1,10 @@
-// ─── DETALLE DE REPARACIÓN ───────────────────────────────────────────────────
-// Este archivo asume que las dependencias ya están cargadas globalmente:
-// - TIPO_ICONS (de reparaciones-core.js)
-// - cargarItemsReparacion, renderItemsReparacion (de reparaciones-items.js)
-// - repMecanicos_cargar, repMecanicos_renderChips (de hr/mecanicos.js)
-
 async function detalleReparacion(id) {
-  const { data: r, error: qErr } = await safeQuery(() => sb.from('reparaciones').select('*, vehiculos(patente,marca,modelo), clientes(nombre,telefono)').eq('id', id).single());
+  // Incluimos foto_orden_url explícitamente
+  const { data: r, error: qErr } = await safeQuery(() => sb
+    .from('reparaciones')
+    .select('*, vehiculos(patente,marca,modelo), clientes(nombre,telefono), foto_orden_url')
+    .eq('id', id)
+    .single());
   if (!r) { if (qErr) toast('Error al cargar reparación', 'error'); navigate('reparaciones'); return; }
 
   // Guardamos el trabajo en "recientes" (localStorage) para que aparezca rápido
@@ -56,6 +55,15 @@ async function detalleReparacion(id) {
       <div class="detail-avatar">${TIPO_ICONS[r.tipo_trabajo] || '🔧'}</div>
       <div><div class="detail-name" style="font-size:1rem">${h(r.descripcion)}</div><div class="detail-sub">${r.tipo_trabajo ? h(r.tipo_trabajo) + ' · ' : ''}${formatFecha(r.fecha)}</div></div>
     </div>
+
+    ${r.foto_orden_url ? `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.75rem;margin-bottom:1rem">
+      <div style="font-family:var(--font-head);font-size:.75rem;color:var(--text2);letter-spacing:1px;margin-bottom:.5rem">📄 ORDEN EN PAPEL</div>
+      <img src="${safeFotoUrl(r.foto_orden_url)}" 
+        style="width:100%;max-height:220px;object-fit:contain;border-radius:8px;border:1px solid var(--border);cursor:pointer;background:var(--surface2)" 
+        onclick="window.open('${safeFotoUrl(r.foto_orden_url)}')">
+    </div>` : ''}
+
     <div class="info-grid">
       <div class="info-item"><div class="label">Estado</div><div class="value"><span class="card-badge ${estadoBadge(r.estado)}">${estadoLabel(r.estado)}</span></div></div>
       <div class="info-item"><div class="label">Vehículo</div><div class="value">${r.vehiculos ? (h(r.vehiculos.patente) + ([r.vehiculos.marca, r.vehiculos.modelo].filter(Boolean).length ? ' · ' + [r.vehiculos.marca, r.vehiculos.modelo].filter(Boolean).map(h).join(' ') : '')) : '-'}</div></div>
@@ -203,107 +211,4 @@ async function detalleReparacion(id) {
       </div>`;
     }
   });
-}
-
-async function cambiarEstado(id, estado) {
-  // Solo necesitamos el costo para calcular saldo. Antes traíamos
-  // descripcion/clientes(nombre) para armar el "concepto" del INSERT
-  // manual; ese INSERT se eliminó en Tarea #47.
-  const { data: rep } = await sb.from('reparaciones').select('costo').eq('id', id).single();
-
-  // Si pasamos a "finalizado" y todavía hay saldo pendiente, ofrecemos
-  // cobrarlo ahora. Si el admin elige "no", el trabajo queda finalizado
-  // pero con saldo > 0 → aparece automáticamente en 💰 Por cobrar (#34)
-  // hasta que se registre el pago real.
-  //
-  // ⚠️ Tarea #47: antes había un INSERT manual a `movimientos_financieros`
-  // cuando totalPagado === 0 (ingreso fantasma del costo total). Se sacó
-  // porque rompía la regla "los movimientos vienen de los triggers" y
-  // creaba ingresos sin contrapartida real (sin pagos_reparacion, sin
-  // método, sin cobrador). Ahora el ingreso aparece SOLO cuando se
-  // registra un pago vía modalPagosReparacion (lo dispara el trigger
-  // `registrar_movimiento_pago_reparacion`).
-  let saldoFinal = 0;
-  if (estado === 'finalizado') {
-    const { data: pagos } = await sb.from('pagos_reparacion').select('monto').eq('reparacion_id', id);
-    const totalPagado = (pagos || []).reduce((s, p) => s + parseFloat(p.monto || 0), 0);
-    const saldo = parseFloat(rep.costo || 0) - totalPagado;
-    saldoFinal = saldo;
-
-    if (saldo > 0) {
-      // Copy distinto según haya pagos parciales o ningún pago, así el
-      // admin entiende exactamente qué decisión está tomando.
-      const confirmMsg = totalPagado === 0
-        ? `No registraste ningún pago para este trabajo (${fm(saldo)}).\n\n¿Querés cobrarlo ahora?\n\n• Aceptar → registrás el pago ahora\n• Cancelar → finalizo igual y queda en 💰 Por cobrar para registrar el pago después`
-        : `Queda un saldo pendiente de ${fm(saldo)}.\n\n¿Querés cobrar ahora la diferencia?\n\n• Aceptar → registrás el pago ahora\n• Cancelar → finalizo igual y el saldo queda en 💰 Por cobrar`;
-      if (confirm(confirmMsg)) {
-        closeModal();
-        await modalPagosReparacion(id, saldo);
-        return;
-      }
-    }
-  }
-
-  await offlineUpdate('reparaciones', { estado }, 'id', id);
-  clearCache('reparaciones');
-  if (estado === 'finalizado' && saldoFinal > 0) {
-    toast(`Trabajo finalizado. Quedó en 💰 Por cobrar (${fm(saldoFinal)})`, 'info');
-  } else {
-    toast('Estado actualizado', 'success');
-  }
-  detalleReparacion(id);
-}
-
-function aprobarPresupuestoCliente(repId, decision) {
-  const confirmMsg = decision === 'aprobado'
-    ? '¿Confirmás que aprobás este presupuesto?'
-    : '¿Confirmás que rechazás este presupuesto?';
-  if (!confirm(confirmMsg)) return;
-  safeCall(async () => {
-    await offlineUpdate('reparaciones', { aprobacion_cliente: decision, fecha_aprobacion: new Date().toISOString() }, 'id', repId);
-    toast(decision === 'aprobado' ? 'Presupuesto aprobado' : 'Presupuesto rechazado', decision === 'aprobado' ? 'success' : 'error');
-    detalleReparacion(repId);
-  }, null, 'No se pudo procesar la aprobación');
-}
-
-function enviarAprobacionWhatsApp(repId) {
-  sb.from('reparaciones').select('*, clientes(nombre,telefono), vehiculos(patente)').eq('id', repId).single().then(({ data: r }) => {
-    if (!r?.clientes?.telefono) return;
-    const tel = r.clientes.telefono.replace(/\D/g, '');
-    const tallerNombre = currentPerfil?.talleres?.nombre || 'TallerPro';
-    const msg = `Hola ${r.clientes.nombre}! Soy del taller ${tallerNombre}. Te paso el presupuesto para tu vehículo ${r.vehiculos?.patente || ''}:\n\n🔧 ${r.descripcion}\n💰 Costo: ${fm(r.costo)}\n\n¿Aprobás este trabajo? Respondé con SI o NO.`;
-    window.open(`https://wa.me/595${tel}?text=${encodeURIComponent(msg)}`);
-  });
-}
-
-function modalActualizarCosto(id, costoActual, repuestosActual) {
-  openModal(`
-    <div class="modal-title">✏️ Actualizar costos</div>
-    <div class="form-group"><label class="form-label">Cobrado al cliente ${monedaActual().simbolo}</label><input class="form-input" id="f-upd-costo" type="number" min="0" value="${costoActual || 0}"></div>
-    <div class="form-group"><label class="form-label">Gastado en repuestos ${monedaActual().simbolo}</label><input class="form-input" id="f-upd-rep" type="number" min="0" value="${repuestosActual || 0}"></div>
-    <div class="form-group"><label class="form-label">Notas adicionales</label><textarea class="form-input" id="f-upd-notas" rows="2" placeholder="Cambió el presupuesto porque..."></textarea></div>
-    <button class="btn-primary" onclick="guardarActualizarCosto('${id}')">Actualizar</button>
-    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>`);
-}
-
-async function guardarActualizarCosto(id) {
-  if (typeof esAdmin === 'function' && !esAdmin() && !(typeof tienePerm === 'function' && tienePerm('modificar_precios'))) {
-    toast('No tenés permisos para modificar costos','error');
-    return;
-  }
-  await safeCall(async () => {
-    const costo = parseFloat(document.getElementById('f-upd-costo').value) || 0;
-    const rep = parseFloat(document.getElementById('f-upd-rep').value) || 0;
-    const notasExtra = document.getElementById('f-upd-notas').value.trim();
-    const updates = { costo, costo_repuestos: rep };
-    if (notasExtra) {
-      const { data: r } = await sb.from('reparaciones').select('notas').eq('id', id).single();
-      updates.notas = ((r?.notas || '') + '\n' + notasExtra).trim();
-    }
-    await sb.from('reparaciones').update(updates).eq('id', id);
-    clearCache('reparaciones');
-    toast('Costos actualizados', 'success');
-    closeModal();
-    detalleReparacion(id);
-  }, null, 'No se pudo actualizar los costos');
 }
