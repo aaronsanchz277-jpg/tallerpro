@@ -7,6 +7,7 @@ async function dashboard() {
   const rol = currentPerfil?.rol;
   const tallerNombre = currentPerfil?.talleres?.nombre || 'Tu Taller';
   if (rol === 'cliente') { misReparaciones(); return; }
+  if (rol === 'empleado') { paraHoy(); return; }
 
   // Tarea #62: si el usuario eligió "Cargá tu primer trabajo" en el banner
   // post-asistente, dejamos un flag para disparar el tour del dashboard la
