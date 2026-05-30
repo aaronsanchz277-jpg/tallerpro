@@ -47,6 +47,15 @@ async function detalleVehiculo(id) {
       sb.from('mantenimientos').select('*').eq('vehiculo_id',id).order('fecha_realizado',{ascending:false}).limit(10)
     ]);
     v = results[0].data; reps = results[1].data; mants = results[2].data;
+
+    // Registrar vehículo en recientes (solo si existe función)
+    if (typeof recordReciente === 'function') {
+      recordReciente('vehiculos', {
+        id: v?.id,
+        patente: v?.patente || '',
+        marca: v?.marca || ''
+      });
+    }
   } catch(e) { toast('Error al cargar vehículo','error'); navigate('vehiculos'); return; }
   if (!v) { toast('Vehículo no encontrado','error'); navigate('vehiculos'); return; }
   const isAdmin = currentPerfil?.rol==='admin';
