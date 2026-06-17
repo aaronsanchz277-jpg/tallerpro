@@ -21,13 +21,13 @@ const h = escapeHtml;
 // ─── SEGURIDAD: Escape combinado HTML-attr + JS-string ───────────────────────
 // Para uso dentro de atributos delimitados por dobles comillas que interpolan
 // strings de usuario como argumentos JS, p.ej.:
-//   onclick="foo('${hjs(name)}')"
+//    onclick="foo('${hjs(name)}')"
 // Aplica DOS capas de escape (orden importa, porque el HTML-parser corre primero
 // y luego el JS-parser):
-//   1) JS-string escape — neutraliza el cierre del string ('), backslashes y
-//      separadores de línea (incl. U+2028/U+2029, que son line terminators en JS).
-//   2) HTML-attribute escape — neutraliza el cierre de atributo (") y todos los
-//      metacaracteres HTML, evitando que un " en el dato cierre el atributo.
+//    1) JS-string escape — neutraliza el cierre del string ('), backslashes y
+//       separadores de línea (incl. U+2028/U+2029, que son line terminators en JS).
+//    2) HTML-attribute escape — neutraliza el cierre de atributo (") y todos los
+//       metacaracteres HTML, evitando que un " en el dato cierre el atributo.
 function escapeHtmlJs(str) {
   if (str === null || str === undefined) return '';
   const jsEscaped = String(str)
@@ -52,11 +52,11 @@ const hjs = escapeHtmlJs;
 // inyectamos HTML sin pasar por escapeHtml.
 //
 // Hace dos pasadas y une los rangos:
-//   1) Match literal case-insensitive por token (regex).
-//   2) Match "compacto" para tokens sin espacios/guiones: caminamos el texto
-//      ignorando `-` y espacios en él, así "ab123" resalta "AB-123" en un
-//      título tipo "AB-123 · TOYOTA" (mismo criterio que matchCompact en el
-//      palette).
+//    1) Match literal case-insensitive por token (regex).
+//    2) Match "compacto" para tokens sin espacios/guiones: caminamos el texto
+//       ignorando `-` y espacios en él, así "ab123" resalta "AB-123" en un
+//       título tipo "AB-123 · TOYOTA" (mismo criterio que matchCompact en el
+//       palette).
 function highlightMatch(text, term) {
   if (text === null || text === undefined) return '';
   const s = String(text);
@@ -81,9 +81,9 @@ function highlightMatch(text, term) {
   } catch (_) { /* token raro: seguimos sin match literal */ }
 
   // 2) Pasada compacta: tokens alfanuméricos (sin separadores) matchean
-  //    ignorando `-` y espacios dentro del texto, pensado para patentes
-  //    tipo "AB-123" cuando el usuario tipea "ab123". Limitamos a tokens
-  //    de al menos 2 chars y sólo alfanuméricos para evitar marcar de más.
+  //     ignorando `-` y espacios dentro del texto, pensado para patentes
+  //     tipo "AB-123" cuando el usuario tipea "ab123". Limitamos a tokens
+  //     de al menos 2 chars y sólo alfanuméricos para evitar marcar de más.
   const sL = s.toLowerCase();
   for (const tok of tokens) {
     if (tok.length < 2) continue;
@@ -133,9 +133,17 @@ function highlightMatch(text, term) {
 }
 const hh = highlightMatch;
 
-// ─── CONFIGURACIÓN ────────────────────────────────────────────────────────────
-const SUPABASE_URL = 'https://uggqqmsmxvafeyyinuir.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_QYoTP02Bh4tEhV_zkQkFVQ_rWXx0hBu';
+// ─── CONFIGURACIÓN (CONMUTADOR DINÁMICO STAGING / PRODUCCIÓN) ────────────────
+const isProduction = window.location.hostname.includes('github.io');
+
+const SUPABASE_URL = isProduction 
+  ? 'https://uggqqmsmxvafeyyinuir.supabase.co' // Producción
+  : 'https://gguytsiobclhsghiyywz.supabase.co'; // Staging
+
+const SUPABASE_KEY = isProduction 
+  ? 'sb_publishable_QYoTP02Bh4tEhV_zkQkFVQ_rWXx0hBu' // Producción Key
+  : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdndXl0c2lvYmNsaHNnaGl5eXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2Mjc1NzksImV4cCI6MjA5NzIwMzU3OX0.WWDPCONo4ruFRZqovjbgmOgG3VKyVACX9zHu1U7NmrI'; // Staging Key
+
 const _sbRaw = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Interceptor global: detectar sesión expirada en cualquier query
